@@ -10,11 +10,12 @@ Features:
 - Summarization, Q&A, and mind map generation
 - Streaming and non-streaming endpoints
 """
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap
+from server.routes import chat, ingest, summarize, qa, mindmap, sessions
+from server.deps import get_current_user
 from config import CONFIG
 import logging
 from datetime import datetime
@@ -67,12 +68,21 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend integration
+# Allow frontend at localhost:3000 (Next.js default) and backend at localhost:5000
+allowed_origins = [
+    "http://localhost:3000",  # Next.js dev server
+    "http://localhost:5000",  # Backend server
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allowed_origins,  # Specific origins for security
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -146,8 +156,17 @@ async def health_check():
     )
 
 
+# Test auth endpoint
+@app.get("/test-auth", tags=["health"])
+async def test_auth(user_id: str = Depends(get_current_user)):
+    """Test endpoint to verify JWT authentication is working"""
+    logger.info(f"🎯 Test auth endpoint hit! User ID: {user_id}")
+    return {"message": "Auth works!", "user_id": user_id}
+
+
 # Include routers
 app.include_router(chat.router)
+app.include_router(sessions.router)
 app.include_router(ingest.router)
 app.include_router(summarize.router)
 app.include_router(qa.router)

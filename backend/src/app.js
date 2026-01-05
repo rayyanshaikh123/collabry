@@ -6,6 +6,7 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin.routes');
+const aiRoutes = require('./routes/ai.routes');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+
 
 // Root route
 app.get('/', (req, res) => {

@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import StudyBuddy from '../../../views/StudyBuddy';
+import StudyBuddyNew from '../../../views/StudyBuddyNew';
 
 export default function StudyBuddyPage() {
-  return <StudyBuddy />;
+  return <StudyBuddyNew />;
 }

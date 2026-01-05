@@ -47,9 +47,11 @@ export default function MainLayout({
   // Check authentication state and redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated && !isLoading) {
-      router.push('/login');
+      // Save current path for redirect after login
+      const currentPath = pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, pathname]);
 
   const cycleTheme = () => {
     const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;

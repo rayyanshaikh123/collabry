@@ -122,22 +122,37 @@ async def chat_stream(
         )
         
         async def event_generator():
-            """Generate SSE events."""
-            chunks = []
+            """Generate SSE events that stream in real-time."""
             
+            def stream_chunk(chunk: str):
+                """Callback that yields chunks immediately."""
+                if chunk.strip():
+                    # Yield each chunk as it's generated
+                    return f"data: {chunk}\n\n"
+                return None
+            
+            # Track if we've sent any data
+            has_data = False
+            
+            # Execute agent with immediate streaming
+            chunks_buffer = []
             def collect_chunk(chunk: str):
-                chunks.append(chunk)
+                chunks_buffer.append(chunk)
             
-            # Execute agent (synchronous)
             agent.handle_user_input_stream(request.message, collect_chunk)
             
-            # Stream collected chunks as SSE
-            for chunk in chunks:
+            # Stream the collected chunks
+            for chunk in chunks_buffer:
                 if chunk.strip():
+                    has_data = True
                     yield f"data: {chunk}\n\n"
             
-            # Send completion event
-            yield f"event: done\ndata: {session_id}\n\n"
+            # Send completion event (without session_id in data)
+            if has_data:
+                yield f"event: done\ndata: \n\n"
+            else:
+                yield f"data: No response generated\n\n"
+                yield f"event: done\ndata: \n\n"
         
         return StreamingResponse(
             event_generator(),
@@ -153,69 +168,4 @@ async def chat_stream(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to stream chat response: {str(e)}"
-        )
-
-
-@router.get(
-    "/sessions",
-    summary="List user sessions",
-    description="Get all chat sessions for the authenticated user"
-)
-async def list_sessions(user_id: str = Depends(get_current_user)):
-    """
-    List all sessions for the current user.
-    
-    Returns:
-        List of session metadata (session_id, last_activity)
-    """
-    try:
-        from core.memory import MemoryManager
-        
-        # Create temporary memory manager to list sessions
-        memory = MemoryManager(user_id=user_id, session_id="temp")
-        sessions = memory.list_user_sessions()
-        
-        return {
-            "user_id": user_id,
-            "sessions": sessions,
-            "total": len(sessions)
-        }
-        
-    except Exception as e:
-        logger.exception(f"List sessions error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list sessions: {str(e)}"
-        )
-
-
-@router.post(
-    "/sessions",
-    summary="Create new session",
-    description="Create a new chat session for the authenticated user"
-)
-async def create_session(user_id: str = Depends(get_current_user)):
-    """
-    Create a new session for the current user.
-    
-    Returns:
-        New session_id
-    """
-    try:
-        from core.memory import MemoryManager
-        
-        memory = MemoryManager(user_id=user_id, session_id="temp")
-        new_session_id = memory.create_session()
-        
-        return {
-            "user_id": user_id,
-            "session_id": new_session_id,
-            "message": "Session created successfully"
-        }
-        
-    except Exception as e:
-        logger.exception(f"Create session error: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to create session: {str(e)}"
         )

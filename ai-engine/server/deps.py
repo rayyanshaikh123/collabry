@@ -32,35 +32,44 @@ def get_current_user(
     try:
         # Decode JWT token
         token = credentials.credentials
+        logger.info(f"🔑 Received token: {token[:30]}...")
+        logger.info(f"🔐 Using secret: {CONFIG['jwt_secret_key'][:20]}...")
+        logger.info(f"🔧 Using algorithm: {CONFIG['jwt_algorithm']}")
+        
         payload = jwt.decode(
             token,
             CONFIG["jwt_secret_key"],
             algorithms=[CONFIG["jwt_algorithm"]]
         )
         
-        # Extract user_id from 'sub' claim (standard JWT practice)
-        user_id: Optional[str] = payload.get("sub")
+        logger.info(f"✅ Token decoded successfully. Payload: {payload}")
+        
+        # Extract user_id from 'sub' or 'id' claim (backend uses 'id', standard is 'sub')
+        user_id: Optional[str] = payload.get("sub") or payload.get("id")
         
         if user_id is None:
-            logger.warning("JWT token missing 'sub' claim")
+            logger.warning(f"❌ JWT token missing 'sub' or 'id' claim. Payload: {payload}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing user identifier",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        logger.info(f"Authenticated user: {user_id}")
+        # Convert ObjectId to string if needed
+        user_id = str(user_id)
+        
+        logger.info(f"✅ Authenticated user: {user_id}")
         return user_id
         
     except JWTError as e:
-        logger.error(f"JWT validation failed: {e}")
+        logger.error(f"❌ JWT validation failed: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        logger.error(f"Unexpected error in JWT validation: {e}")
+        logger.error(f"❌ Unexpected error in JWT validation: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed",
@@ -86,3 +95,4 @@ def get_optional_user(
         return get_current_user(credentials)
     except HTTPException:
         return None
+

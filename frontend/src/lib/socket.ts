@@ -13,6 +13,11 @@ class SocketClient {
   private maxReconnectAttempts = 5;
 
   connect(token: string) {
+    // Socket disabled - backend server not running
+    console.log('[Socket] Socket connection disabled (backend not running)');
+    return null;
+    
+    /* Commented out until backend server is running
     if (this.socket?.connected) {
       return this.socket;
     }
@@ -30,6 +35,7 @@ class SocketClient {
 
     this.setupEventHandlers();
     return this.socket;
+    */
   }
 
   private setupEventHandlers() {

@@ -312,7 +312,7 @@ class COLLABRYAgent:
         clarification = self.study_copilot.needs_clarification(corrected)
         if clarification:
             response = f"🤔 {clarification}\n\n(This will help me give you a better explanation!)"
-            _typing_print(response)
+            on_token(response)  # Use callback instead of print
             self.memory.save_context({"user_input": corrected}, {"output": response})
             return
 
@@ -339,7 +339,7 @@ class COLLABRYAgent:
         parsed_json = extract_json(raw_response)
         if not parsed_json:
             # Fallback for non-JSON response
-            _typing_print(raw_response)
+            on_token(raw_response)  # Use callback instead of print
             self.memory.save_context({"user_input": corrected}, {"output": raw_response})
             return
 
@@ -366,7 +366,7 @@ class COLLABRYAgent:
             # Add learning tip
             full_response += f"\n\n{self.study_copilot._get_learning_tip()}"
             
-            _typing_print(full_response)
+            on_token(full_response)  # Use callback instead of print
             self.memory.save_context({"user_input": corrected}, {"output": full_response})
             return
             
@@ -384,7 +384,7 @@ class COLLABRYAgent:
                 msg += "💡 **Suggested tools:**\n"
                 for sug in suggestions:
                     msg += f"- {sug['tool']}: {sug['reason']}\n"
-            _typing_print(msg)
+            on_token(msg)  # Use callback instead of print
             self.memory.save_context({"user_input": corrected}, {"output": msg})
             return
 
@@ -448,7 +448,7 @@ class COLLABRYAgent:
                     for i, q in enumerate(follow_ups, 1):
                         full_response += f"\n{i}. {q}"
                 
-                _typing_print(full_response)
+                on_token(full_response)  # Use callback instead of print
                 
                 # Store with tool tag
                 if full_content:
@@ -460,7 +460,7 @@ class COLLABRYAgent:
                 return
             else:
                 # Fallback: print immediate result
-                _typing_print(clean_answer(immediate))
+                on_token(clean_answer(immediate))  # Use callback instead of print
                 self.memory.save_context(
                     {"user_input": corrected},
                     {"output": f"[tool:{canonical}] {clean_answer(immediate)}"}
@@ -486,7 +486,7 @@ class COLLABRYAgent:
         except Exception as e:
             logger.exception("LLM synthesis failed")
             out = clean_answer(result)
-            _typing_print(out)
+            on_token(out)  # Use callback instead of print
             self.memory.save_context({"user_input": corrected}, {"output": f"[tool:{canonical}] {out}"})
             return
 
@@ -495,7 +495,7 @@ class COLLABRYAgent:
         else:
             final_answer = clean_answer(result)
         
-        _typing_print(final_answer)
+        on_token(final_answer)  # Use callback instead of print
         
         # Store with full content if web_scrape
         if full_content:
