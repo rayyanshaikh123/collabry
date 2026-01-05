@@ -1,0 +1,88 @@
+"""
+FastAPI dependencies for JWT authentication and user extraction.
+"""
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+from typing import Optional
+from config import CONFIG
+import logging
+
+logger = logging.getLogger(__name__)
+
+# HTTP Bearer token scheme
+security = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """
+    Extract and validate user_id from JWT token.
+    
+    Args:
+        credentials: HTTP Bearer credentials from request header
+        
+    Returns:
+        user_id: Validated user identifier from JWT claims
+        
+    Raises:
+        HTTPException: 401 if token is invalid or missing user_id
+    """
+    try:
+        # Decode JWT token
+        token = credentials.credentials
+        payload = jwt.decode(
+            token,
+            CONFIG["jwt_secret_key"],
+            algorithms=[CONFIG["jwt_algorithm"]]
+        )
+        
+        # Extract user_id from 'sub' claim (standard JWT practice)
+        user_id: Optional[str] = payload.get("sub")
+        
+        if user_id is None:
+            logger.warning("JWT token missing 'sub' claim")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: missing user identifier",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        logger.info(f"Authenticated user: {user_id}")
+        return user_id
+        
+    except JWTError as e:
+        logger.error(f"JWT validation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in JWT validation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        HTTPBearer(auto_error=False)
+    )
+) -> Optional[str]:
+    """
+    Optional JWT authentication for public endpoints.
+    
+    Returns:
+        user_id if token is valid, None otherwise
+    """
+    if credentials is None:
+        return None
+    
+    try:
+        return get_current_user(credentials)
+    except HTTPException:
+        return None

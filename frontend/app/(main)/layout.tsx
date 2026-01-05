@@ -1,0 +1,135 @@
+'use client';
+
+/**
+ * Main Layout
+ * Protected routes layout with sidebar and top navbar
+ * Used for: dashboard, study-board, planner, focus, profile, study-buddy, visual-aids
+ */
+
+import React from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Sidebar from '../../components/Sidebar';
+import { ICONS } from '../../constants';
+import { useAuthStore } from '../../src/stores/auth.store';
+import { useUIStore } from '../../src/stores/ui.store';
+import { useSocket } from '../../src/hooks/useCollaboration';
+import { AppRoute } from '../../types';
+
+const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
+
+// Map pathnames to AppRoute enum values
+const getAppRouteFromPath = (path: string): string => {
+  const routeMap: Record<string, string> = {
+    '/dashboard': 'dashboard',
+    '/study-board': 'study-board',
+    '/planner': 'planner',
+    '/focus': 'focus',
+    '/profile': 'profile',
+    '/study-buddy': 'study-buddy',
+    '/visual-aids': 'visual-aids',
+  };
+  return routeMap[path] || 'dashboard';
+};
+
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, logout } = useAuthStore();
+  const { isMobileSidebarOpen, toggleMobileSidebar, theme, setTheme } = useUIStore();
+
+  // Initialize socket connection
+  useSocket();
+
+  const cycleTheme = () => {
+    const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;
+    setTheme(THEMES[nextIndex] as any);
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push('/');
+  };
+
+  const handleNavigate = (route: string | AppRoute) => {
+    const routeStr = typeof route === 'string' ? route : route.toString();
+    const pathMap: Record<string, string> = {
+      'dashboard': '/dashboard',
+      'study-board': '/study-board',
+      'planner': '/planner',
+      'focus': '/focus',
+      'profile': '/profile',
+      'study-buddy': '/study-buddy',
+      'visual-aids': '/visual-aids',
+    };
+    router.push(pathMap[routeStr] || '/dashboard');
+  };
+
+  const currentRoute = getAppRouteFromPath(pathname);
+
+  return (
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      <Sidebar 
+        currentRoute={currentRoute as any} 
+        onNavigate={handleNavigate as any} 
+        isMobileOpen={isMobileSidebarOpen}
+        setMobileOpen={toggleMobileSidebar}
+        onLogout={handleLogout}
+        userRole={user?.role || 'student'}
+        onCycleTheme={cycleTheme}
+      />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Navbar */}
+        <header className="h-16 bg-white border-b-2 border-slate-100 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={toggleMobileSidebar}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-2xl transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 6h16M4 12h16m-7 6h7" />
+              </svg>
+            </button>
+            <div className="hidden md:flex items-center bg-slate-50 rounded-2xl px-4 py-2 w-72 border-2 border-transparent focus-within:border-indigo-200 focus-within:bg-white transition-all shadow-inner">
+              <span className="text-slate-300"><ICONS.Search size={18} strokeWidth={3} /></span>
+              <input 
+                type="text" 
+                placeholder="Search your knowledge..." 
+                className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-600 placeholder:text-slate-300 font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 md:gap-4">
+            <button className="p-2.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-2xl relative transition-all bouncy-hover">
+              <ICONS.Notification size={22} strokeWidth={2.5} />
+              <span className="absolute top-2 right-2 w-3 h-3 bg-rose-500 border-2 border-white rounded-full animate-bounce"></span>
+            </button>
+            <div className="h-8 w-1 bg-slate-100 mx-1 hidden md:block rounded-full"></div>
+            <div 
+              className="flex items-center gap-3 pl-1 md:pl-2 cursor-pointer group"
+              onClick={() => router.push('/profile')}
+            >
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-bold text-slate-700">{user?.name || 'User'}</p>
+                <p className="text-xs text-slate-400 capitalize">{user?.role || 'Student'}</p>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-500 flex items-center justify-center text-white font-black text-xl border-2 border-white shadow-lg group-hover:scale-105 transition-all">
+                {(user?.name?.[0] || 'U').toUpperCase()}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
