@@ -95,13 +95,14 @@ export const useAuthStore = create<AuthState>()(
       // Logout action
       logout: async () => {
         try {
+          // Disconnect socket first
+          socketClient.disconnect();
+          
+          // Call backend logout
           await authService.logout();
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
-          // Disconnect socket
-          socketClient.disconnect();
-          
           // Clear state
           set({
             user: null,
@@ -109,7 +110,11 @@ export const useAuthStore = create<AuthState>()(
             refreshToken: null,
             isAuthenticated: false,
             error: null,
+            isLoading: false,
           });
+          
+          // Clear persisted storage
+          localStorage.removeItem('auth-storage');
         }
       },
 

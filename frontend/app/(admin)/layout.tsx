@@ -5,7 +5,7 @@
  * Protected admin routes with admin sidebar and role guard
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RoleGuard } from '../../src/guards/RoleGuard';
 import { useAuthStore } from '../../src/stores/auth.store';
@@ -31,18 +31,31 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) { 
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, isAuthenticated, isLoading } = useAuthStore();
   const { isMobileSidebarOpen, toggleMobileSidebar, theme, setTheme } = useUIStore();
   const [currentSubRoute, setCurrentSubRoute] = useState<AppRoute>(AppRoute.ADMIN);
+
+  // Check authentication state and redirect if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && !isLoading) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, isLoading, router]);
 
   const cycleTheme = () => {
     const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;
     setTheme(THEMES[nextIndex] as any);
   };
 
-  const handleLogout = () => {
-    logout();
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // The useEffect will handle the redirect based on isAuthenticated state
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force redirect on error
+      router.push('/login');
+    }
   };
 
   const handleNavigate = (route: string | AppRoute) => {
@@ -63,6 +76,18 @@ export default function AdminLayout({
     const targetRoute = routeEnumMap[routeValue] || AppRoute.ADMIN;
     setCurrentSubRoute(targetRoute);
   };
+
+  // Show loading state during logout
+  if (!isAuthenticated && isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-rose-600 mx-auto"></div>
+          <p className="mt-4 text-slate-600 font-semibold">Logging out...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <RoleGuard 
