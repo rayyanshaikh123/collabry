@@ -112,6 +112,16 @@ class AIEngineService {
   }
 
   /**
+   * Streaming summarization
+   */
+  async summarizeStream(text: string, userId: string, options?: { max_length?: number; style?: string }) {
+    return this.client.post('/ai/summarize/stream', {
+      text,
+      ...options,
+    });
+  }
+
+  /**
    * Generate Q&A from text
    */
   async generateQA(text: string, userId: string, options?: { num_questions?: number }) {
@@ -119,6 +129,90 @@ class AIEngineService {
       text,
       user_id: userId,
       ...options,
+    });
+  }
+
+  /**
+   * Question answering with RAG
+   */
+  async questionAnswer(question: string, userId: string, options?: { use_rag?: boolean; context?: string; top_k?: number }) {
+    return this.client.post('/ai/qa', {
+      question,
+      user_id: userId,
+      use_rag: options?.use_rag !== false,
+      context: options?.context,
+      top_k: options?.top_k || 3,
+    });
+  }
+
+  /**
+   * Streaming QA with RAG
+   */
+  async questionAnswerStream(question: string, userId: string, options?: { use_rag?: boolean; context?: string; top_k?: number }) {
+    return this.client.post('/ai/qa/stream', {
+      question,
+      use_rag: options?.use_rag !== false,
+      context: options?.context,
+      top_k: options?.top_k || 3,
+    });
+  }
+
+  /**
+   * QA with file upload
+   */
+  async questionAnswerWithFile(question: string, file: File, use_rag: boolean = false) {
+    const formData = new FormData();
+    formData.append('question', question);
+    formData.append('file', file);
+    formData.append('use_rag', String(use_rag));
+
+    return this.client.post('/ai/qa/file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
+
+  /**
+   * Generate quiz questions from text
+   */
+  async generateQuiz(text: string, options?: { num_questions?: number; difficulty?: string; include_options?: boolean }) {
+    return this.client.post('/ai/qa/generate', {
+      text,
+      num_questions: options?.num_questions || 5,
+      difficulty: options?.difficulty || 'medium',
+      include_options: options?.include_options || false,
+    });
+  }
+
+  /**
+   * Generate quiz questions with streaming
+   */
+  async generateQuizStream(text: string, options?: { num_questions?: number; difficulty?: string; include_options?: boolean }) {
+    return this.client.post('/ai/qa/generate/stream', {
+      text,
+      num_questions: options?.num_questions || 5,
+      difficulty: options?.difficulty || 'medium',
+      include_options: options?.include_options || false,
+    }, {
+      responseType: 'stream'
+    });
+  }
+
+  /**
+   * Generate quiz from uploaded file
+   */
+  async generateQuizFromFile(file: File, options?: { num_questions?: number; difficulty?: string; include_options?: boolean }) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('num_questions', String(options?.num_questions || 5));
+    formData.append('difficulty', options?.difficulty || 'medium');
+    formData.append('include_options', String(options?.include_options || false));
+
+    return this.client.post('/ai/qa/generate/file', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
   }
 

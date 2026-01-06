@@ -18,9 +18,11 @@ logger.setLevel(logging.INFO)
 # ---------------------------------------------------------------
 try:
     nlp = spacy.load("en_core_web_sm")
+    nlp.max_length = 10000000  # Increase to 10M characters
 except:
     logger.warning("spaCy model missing — using blank model.")
     nlp = spacy.blank("en")
+    nlp.max_length = 10000000
 
 # ---------------------------------------------------------------
 # Load Intent Classifier

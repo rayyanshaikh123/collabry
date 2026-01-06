@@ -8,6 +8,7 @@ export * from './studyBoard.types';
 export * from './planner.types';
 export * from './focus.types';
 export * from './collaboration.types';
+export * from './visualAids.types';
 
 // API Response Types
 export interface ApiResponse<T = any> {

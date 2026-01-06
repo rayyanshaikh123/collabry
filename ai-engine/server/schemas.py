@@ -97,6 +97,37 @@ class QAResponse(BaseModel):
 
 
 # ============================================================================
+# Q&A Generation Schemas (Quiz/Test Generation)
+# ============================================================================
+
+class QuizQuestion(BaseModel):
+    """Single quiz question with answer."""
+    question: str = Field(..., description="The question text")
+    answer: str = Field(..., description="The correct answer")
+    options: Optional[List[str]] = Field(None, description="Multiple choice options if applicable")
+    explanation: Optional[str] = Field(None, description="Explanation of the answer")
+    difficulty: Optional[str] = Field("medium", description="Question difficulty: easy, medium, hard")
+
+
+class QAGenerateRequest(BaseModel):
+    """Request for generating quiz questions from content."""
+    text: str = Field(..., description="Text content to generate questions from", min_length=10)
+    num_questions: int = Field(5, description="Number of questions to generate", ge=1, le=20)
+    difficulty: Optional[str] = Field("medium", description="Difficulty level: easy, medium, hard, mixed")
+    include_options: bool = Field(False, description="Generate multiple choice options")
+    use_rag: bool = Field(False, description="Use RAG to retrieve relevant documents from user's knowledge base")
+    topic: Optional[str] = Field(None, description="Topic to filter RAG retrieval (if use_rag is True)")
+
+
+class QAGenerateResponse(BaseModel):
+    """Response with generated quiz questions."""
+    questions: List[QuizQuestion] = Field(..., description="List of generated questions")
+    source_length: int = Field(..., description="Length of source text")
+    user_id: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================================
 # Mind Map Schemas
 # ============================================================================
 

@@ -298,8 +298,13 @@ class COLLABRYAgent:
             on_token: Callback for streaming tokens
         """
         # 1. NLP analysis (spell correction, intent, entities)
+        # Skip NLP for very long texts (quiz generation with large documents)
         try:
-            analysis = analyze(user_input)
+            if len(user_input) > 1000000:  # Skip NLP for texts > 1MB
+                logger.info(f"Skipping NLP analysis for long text ({len(user_input)} chars)")
+                analysis = {"corrected": user_input}
+            else:
+                analysis = analyze(user_input)
         except Exception as e:
             logger.exception("NLP analyze failed")
             analysis = {"corrected": user_input}
@@ -343,7 +348,14 @@ class COLLABRYAgent:
             self.memory.save_context({"user_input": corrected}, {"output": raw_response})
             return
 
-        # 8. Handle direct answer (no tool)
+        # 8. Handle list responses (e.g., quiz questions array)
+        if isinstance(parsed_json, list):
+            # For list responses, just stream the raw response
+            on_token(raw_response)
+            self.memory.save_context({"user_input": corrected}, {"output": raw_response})
+            return
+
+        # 9. Handle direct answer (no tool)
         if parsed_json.get("tool") is None:
             answer = clean_answer(parsed_json.get("answer", ""))
             follow_ups = parsed_json.get("follow_up_questions", [])

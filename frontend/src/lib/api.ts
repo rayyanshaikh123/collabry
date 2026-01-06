@@ -7,7 +7,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import type { ApiResponse } from '../types';
 
 // Base URL from environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -17,7 +17,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 30000,
+      timeout: 300000, // 5 minutes for large quiz generation
       headers: {
         'Content-Type': 'application/json',
       },
@@ -35,6 +35,12 @@ class ApiClient {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // If data is FormData, remove Content-Type to let browser set it
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
+        }
+        
         return config;
       },
       (error) => Promise.reject(error)
@@ -46,11 +52,15 @@ class ApiClient {
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-        // Silently ignore network errors in development when backend is not running
-        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || error.response?.status === 404) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Backend not connected - API call skipped');
-          }
+        // Log network errors for debugging
+        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+          console.error('Network Error Details:', {
+            code: error.code,
+            message: error.message,
+            url: error.config?.url,
+            baseURL: error.config?.baseURL,
+            method: error.config?.method
+          });
         }
 
         // Handle 401 Unauthorized

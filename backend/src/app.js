@@ -6,15 +6,16 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin.routes');
-const aiRoutes = require('./routes/ai.routes');
+const visualAidsRoutes = require('./routes/visualAids.routes');
+
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
 
 // Middleware
 app.use(cors(config.cors));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' })); // Increase limit for large file uploads
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));
 
 // Routes
@@ -22,6 +23,7 @@ app.use('/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/visual-aids', visualAidsRoutes);
 
 
 // Root route

@@ -194,7 +194,11 @@ async def root():
             "chat_stream": "POST /ai/chat/stream - Streaming chat (SSE)",
             "upload": "POST /ai/upload - Upload document for RAG",
             "summarize": "POST /ai/summarize - Summarize text",
+            "summarize_stream": "POST /ai/summarize/stream - Streaming summarization (SSE)",
             "qa": "POST /ai/qa - Question answering with RAG",
+            "qa_stream": "POST /ai/qa/stream - Streaming QA (SSE)",
+            "qa_file": "POST /ai/qa/file - QA with file upload (PDF/TXT/MD, max 10MB)",
+            "qa_file_stream": "POST /ai/qa/file/stream - Streaming QA with file (SSE)",
             "mindmap": "POST /ai/mindmap - Generate mind map",
             "sessions": "GET /ai/sessions - List user sessions",
             "create_session": "POST /ai/sessions - Create new session"

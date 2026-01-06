@@ -18,6 +18,15 @@ interface ChatSession {
   messageCount: number;
 }
 
+interface QuizQuestion {
+  question: string;
+  answer: string;
+  options?: string[];
+  explanation?: string;
+  difficulty?: string;
+  isRevealed?: boolean;
+}
+
 type AIMode = 'chat' | 'summarize' | 'qa' | 'mindmap';
 
 const StudyBuddyNew: React.FC = () => {
@@ -47,6 +56,10 @@ const StudyBuddyNew: React.FC = () => {
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [showRateLimitWarning, setShowRateLimitWarning] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false); // Flag to prevent message reload during streaming
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null); // For file uploads
+  const [showAttachMenu, setShowAttachMenu] = useState(false); // For + icon menu
+  const [useRAG, setUseRAG] = useState(false); // Enable RAG for all modes
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]); // Store generated quiz questions
 
   // Transform sessions data
   const sessions = React.useMemo(() => {
@@ -92,6 +105,19 @@ const StudyBuddyNew: React.FC = () => {
       setShowRateLimitWarning(true);
     }
   }, [sessionsData]);
+
+  // Close attach menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showAttachMenu && !target.closest('.attach-menu-container')) {
+        setShowAttachMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAttachMenu]);
 
   // Debug: Log user and sessions data
   useEffect(() => {
@@ -226,8 +252,8 @@ const StudyBuddyNew: React.FC = () => {
                 flushSync(() => {
                   updateMessage(messageTimestamp, fullResponse, false);
                 });
-                // Small delay to make streaming visible (10ms)
-                await new Promise(resolve => setTimeout(resolve, 10));
+                // Reduced delay for faster streaming (1ms instead of 10ms)
+                await new Promise(resolve => setTimeout(resolve, 1));
               }
             } else if (line.startsWith('event: done')) {
               console.log('✅ [streamMessage] Stream complete event');
@@ -278,6 +304,297 @@ const StudyBuddyNew: React.FC = () => {
       // Re-enable message loading after streaming completes
       setIsStreaming(false);
       console.log('🔓 [streamMessage] Streaming complete, message reload enabled');
+    }
+  };
+
+  // Stream summarization using Server-Sent Events
+  const streamSummarize = async (messageTimestamp: string, textToSummarize: string) => {
+    console.log('📝 [streamSummarize] Starting SSE stream for summarization');
+    console.log('📝 [streamSummarize] Text length:', textToSummarize.length);
+    setIsStreaming(true);
+    
+    let fullResponse = '';
+    let streamComplete = false;
+    
+    try {
+      // Get auth token
+      const authStorage = localStorage.getItem('auth-storage');
+      let token = '';
+      if (authStorage) {
+        const { state } = JSON.parse(authStorage);
+        token = state?.accessToken || '';
+      }
+
+      const AI_ENGINE_URL = 'http://localhost:8000';
+      const url = new URL('/ai/summarize/stream', AI_ENGINE_URL);
+      console.log('📝 [streamSummarize] Calling URL:', url.toString());
+      
+      // Use fetch with ReadableStream for SSE
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: textToSummarize,
+          style: 'concise'  // Can be made configurable
+        })
+      });
+
+      console.log('📝 [streamSummarize] Response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Stream failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+
+      let firstChunkReceived = false;
+
+      const processStream = async () => {
+        while (!streamComplete) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log('✅ [streamSummarize] Stream done');
+            streamComplete = true;
+            break;
+          }
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data && data.trim()) {
+                if (!firstChunkReceived) {
+                  console.log('📥 [streamSummarize] First chunk received');
+                  firstChunkReceived = true;
+                  updateMessage(messageTimestamp, '📝 **Summary:**\n\n', false);
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                
+                fullResponse += data;
+                flushSync(() => {
+                  updateMessage(messageTimestamp, `📝 **Summary:**\n\n${fullResponse}`, false);
+                });
+                // Reduced delay for faster streaming (1ms instead of 10ms)
+                await new Promise(resolve => setTimeout(resolve, 1));
+              }
+            } else if (line.startsWith('event: done')) {
+              console.log('✅ [streamSummarize] Stream complete event');
+              streamComplete = true;
+            }
+          }
+        }
+        
+        console.log(`✅ [streamSummarize] Final summary length: ${fullResponse.length}`);
+        flushSync(() => {
+          updateMessage(messageTimestamp, `📝 **Summary:**\n\n${fullResponse}`, false);
+        });
+        
+        // Save to backend after a delay
+        if (fullResponse && activeSessionId) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('💾 [streamSummarize] Saving summary to backend...');
+          try {
+            await saveMessage.mutateAsync({ 
+              sessionId: activeSessionId, 
+              message: {
+                role: 'assistant',
+                content: `📝 **Summary:**\n\n${fullResponse}`,
+                timestamp: messageTimestamp
+              }
+            });
+            console.log('✅ [streamSummarize] Summary saved to backend');
+          } catch (error) {
+            console.error('❌ [streamSummarize] Failed to save summary:', error);
+          }
+        }
+      };
+      
+      await processStream();
+      console.log('✅ [streamSummarize] Complete');
+
+    } catch (error) {
+      console.error('❌ [streamSummarize] Error:', error);
+      updateMessage(messageTimestamp, '❌ Summarization failed. Please try again.', false);
+    } finally {
+      setIsStreaming(false);
+      console.log('🔓 [streamSummarize] Streaming complete');
+    }
+  };
+
+  // Generate Quiz Questions from content
+  const generateQuiz = async (messageTimestamp: string, content: string, file?: File) => {
+    console.log('❓ [generateQuiz] Starting quiz generation');
+    console.log('❓ [generateQuiz] Content length:', content.length);
+    if (file) console.log('❓ [generateQuiz] File:', file.name);
+    setIsStreaming(true);
+    
+    const questions: QuizQuestion[] = [];
+    
+    try {
+      const authStorage = localStorage.getItem('auth-storage');
+      let token = '';
+      if (authStorage) {
+        const { state } = JSON.parse(authStorage);
+        token = state?.accessToken || '';
+      }
+
+      const AI_ENGINE_URL = 'http://localhost:8000';
+      let url: string;
+      let requestBody: any;
+      let headers: any = {
+        'Authorization': `Bearer ${token}`
+      };
+
+      if (file) {
+        // Use file upload endpoint for quiz generation
+        url = `${AI_ENGINE_URL}/ai/qa/generate/file`;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('num_questions', '5');
+        formData.append('difficulty', 'medium');
+        formData.append('include_options', 'true');
+        requestBody = formData;
+      } else {
+        // Use streaming endpoint for quiz generation
+        url = `${AI_ENGINE_URL}/ai/qa/generate/stream`;
+        headers['Content-Type'] = 'application/json';
+        requestBody = JSON.stringify({
+          text: content,
+          num_questions: 5,
+          difficulty: 'medium',
+          include_options: true
+        });
+      }
+
+      console.log('❓ [generateQuiz] Calling URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: requestBody
+      });
+
+      console.log('❓ [generateQuiz] Response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`Quiz generation failed: ${response.status}`);
+      }
+
+      if (file) {
+        // For file upload, parse JSON response directly
+        const data = await response.json();
+        if (data.questions) {
+          questions.push(...data.questions.map((q: any) => ({
+            ...q,
+            isRevealed: false
+          })));
+        }
+      } else {
+        // For streaming, use SSE to get questions one by one
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          throw new Error('No reader available');
+        }
+
+        let streamComplete = false;
+        let firstQuestionReceived = false;
+
+        while (!streamComplete) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log('✅ [generateQuiz] Stream done');
+            streamComplete = true;
+            break;
+          }
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data && data.trim()) {
+                try {
+                  const questionData = JSON.parse(data);
+                  if (!firstQuestionReceived) {
+                    console.log('📥 [generateQuiz] First question received');
+                    firstQuestionReceived = true;
+                    updateMessage(messageTimestamp, `❓ **Quiz Generated!**\n\nGenerating questions...`, false);
+                  }
+                  
+                  questions.push({
+                    ...questionData,
+                    isRevealed: false
+                  });
+                  
+                  console.log(`📥 [generateQuiz] Question ${questions.length} received`);
+                  updateMessage(messageTimestamp, `❓ **Quiz Generated!**\n\n${questions.length} questions created. See below:`, false);
+                  
+                } catch (e) {
+                  console.warn('Failed to parse question data:', e);
+                }
+              }
+            } else if (line.startsWith('event: done')) {
+              console.log('✅ [generateQuiz] Stream complete event');
+              streamComplete = true;
+            } else if (line.startsWith('event: error')) {
+              console.error('❌ [generateQuiz] Error event received');
+              streamComplete = true;
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ [generateQuiz] Generated ${questions.length} questions`);
+      
+      // Store questions in state
+      setQuizQuestions(questions);
+      
+      // Update message with final count
+      flushSync(() => {
+        updateMessage(messageTimestamp, `❓ **Quiz Generated!**\n\n${questions.length} questions created. Test yourself below! 🎯`, false);
+      });
+      
+      // Save to backend
+      if (questions.length > 0 && activeSessionId) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('💾 [generateQuiz] Saving quiz to backend...');
+        try {
+          await saveMessage.mutateAsync({ 
+            sessionId: activeSessionId, 
+            message: {
+              role: 'assistant',
+              content: `❓ **Quiz Generated!**\n\n${questions.length} questions created. Test yourself below! 🎯`,
+              timestamp: messageTimestamp
+            }
+          });
+          console.log('✅ [generateQuiz] Quiz saved to backend');
+        } catch (error) {
+          console.error('❌ [generateQuiz] Failed to save quiz:', error);
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ [generateQuiz] Error:', error);
+      updateMessage(messageTimestamp, '❌ Quiz generation failed. Please try again.', false);
+      setQuizQuestions([]);
+    } finally {
+      setIsStreaming(false);
+      console.log('🔓 [generateQuiz] Generation complete');
     }
   };
 
@@ -332,36 +649,15 @@ const StudyBuddyNew: React.FC = () => {
         break;
 
       case 'summarize':
-        summarize(
-          { text: userMessage },
-          {
-            onSuccess: (response: any) => {
-              const summary = response.summary || response.result || 'Summary generated!';
-              updateMessage(loadingTimestamp, `📝 **Summary:**\n\n${summary}`, false);
-            },
-            onError: (error: any) => {
-              updateMessage(loadingTimestamp, `❌ Error: ${error.message}`, false);
-            },
-          }
-        );
+        console.log('📝 [handleSendMessage] Calling streamSummarize');
+        await streamSummarize(loadingTimestamp, userMessage);
+        console.log('✅ [handleSendMessage] Summarize stream complete');
         break;
 
       case 'qa':
-        generateQA(
-          { text: userMessage, options: { num_questions: 5 } },
-          {
-            onSuccess: (response: any) => {
-              const questions = response.questions || response.result || [];
-              const formattedQA = Array.isArray(questions) 
-                ? questions.map((q: any, i: number) => `${i + 1}. ${q.question || q}\n   Answer: ${q.answer || 'N/A'}`).join('\n\n')
-                : 'Q&A generated!';
-              updateMessage(loadingTimestamp, `❓ **Practice Questions:**\n\n${formattedQA}`, false);
-            },
-            onError: (error: any) => {
-              updateMessage(loadingTimestamp, `❌ Error: ${error.message}`, false);
-            },
-          }
-        );
+        console.log('❓ [handleSendMessage] Calling generateQuiz');
+        await generateQuiz(loadingTimestamp, userMessage, uploadedFile || undefined);
+        console.log('✅ [handleSendMessage] Quiz generation complete');
         break;
 
       case 'mindmap':
@@ -649,13 +945,23 @@ const StudyBuddyNew: React.FC = () => {
 
         {/* Current Mode Indicator */}
         <div className="px-6 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-slate-100">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-lg">{getModeIcon(aiMode)}</span>
             <span className="text-sm font-bold text-slate-700">Mode: {getModeLabel(aiMode)}</span>
-            {aiMode !== 'chat' && (
+            {useRAG && (
+              <Badge className="text-[10px] bg-emerald-100 text-emerald-600 border border-emerald-200">
+                🔗 RAG Active
+              </Badge>
+            )}
+            {uploadedFile && (
+              <Badge className="text-[10px] bg-indigo-100 text-indigo-600 border border-indigo-200">
+                📄 {uploadedFile.name}
+              </Badge>
+            )}
+            {!uploadedFile && !useRAG && aiMode !== 'chat' && (
               <Badge className="ml-2 text-[10px] bg-indigo-100 text-indigo-600">
                 {aiMode === 'summarize' && 'Paste text to summarize'}
-                {aiMode === 'qa' && 'Paste text to generate questions'}
+                {aiMode === 'qa' && 'Ask questions or upload a file'}
                 {aiMode === 'mindmap' && 'Paste topic to create mind map'}
               </Badge>
             )}
@@ -728,32 +1034,300 @@ const StudyBuddyNew: React.FC = () => {
               </div>
             </div>
           ))}
+          
+          {/* Quiz Cards - Show after messages when quiz is generated */}
+          {quizQuestions.length > 0 && (
+            <div className="space-y-4 mt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="text-2xl">🎯</div>
+                <h3 className="text-lg font-bold text-slate-800">Test Yourself</h3>
+                <Badge className="bg-indigo-100 text-indigo-600">{quizQuestions.length} Questions</Badge>
+              </div>
+              
+              {quizQuestions.map((question, idx) => (
+                <Card key={idx} className="p-6 bg-white border-2 border-indigo-100 shadow-lg hover:shadow-xl transition-all">
+                  <div className="space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Badge className="bg-indigo-500 text-white shrink-0">Q{idx + 1}</Badge>
+                      <p className="font-bold text-slate-800 flex-1">{question.question}</p>
+                    </div>
+                    
+                    {question.options && question.options.length > 0 && (
+                      <div className="space-y-2 pl-10">
+                        {question.options.map((option, optIdx) => (
+                          <div 
+                            key={optIdx}
+                            className="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer border border-slate-200"
+                          >
+                            <span className="text-sm text-slate-700">{option}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {question.isRevealed ? (
+                      <div className="space-y-3 pl-10">
+                        <div className="p-4 rounded-xl bg-emerald-50 border-2 border-emerald-200">
+                          <p className="text-xs font-bold text-emerald-600 uppercase mb-1">✓ Correct Answer</p>
+                          <p className="font-bold text-emerald-800">{question.answer}</p>
+                        </div>
+                        
+                        {question.explanation && (
+                          <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
+                            <p className="text-xs font-bold text-blue-600 uppercase mb-1">💡 Explanation</p>
+                            <p className="text-sm text-blue-800">{question.explanation}</p>
+                          </div>
+                        )}
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const updated = [...quizQuestions];
+                              updated[idx].isRevealed = false;
+                              setQuizQuestions(updated);
+                            }}
+                            className="text-xs"
+                          >
+                            Hide Answer
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 pl-10">
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const updated = [...quizQuestions];
+                            updated[idx].isRevealed = true;
+                            setQuizQuestions(updated);
+                          }}
+                          className="bg-indigo-500 hover:bg-indigo-600"
+                        >
+                          Show Answer
+                        </Button>
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2 pt-4 border-t border-slate-100 pl-10">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setQuizQuestions(quizQuestions.filter((_, i) => i !== idx));
+                        }}
+                      >
+                        <ICONS.Trash size={14} className="mr-1" />
+                        Delete
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs text-indigo-600 hover:bg-indigo-50"
+                        onClick={() => {
+                          // TODO: Add to visual aids
+                          alert('Add to Visual Aids feature coming soon!');
+                        }}
+                      >
+                        <ICONS.Plus size={14} className="mr-1" />
+                        Add to Visual Aids
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              
+              <Button
+                variant="outline"
+                onClick={() => setQuizQuestions([])}
+                className="w-full text-red-600 hover:bg-red-50"
+              >
+                Clear All Questions
+              </Button>
+            </div>
+          )}
+          
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
         <div className="p-6 bg-white border-t-2 border-slate-50">
-          <div className="max-w-4xl mx-auto relative">
-            <Input 
-              placeholder={`${getModeLabel(aiMode)}... (${aiHealth?.status === 'healthy' ? 'AI Ready' : 'AI Offline'})`}
-              className="rounded-[2.5rem] py-5 px-8 text-base border-2 focus:ring-8 shadow-inner bg-slate-50 pr-24"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-              disabled={isAnyPending || !user || aiHealth?.status !== 'healthy'}
+          <div className="max-w-4xl mx-auto">
+            {/* Hidden file input */}
+            <input
+              type="file"
+              id="file-upload-input"
+              accept=".pdf,.txt,.md"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  if (file.size > 10 * 1024 * 1024) {
+                    alert('File too large! Maximum size is 10MB');
+                    e.target.value = '';
+                    return;
+                  }
+                  setUploadedFile(file);
+                  setShowAttachMenu(false);
+                }
+              }}
+              className="hidden"
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
-              <Button 
-                onClick={handleSendMessage}
-                disabled={isAnyPending || !inputText.trim() || !user || aiHealth?.status !== 'healthy'}
-                className="w-12 h-12 rounded-full p-0 flex items-center justify-center shadow-indigo-200 disabled:opacity-50"
-              >
-                {isAnyPending ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <ICONS.Share size={20} className="rotate-[-45deg] mr-0.5 mt-0.5" strokeWidth={3} />
-                )}
-              </Button>
+
+            {/* File preview badge */}
+            {uploadedFile && (
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl shadow-sm">
+                  <span className="text-lg">📄</span>
+                  <span className="text-sm font-semibold text-indigo-700">{uploadedFile.name}</span>
+                  <span className="text-xs text-indigo-600">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
+                  <button
+                    onClick={() => setUploadedFile(null)}
+                    className="ml-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded-full w-5 h-5 flex items-center justify-center transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                {/* RAG Toggle */}
+                <button
+                  onClick={() => setUseRAG(!useRAG)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    useRAG 
+                      ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300' 
+                      : 'bg-slate-100 text-slate-600 border-2 border-slate-200 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="text-base">{useRAG ? '🔗' : '📚'}</span>
+                  <span>RAG {useRAG ? 'On' : 'Off'}</span>
+                </button>
+              </div>
+            )}
+            
+            <div className="relative">
+              <Input 
+                placeholder={
+                  uploadedFile
+                    ? `${getModeLabel(aiMode)} for ${uploadedFile.name}...`
+                    : `${getModeLabel(aiMode)}... (${aiHealth?.status === 'healthy' ? 'AI Ready' : 'AI Offline'})`
+                }
+                className="rounded-[2.5rem] py-5 pl-16 pr-24 text-base border-2 focus:ring-8 shadow-inner bg-slate-50"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                disabled={isAnyPending || !user || aiHealth?.status !== 'healthy'}
+              />
+              
+              {/* Left side - Attach Menu (+ icon) */}
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 attach-menu-container">
+                <div className="relative">
+                  <Button
+                    onClick={() => setShowAttachMenu(!showAttachMenu)}
+                    disabled={isAnyPending || !user}
+                    className="w-12 h-12 rounded-full p-0 flex items-center justify-center bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-slate-300 shadow-sm disabled:opacity-50 transition-all"
+                    title="Attach file or use RAG"
+                  >
+                    <svg 
+                      className={`w-5 h-5 text-slate-600 transition-transform ${showAttachMenu ? 'rotate-45' : ''}`}
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2.5} 
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                  </Button>
+                  
+                  {/* Attach Menu Popup */}
+                  {showAttachMenu && (
+                    <div className="absolute bottom-full left-0 mb-2 bg-white rounded-2xl shadow-xl border-2 border-slate-100 p-2 min-w-[280px] z-50">
+                      <div className="p-2 border-b border-slate-100">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Attachments & Options</p>
+                      </div>
+                      
+                      {/* File Upload Option */}
+                      <button
+                        onClick={() => {
+                          document.getElementById('file-upload-input')?.click();
+                        }}
+                        className="w-full text-left p-3 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-3"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center text-lg">
+                          📎
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-slate-700">Upload File</p>
+                          <p className="text-xs text-slate-500">PDF, TXT, MD (max 10MB)</p>
+                        </div>
+                      </button>
+                      
+                      {/* RAG Toggle Option */}
+                      <button
+                        onClick={() => {
+                          setUseRAG(!useRAG);
+                        }}
+                        className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${
+                          useRAG ? 'bg-emerald-50' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                          useRAG ? 'bg-emerald-200' : 'bg-slate-100'
+                        }`}>
+                          {useRAG ? '🔗' : '📚'}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-sm font-semibold ${useRAG ? 'text-emerald-700' : 'text-slate-700'}`}>
+                            Use RAG {useRAG ? '(Active)' : '(Inactive)'}
+                          </p>
+                          <p className="text-xs text-slate-500">Search your documents</p>
+                        </div>
+                      </button>
+                      
+                      {/* Mode Switcher */}
+                      <div className="pt-2 mt-2 border-t border-slate-100">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide px-3 mb-2">Mode</p>
+                        {(['chat', 'summarize', 'qa', 'mindmap'] as AIMode[]).map(mode => (
+                          <button
+                            key={mode}
+                            onClick={() => {
+                              setAIMode(mode);
+                              setShowAttachMenu(false);
+                            }}
+                            className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${
+                              aiMode === mode 
+                                ? 'bg-indigo-50 text-indigo-600' 
+                                : 'hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <span className="text-lg">{getModeIcon(mode)}</span>
+                            <span className="text-sm font-medium">{getModeLabel(mode)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right side - Send Button */}
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-2">
+                <Button 
+                  onClick={handleSendMessage}
+                  disabled={isAnyPending || !inputText.trim() || !user || aiHealth?.status !== 'healthy'}
+                  className="w-12 h-12 rounded-full p-0 flex items-center justify-center shadow-indigo-200 disabled:opacity-50"
+                >
+                  {isAnyPending ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <ICONS.Share size={20} className="rotate-[-45deg] mr-0.5 mt-0.5" strokeWidth={3} />
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
           <p className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-4">

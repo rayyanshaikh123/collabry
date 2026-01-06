@@ -26,7 +26,11 @@ import {
   Circle,
   MessageCircle,
   Sparkles,
-  Trash2
+  Trash2,
+  Target,
+  Play,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -36,6 +40,7 @@ export const ICONS = {
   StudyBoard: PenTool,
   Planner: Calendar,
   Focus: Clock,
+  Clock: Clock,
   Flashcards: CreditCard,
   Profile: User,
   Admin: ShieldCheck,
@@ -55,10 +60,15 @@ export const ICONS = {
   Share: Share2,
   Menu: MoreVertical,
   Check: CheckCircle2,
+  CheckCircle: CheckCircle2,
   Uncheck: Circle,
   Chat: MessageCircle,
   Sparkles: Sparkles,
   Trash: Trash2,
+  Target: Target,
+  Play: Play,
+  ChevronLeft: ChevronLeft,
+  ChevronRight: ChevronRight,
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [
