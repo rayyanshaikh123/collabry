@@ -2,6 +2,8 @@
 Middleware for automatic usage tracking.
 
 Tracks AI operations and logs usage metrics automatically.
+Each operation consumes ~100 tokens from the user's daily limit.
+Daily limits reset every 24 hours based on UTC timezone.
 """
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -125,18 +127,19 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             Estimated token count
         """
         # Base token estimates by operation type
+        # Set to ~100 tokens per operation as requested
         token_estimates = {
-            "chat": 500,
-            "chat_stream": 750,
-            "session_chat": 500,  # Session-based chat
-            "summarize": 1000,
-            "summarize_stream": 1200,
-            "qa": 800,
-            "qa_stream": 900,
-            "qa_file": 1500,
-            "qa_file_stream": 1600,
-            "mindmap": 2000,
+            "chat": 100,
+            "chat_stream": 100,
+            "session_chat": 100,  # Session-based chat
+            "summarize": 100,
+            "summarize_stream": 100,
+            "qa": 100,
+            "qa_stream": 100,
+            "qa_file": 100,
+            "qa_file_stream": 100,
+            "mindmap": 100,
             "upload": 100
         }
         
-        return token_estimates.get(operation_type, 500)
+        return token_estimates.get(operation_type, 100)

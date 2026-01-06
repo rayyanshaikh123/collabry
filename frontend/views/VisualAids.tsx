@@ -12,6 +12,8 @@ import {
   useGenerateMindMap,
   useCreateSubject,
 } from '../src/hooks/useVisualAids';
+import AlertModal from '../components/AlertModal';
+import { useAlert } from '../src/hooks/useAlert';
 
 const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -44,6 +46,7 @@ const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, a
 };
 
 const VisualAidsView: React.FC = () => {
+  const { alertState, showAlert, hideAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<'quizzes' | 'mindmap' | 'concepts'>('quizzes');
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>();
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
@@ -193,15 +196,13 @@ const VisualAidsView: React.FC = () => {
     const timeTaken = ((currentQuiz.timeLimit || 10) * 60) - timeRemaining;
     
     // Show results
-    const resultMessage = `
-🎉 Quiz Complete!
-
-Score: ${score}%
-Correct: ${correct}/${currentQuiz.questions.length}
-Time Taken: ${formatTime(timeTaken)}
-    `.trim();
+    const resultMessage = `Score: ${score}%\nCorrect: ${correct}/${currentQuiz.questions.length}\nTime Taken: ${formatTime(timeTaken)}`;
     
-    alert(resultMessage);
+    showAlert({
+      type: score >= 70 ? 'success' : 'warning',
+      title: '🎉 Quiz Complete!',
+      message: resultMessage
+    });
 
     // TODO: Save attempt to backend
     // await api.post(`/api/visual-aids/quizzes/${activeQuizAttempt}/attempt`, {
@@ -808,6 +809,15 @@ Time Taken: ${formatTime(timeTaken)}
           </div>
         </div>
       )}
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        confirmText={alertState.confirmText}
+      />
     </div>
   );
 };

@@ -121,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                         Last Active {board.lastActive}
                       </p>
                       <div className="pt-3">
-                        <ProgressBar progress={Math.floor(Math.random() * 60) + 20} color={board.color.replace('bg-', 'bg-')} />
+                        <ProgressBar progress={board.progress} color={board.color.replace('bg-', 'bg-')} />
                       </div>
                     </div>
                   </div>

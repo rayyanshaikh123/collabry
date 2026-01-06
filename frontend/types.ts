@@ -46,6 +46,7 @@ export interface StudyBoard {
   lastActive: string;
   participants: number;
   color: string;
+  progress: number;
 }
 
 export interface Activity {

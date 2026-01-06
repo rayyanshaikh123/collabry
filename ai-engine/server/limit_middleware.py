@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class UsageLimitMiddleware(BaseHTTPMiddleware):
     """Middleware to check usage limits before processing AI requests."""
     
-    # Subscription tier limits (tokens per month)
+    # Subscription tier limits (tokens per day - resets every 24 hours)
     TIER_LIMITS = {
         "free": 10000,
         "basic": 50000,
@@ -67,24 +67,24 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         # If we have a user_id, check their usage
         if user_id:
             try:
-                # Get user's usage for current month
-                usage_data = usage_tracker.get_user_usage(user_id, days=30)
+                # Get user's usage for current day (24-hour period)
+                usage_data = usage_tracker.get_user_usage(user_id, days=1)
                 current_tokens = usage_data.get("total_tokens", 0)
                 
                 # Get tier limit
                 tier_limit = self.TIER_LIMITS.get(subscription_tier, self.TIER_LIMITS["free"])
                 
-                # Check if user has exceeded limit
+                # Check if user has exceeded daily limit
                 if current_tokens >= tier_limit:
                     logger.warning(f"User {user_id} exceeded usage limit: {current_tokens}/{tier_limit}")
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         detail={
-                            "message": f"Monthly token limit exceeded ({tier_limit:,} tokens)",
+                            "message": f"Daily token limit exceeded ({tier_limit:,} tokens). Resets in 24 hours.",
                             "current_usage": current_tokens,
                             "limit": tier_limit,
                             "tier": subscription_tier,
-                            "suggestion": "Upgrade your plan to continue using AI features"
+                            "suggestion": "Upgrade your plan for higher daily limits or wait for daily reset"
                         }
                     )
                 

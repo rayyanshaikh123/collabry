@@ -9,12 +9,17 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, AreaCh
 import { adminService, type UserFormData } from '../src/services/admin.service';
 import { usageService, type GlobalUsage, type RealtimeStats } from '../src/services/usage.service';
 import type { User } from '../src/types/user.types';
+import AlertModal from '../components/AlertModal';
+import { useAlert } from '../src/hooks/useAlert';
 
 interface AdminDashboardProps {
   currentSubRoute: AppRoute;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
+  // Alert modal
+  const { alertState, showAlert, hideAlert } = useAlert();
+  
   // User management state
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -197,7 +202,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         await adminService.updateUser(editingUser.id, formData);
       } else {
         if (!formData.password) {
-          alert('Password is required for new users');
+          showAlert({
+            type: 'warning',
+            title: 'Missing Password',
+            message: 'Password is required for new users'
+          });
           return;
         }
         await adminService.createUser(formData);
@@ -205,7 +214,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       setShowModal(false);
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Operation failed');
+      showAlert({
+        type: 'error',
+        title: 'Operation Failed',
+        message: error.message || 'Operation failed'
+      });
     } finally {
       setLoading(false);
     }
@@ -219,7 +232,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       await adminService.deleteUser(user.id);
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Failed to delete user');
+      showAlert({
+        type: 'error',
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete user'
+      });
     } finally {
       setLoading(false);
     }
@@ -230,7 +247,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       await adminService.updateUser(user.id, { isActive: !user.isActive });
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Failed to update status');
+      showAlert({
+        type: 'error',
+        title: 'Update Failed',
+        message: error.message || 'Failed to update status'
+      });
     }
   };
   
@@ -848,6 +869,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       <div className="relative min-h-[500px]">
         {renderActiveSection()}
       </div>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        confirmText={alertState.confirmText}
+      />
     </div>
   );
 };

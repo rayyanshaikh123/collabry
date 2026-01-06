@@ -12,25 +12,25 @@ const SUBSCRIPTION_TIERS = {
     name: 'Free',
     limit: 10000,
     price: '$0/month',
-    features: ['10K tokens/month', 'Basic AI features', 'Community support']
+    features: ['10K tokens/day', 'Basic AI features', 'Community support', 'Resets every 24 hours']
   },
   basic: {
     name: 'Basic',
     limit: 50000,
     price: '$9/month',
-    features: ['50K tokens/month', 'All AI features', 'Priority support', 'Export data']
+    features: ['50K tokens/day', 'All AI features', 'Priority support', 'Export data']
   },
   pro: {
     name: 'Pro',
     limit: 200000,
     price: '$29/month',
-    features: ['200K tokens/month', 'Advanced AI models', '24/7 support', 'Custom integrations']
+    features: ['200K tokens/day', 'Advanced AI models', '24/7 support', 'Custom integrations']
   },
   enterprise: {
     name: 'Enterprise',
     limit: 1000000,
     price: 'Custom',
-    features: ['1M+ tokens/month', 'Dedicated AI instance', 'SLA guarantee', 'Custom training']
+    features: ['1M+ tokens/day', 'Dedicated AI instance', 'SLA guarantee', 'Custom training']
   }
 };
 
@@ -40,7 +40,7 @@ const UsageView: React.FC = () => {
   const { user } = useAuthStore();
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<7 | 30 | 90>(30);
+  const [selectedPeriod, setSelectedPeriod] = useState<7 | 30 | 90>(7);
 
   useEffect(() => {
     loadUsage();
@@ -318,10 +318,10 @@ const UsageView: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-black text-slate-800 mb-2">High Usage Alert</h3>
                     <p className="text-sm text-slate-600 mb-4">
-                      You've used {usagePercentage.toFixed(1)}% of your monthly token limit. 
+                      You've used {usagePercentage.toFixed(1)}% of your daily token limit. 
                       {usagePercentage >= 100 
-                        ? ' Your AI features will be limited until next month or you upgrade your plan.'
-                        : ' Consider upgrading to avoid hitting your limit.'}
+                        ? ' Your AI features will be limited until the next 24-hour reset or you upgrade your plan.'
+                        : ' Consider upgrading to avoid hitting your daily limit.'}
                     </p>
                     {subscriptionTier === 'free' && (
                       <button className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
