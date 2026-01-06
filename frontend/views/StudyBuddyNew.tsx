@@ -9,6 +9,8 @@ import { useAuthStore } from '../src/stores/auth.store';
 import ReactMarkdown from 'react-markdown';
 import { useSessions, useCreateSession, useSessionMessages, useSaveMessage, useDeleteSession } from '../src/hooks/useSessions';
 import type { Message as ChatMessage } from '../src/services/sessions.service';
+import AlertModal from '../components/AlertModal';
+import { useAlert } from '../src/hooks/useAlert';
 
 interface ChatSession {
   id: string;
@@ -32,6 +34,7 @@ type AIMode = 'chat' | 'summarize' | 'qa' | 'mindmap';
 const StudyBuddyNew: React.FC = () => {
   const { user } = useAuthStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { alertState, showAlert, hideAlert } = useAlert();
   
   // AI Hooks
   const { mutate: sendChat, isPending: isChatPending } = useAIChat();
@@ -1128,7 +1131,11 @@ const StudyBuddyNew: React.FC = () => {
                         className="text-xs text-indigo-600 hover:bg-indigo-50"
                         onClick={() => {
                           // TODO: Add to visual aids
-                          alert('Add to Visual Aids feature coming soon!');
+                          showAlert({
+                            type: 'info',
+                            title: 'Coming Soon',
+                            message: 'Add to Visual Aids feature coming soon!'
+                          });
                         }}
                       >
                         <ICONS.Plus size={14} className="mr-1" />
@@ -1164,7 +1171,11 @@ const StudyBuddyNew: React.FC = () => {
                 const file = e.target.files?.[0];
                 if (file) {
                   if (file.size > 10 * 1024 * 1024) {
-                    alert('File too large! Maximum size is 10MB');
+                    showAlert({
+                      type: 'warning',
+                      title: 'File Too Large',
+                      message: 'File too large! Maximum size is 10MB'
+                    });
                     e.target.value = '';
                     return;
                   }
@@ -1340,6 +1351,15 @@ const StudyBuddyNew: React.FC = () => {
           </p>
         </div>
       </div>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        confirmText={alertState.confirmText}
+      />
     </div>
   );
 };

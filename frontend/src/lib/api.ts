@@ -132,15 +132,26 @@ class ApiClient {
       throw new Error('No refresh token available');
     }
 
-    // TODO: Replace with actual refresh endpoint
-    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-      refreshToken,
-    });
+    try {
+      // Call refresh endpoint
+      const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        refreshToken,
+      });
 
-    const { accessToken } = response.data;
-    localStorage.setItem('accessToken', accessToken);
-    
-    return accessToken;
+      // Backend returns: { success: true, data: { accessToken, refreshToken } }
+      const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+      
+      // Update both tokens in localStorage
+      localStorage.setItem('accessToken', accessToken);
+      if (newRefreshToken) {
+        localStorage.setItem('refreshToken', newRefreshToken);
+      }
+      
+      return accessToken;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      throw new Error('Token refresh failed');
+    }
   }
 
   private handleAuthError() {
@@ -154,28 +165,65 @@ class ApiClient {
 
   // Public API methods
   async get<T = any>(url: string, config = {}): Promise<ApiResponse<T>> {
-    const response = await this.client.get(url, config);
-    return response.data;
+    try {
+      const response = await this.client.get(url, config);
+      return response.data;
+    } catch (error) {
+      throw this.formatError(error);
+    }
   }
 
   async post<T = any>(url: string, data?: any, config = {}): Promise<ApiResponse<T>> {
-    const response = await this.client.post(url, data, config);
-    return response.data;
+    try {
+      const response = await this.client.post(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw this.formatError(error);
+    }
   }
 
   async put<T = any>(url: string, data?: any, config = {}): Promise<ApiResponse<T>> {
-    const response = await this.client.put(url, data, config);
-    return response.data;
+    try {
+      const response = await this.client.put(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw this.formatError(error);
+    }
   }
 
   async patch<T = any>(url: string, data?: any, config = {}): Promise<ApiResponse<T>> {
-    const response = await this.client.patch(url, data, config);
-    return response.data;
+    try {
+      const response = await this.client.patch(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw this.formatError(error);
+    }
   }
 
   async delete<T = any>(url: string, config = {}): Promise<ApiResponse<T>> {
-    const response = await this.client.delete(url, config);
-    return response.data;
+    try {
+      const response = await this.client.delete(url, config);
+      return response.data;
+    } catch (error) {
+      throw this.formatError(error);
+    }
+  }
+
+  private formatError(error: any): Error {
+    if (axios.isAxiosError(error)) {
+      // Extract error message from response
+      const message = error.response?.data?.message 
+        || error.response?.data?.error 
+        || error.message 
+        || 'An unexpected error occurred';
+      
+      const formattedError = new Error(message);
+      (formattedError as any).status = error.response?.status;
+      (formattedError as any).data = error.response?.data;
+      return formattedError;
+    }
+    
+    return error instanceof Error ? error : new Error(String(error));
   }
 
   // Get the underlying axios instance for advanced usage

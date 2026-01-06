@@ -3,6 +3,7 @@
  */
 
 export type UserRole = 'student' | 'admin' | 'mentor';
+export type SubscriptionTier = 'free' | 'basic' | 'pro' | 'enterprise';
 
 export interface User {
   id: string;
@@ -10,6 +11,7 @@ export interface User {
   email: string;
   avatar?: string;
   role: UserRole;
+  subscriptionTier?: SubscriptionTier;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

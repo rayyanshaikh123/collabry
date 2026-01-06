@@ -72,10 +72,10 @@ export const ICONS = {
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [
-  { id: '1', title: 'Advanced Calculus', lastActive: '2m ago', participants: 4, color: 'bg-indigo-500' },
-  { id: '2', title: 'Neuroscience 101', lastActive: '1h ago', participants: 12, color: 'bg-rose-500' },
-  { id: '3', title: 'World History Group', lastActive: '5h ago', participants: 8, color: 'bg-emerald-500' },
-  { id: '4', title: 'Python Algorithms', lastActive: '1d ago', participants: 3, color: 'bg-amber-500' },
+  { id: '1', title: 'Advanced Calculus', lastActive: '2m ago', participants: 4, color: 'bg-indigo-500', progress: 58 },
+  { id: '2', title: 'Neuroscience 101', lastActive: '1h ago', participants: 12, color: 'bg-rose-500', progress: 31 },
+  { id: '3', title: 'World History Group', lastActive: '5h ago', participants: 8, color: 'bg-emerald-500', progress: 72 },
+  { id: '4', title: 'Python Algorithms', lastActive: '1d ago', participants: 3, color: 'bg-amber-500', progress: 46 },
 ];
 
 export const MOCK_ACTIVITIES: Activity[] = [

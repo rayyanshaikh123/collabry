@@ -25,6 +25,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/planner': 'planner',
     '/focus': 'focus',
     '/profile': 'profile',
+    '/usage': 'usage',
     '/study-buddy': 'study-buddy',
     '/visual-aids': 'visual-aids',
   };
@@ -77,6 +78,7 @@ export default function MainLayout({
       'planner': '/planner',
       'focus': '/focus',
       'profile': '/profile',
+      'usage': '/usage',
       'study-buddy': '/study-buddy',
       'visual-aids': '/visual-aids',
     };

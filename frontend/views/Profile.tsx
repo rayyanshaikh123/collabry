@@ -2,6 +2,7 @@
 
 
 import React from 'react';
+import Link from 'next/link';
 import { Card, Button, Badge, ProgressBar, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { useAuthStore } from '../src/stores/auth.store';
@@ -42,6 +43,11 @@ const ProfileView: React.FC = () => {
             <Button variant="primary" className="gap-2 px-8 shadow-indigo-100">
               <ICONS.Profile size={18} /> Edit Profile
             </Button>
+            <Link href="/usage">
+              <Button variant="outline" className="gap-2 px-8">
+                <ICONS.Focus size={18} /> View AI Usage
+              </Button>
+            </Link>
             <Button variant="outline" className="gap-2 px-8">
               <ICONS.Share size={18} /> Share Profile
             </Button>

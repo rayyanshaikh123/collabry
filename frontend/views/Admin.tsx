@@ -7,13 +7,19 @@ import { ICONS } from '../constants';
 import { AppRoute } from '../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, AreaChart, Area } from 'recharts';
 import { adminService, type UserFormData } from '../src/services/admin.service';
-import type { User } from '../types';
+import { usageService, type GlobalUsage, type RealtimeStats } from '../src/services/usage.service';
+import type { User } from '../src/types/user.types';
+import AlertModal from '../components/AlertModal';
+import { useAlert } from '../src/hooks/useAlert';
 
 interface AdminDashboardProps {
   currentSubRoute: AppRoute;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
+  // Alert modal
+  const { alertState, showAlert, hideAlert } = useAlert();
+  
   // User management state
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,12 +36,123 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Usage tracking state
+  const [globalUsage, setGlobalUsage] = useState<GlobalUsage | null>(null);
+  const [realtimeStats, setRealtimeStats] = useState<RealtimeStats | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
   // Load users when viewing users section
   useEffect(() => {
     if (currentSubRoute === AppRoute.ADMIN_USERS) {
       loadUsers();
     }
   }, [currentSubRoute, currentPage, searchTerm]);
+
+  // Load total user count on mount
+  useEffect(() => {
+    loadTotalUsers();
+  }, []);
+
+  // Load usage data for AI monitoring section
+  useEffect(() => {
+    if (currentSubRoute === AppRoute.ADMIN_AI) {
+      loadUsageData();
+    }
+  }, [currentSubRoute]);
+
+  // Poll realtime stats every 30 seconds when on dashboard or AI page
+  useEffect(() => {
+    if (currentSubRoute === AppRoute.ADMIN || currentSubRoute === AppRoute.ADMIN_AI) {
+      loadRealtimeStats();
+      const interval = setInterval(loadRealtimeStats, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [currentSubRoute]);
+
+  const loadTotalUsers = async () => {
+    try {
+      // Get total user count from the database
+      const data = await adminService.getUsers({ page: 1, limit: 1 });
+      setTotalUsers(data.total || 0);
+    } catch (error) {
+      console.error('Failed to load user count:', error);
+    }
+  };
+
+  const loadUserNames = async (userIds: string[]) => {
+    try {
+      // Fetch all users to get their names
+      const data = await adminService.getUsers({ page: 1, limit: 100 });
+      const nameMap: Record<string, string> = {};
+      
+      data.users.forEach((user: User) => {
+        if (userIds.includes(user.id)) {
+          nameMap[user.id] = user.name;
+        }
+      });
+      
+      setUserNames(nameMap);
+    } catch (error) {
+      console.error('Failed to load user names:', error);
+    }
+  };
+
+  const loadUsageData = async () => {
+    try {
+      setUsageLoading(true);
+      
+      // Get health with realtime stats (no auth required)
+      const health = await usageService.getHealth();
+      if (health.usage_stats) {
+        setRealtimeStats(health.usage_stats);
+      }
+      
+      // Try to get public stats (no auth required)
+      try {
+        const usage = await usageService.getPublicStats(7);
+        setGlobalUsage(usage);
+        
+        // Fetch user names for top users
+        if (usage.top_users && usage.top_users.length > 0) {
+          const userIds = usage.top_users.map(u => u.user_id);
+          await loadUserNames(userIds);
+        }
+      } catch (statsError: any) {
+        console.warn('Could not load public stats, trying authenticated endpoint:', statsError.message);
+        // Fallback to authenticated endpoint
+        try {
+          const usage = await usageService.getGlobalUsage(7);
+          setGlobalUsage(usage);
+          
+          // Fetch user names for top users
+          if (usage.top_users && usage.top_users.length > 0) {
+            const userIds = usage.top_users.map(u => u.user_id);
+            await loadUserNames(userIds);
+          }
+        } catch (authError: any) {
+          console.warn('Global usage requires authentication:', authError.message);
+          setGlobalUsage(null);
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to load usage data:', error);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  const loadRealtimeStats = async () => {
+    try {
+      const health = await usageService.getHealth();
+      if (health.usage_stats) {
+        setRealtimeStats(health.usage_stats);
+      }
+    } catch (error: any) {
+      console.error('Failed to load realtime stats:', error);
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -85,7 +202,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         await adminService.updateUser(editingUser.id, formData);
       } else {
         if (!formData.password) {
-          alert('Password is required for new users');
+          showAlert({
+            type: 'warning',
+            title: 'Missing Password',
+            message: 'Password is required for new users'
+          });
           return;
         }
         await adminService.createUser(formData);
@@ -93,7 +214,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       setShowModal(false);
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Operation failed');
+      showAlert({
+        type: 'error',
+        title: 'Operation Failed',
+        message: error.message || 'Operation failed'
+      });
     } finally {
       setLoading(false);
     }
@@ -107,7 +232,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       await adminService.deleteUser(user.id);
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Failed to delete user');
+      showAlert({
+        type: 'error',
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete user'
+      });
     } finally {
       setLoading(false);
     }
@@ -118,26 +247,66 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       await adminService.updateUser(user.id, { isActive: !user.isActive });
       loadUsers();
     } catch (error: any) {
-      alert(error.message || 'Failed to update status');
+      showAlert({
+        type: 'error',
+        title: 'Update Failed',
+        message: error.message || 'Failed to update status'
+      });
     }
   };
   
   const stats = [
-    { label: 'Total Explorers', value: '42.5k', change: '+12%', icon: ICONS.Profile, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-    { label: 'Active Sessions', value: '1,204', change: '+5%', icon: ICONS.Focus, color: 'text-emerald-600', bg: 'bg-emerald-100' },
-    { label: 'Reports Pending', value: '12', change: '-2%', icon: ICONS.Admin, color: 'text-rose-600', bg: 'bg-rose-100' },
-    { label: 'AI Usage (Tokens)', value: '8.4M', change: '+25%', icon: ICONS.Sparkles, color: 'text-amber-600', bg: 'bg-amber-100' },
+    { 
+      label: 'Total Explorers', 
+      value: totalUsers > 0 ? totalUsers.toString() : (globalUsage?.unique_users?.toString() || (realtimeStats ? realtimeStats.last_hour.active_users.toString() : '0')), 
+      change: realtimeStats && realtimeStats.last_hour.active_users > 0 ? `${realtimeStats.last_hour.active_users} active now` : 'No recent activity',
+      icon: ICONS.Profile, 
+      color: 'text-indigo-600', 
+      bg: 'bg-indigo-100' 
+    },
+    { 
+      label: 'Active Sessions', 
+      value: realtimeStats?.last_hour?.active_users?.toString() || '0', 
+      change: `${realtimeStats?.last_5_minutes?.operations || 0} ops in 5min`, 
+      icon: ICONS.Focus, 
+      color: 'text-emerald-600', 
+      bg: 'bg-emerald-100' 
+    },
+    { 
+      label: 'Total Operations', 
+      value: globalUsage ? usageService.formatNumber(globalUsage.total_operations) : (realtimeStats ? realtimeStats.last_hour.total_operations.toString() : '0'),
+      change: globalUsage ? `${globalUsage.success_rate?.toFixed(1) || 0}% success` : `${realtimeStats?.last_hour?.success_rate || 0}% success`,
+      icon: ICONS.Admin, 
+      color: 'text-rose-600', 
+      bg: 'bg-rose-100' 
+    },
+    { 
+      label: 'AI Usage (Tokens)', 
+      value: globalUsage ? usageService.formatNumber(globalUsage.total_tokens) : usageService.formatNumber(realtimeStats?.last_hour?.total_tokens || 0),
+      change: `${usageService.formatNumber(realtimeStats?.last_hour?.total_tokens || 0)} in last hour`, 
+      icon: ICONS.Sparkles, 
+      color: 'text-amber-600', 
+      bg: 'bg-amber-100' 
+    },
   ];
 
-  const chartData = [
-    { name: 'Mon', usage: 400, growth: 240 },
-    { name: 'Tue', usage: 300, growth: 139 },
-    { name: 'Wed', usage: 600, growth: 980 },
-    { name: 'Thu', usage: 800, growth: 390 },
-    { name: 'Fri', usage: 500, growth: 480 },
-    { name: 'Sat', usage: 200, growth: 380 },
-    { name: 'Sun', usage: 150, growth: 430 },
-  ];
+  const chartData = globalUsage?.daily_usage 
+    ? Object.entries(globalUsage.daily_usage)
+        .slice(-7) // Last 7 days
+        .map(([date, data]: [string, any]) => ({
+          name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
+          usage: data.operations || 0,
+          growth: data.tokens ? Math.floor(data.tokens / 100) : 0,
+        }))
+    : [
+        { name: 'Mon', usage: 400, growth: 240 },
+        { name: 'Tue', usage: 300, growth: 139 },
+        { name: 'Wed', usage: 600, growth: 980 },
+        { name: 'Thu', usage: 800, growth: 390 },
+        { name: 'Fri', usage: 500, growth: 480 },
+        { name: 'Sat', usage: 200, growth: 380 },
+        { name: 'Sun', usage: 150, growth: 430 },
+      ];
 
   const renderActiveSection = () => {
     switch (currentSubRoute) {
@@ -153,7 +322,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
                     <h4 className="text-2xl font-black text-slate-800">{s.value}</h4>
-                    <span className={`text-[10px] font-black ${s.change.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>{s.change} vs last month</span>
+                    <span className={`text-[10px] font-black ${s.change.includes('active') || s.change.includes('success') || s.change.includes('in') ? 'text-emerald-500' : s.change.startsWith('+') ? 'text-emerald-500' : 'text-slate-500'}`}>{s.change}</span>
                   </div>
                 </Card>
               ))}
@@ -179,22 +348,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 </div>
               </Card>
               <Card>
-                <h3 className="text-xl font-black text-slate-800 mb-8">Active Study Sessions</h3>
+                <h3 className="text-xl font-black text-slate-800 mb-8">Active Operations</h3>
                 <div className="space-y-4">
-                  {[
-                    { label: 'Intro to Bio', val: 80, color: 'bg-emerald-500' },
-                    { label: 'Calculus Chat', val: 65, color: 'bg-indigo-500' },
-                    { label: 'Art History', val: 30, color: 'bg-rose-500' },
-                    { label: 'Python Lab', val: 90, color: 'bg-amber-500' },
-                  ].map((s, i) => (
-                    <div key={i} className="space-y-1.5">
-                      <div className="flex justify-between text-xs font-bold text-slate-600">
-                        <span>{s.label}</span>
-                        <span>{s.val}% Load</span>
-                      </div>
-                      <ProgressBar progress={s.val} color={s.color} />
+                  {globalUsage?.operations_by_type && Object.keys(globalUsage.operations_by_type).length > 0 ? (
+                    Object.entries(globalUsage.operations_by_type)
+                      .sort(([, a], [, b]) => b - a)
+                      .slice(0, 4)
+                      .map(([type, count], i) => {
+                        const colors = ['bg-emerald-500', 'bg-indigo-500', 'bg-rose-500', 'bg-amber-500'];
+                        const percentage = globalUsage.total_operations > 0 
+                          ? Math.round((count / globalUsage.total_operations) * 100) 
+                          : 0;
+                        return (
+                          <div key={i} className="space-y-1.5">
+                            <div className="flex justify-between text-xs font-bold text-slate-600">
+                              <span className="capitalize">{type.replace('_', ' ')}</span>
+                              <span>{percentage}% ({count} ops)</span>
+                            </div>
+                            <ProgressBar progress={percentage} color={colors[i % colors.length]} />
+                          </div>
+                        );
+                      })
+                  ) : realtimeStats?.last_hour?.total_operations ? (
+                    <div className="text-center py-8 text-slate-400">
+                      <p className="text-sm font-bold">{realtimeStats.last_hour.total_operations} operations</p>
+                      <p className="text-xs mt-2">in the last hour</p>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="text-center py-8 text-slate-400">
+                      <p className="text-sm font-bold">No operations yet</p>
+                      <p className="text-xs mt-2">Start using AI features to see activity</p>
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>
@@ -474,32 +659,167 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-amber-50 border-amber-100">
-                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Token Usage</p>
-                  <h4 className="text-3xl font-black text-slate-800">842,500</h4>
-                  <div className="mt-4"><ProgressBar progress={65} color="bg-amber-400" /></div>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Token Usage (7d)</p>
+                  <h4 className="text-3xl font-black text-slate-800">
+                    {usageLoading ? '...' : usageService.formatNumber(globalUsage?.total_tokens || 0)}
+                  </h4>
+                  <div className="mt-4">
+                    <ProgressBar 
+                      progress={Math.min(((globalUsage?.total_tokens || 0) / 1000000) * 100, 100)} 
+                      color="bg-amber-400" 
+                    />
+                  </div>
+                  <p className="text-xs text-amber-600 mt-2 font-bold">
+                    {realtimeStats?.last_hour?.total_tokens || 0} tokens in last hour
+                  </p>
                 </Card>
                 <Card className="bg-indigo-50 border-indigo-100">
                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Success Rate</p>
-                  <h4 className="text-3xl font-black text-slate-800">99.8%</h4>
-                  <div className="mt-4"><ProgressBar progress={99} color="bg-indigo-500" /></div>
+                  <h4 className="text-3xl font-black text-slate-800">
+                    {usageLoading ? '...' : `${globalUsage?.success_rate?.toFixed(1) || 0}%`}
+                  </h4>
+                  <div className="mt-4">
+                    <ProgressBar 
+                      progress={globalUsage?.success_rate || 0} 
+                      color="bg-indigo-500" 
+                    />
+                  </div>
+                  <p className="text-xs text-indigo-600 mt-2 font-bold">
+                    {globalUsage?.successful_operations || 0} / {globalUsage?.total_operations || 0} operations
+                  </p>
                 </Card>
                 <Card className="bg-emerald-50 border-emerald-100">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Avg Latency</p>
-                  <h4 className="text-3xl font-black text-slate-800">1.2s</h4>
-                  <div className="mt-4"><ProgressBar progress={30} color="bg-emerald-500" /></div>
+                  <h4 className="text-3xl font-black text-slate-800">
+                    {usageLoading ? '...' : `${(globalUsage?.avg_response_time_ms || 0).toFixed(0)}ms`}
+                  </h4>
+                  <div className="mt-4">
+                    <ProgressBar 
+                      progress={Math.min((globalUsage?.avg_response_time_ms || 0) / 50, 100)} 
+                      color="bg-emerald-500" 
+                    />
+                  </div>
+                  <p className="text-xs text-emerald-600 mt-2 font-bold">
+                    {realtimeStats?.last_hour?.total_operations || 0} operations last hour
+                  </p>
                 </Card>
              </div>
+             
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-8">Operations by Type (7d)</h3>
+                  <div className="h-[400px]">
+                     {usageLoading ? (
+                       <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>
+                     ) : globalUsage?.operations_by_type ? (
+                       <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={usageService.formatOperationsByType(globalUsage.operations_by_type)}>
+                            <XAxis 
+                              dataKey="name" 
+                              axisLine={false} 
+                              tickLine={false} 
+                              tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} 
+                            />
+                            <Tooltip 
+                              contentStyle={{
+                                borderRadius: '20px', 
+                                border: 'none', 
+                                boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                              }} 
+                            />
+                            <Bar 
+                              dataKey="value" 
+                              radius={[10, 10, 10, 10]} 
+                              barSize={50} 
+                              fill="#818cf8" 
+                            />
+                          </BarChart>
+                       </ResponsiveContainer>
+                     ) : (
+                       <div className="flex items-center justify-center h-full text-slate-400">No data available</div>
+                     )}
+                  </div>
+               </Card>
+               
+               <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-8">Top Users by Operations</h3>
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                    {usageLoading ? (
+                      <div className="text-slate-400 text-center py-8">Loading...</div>
+                    ) : globalUsage?.top_users && globalUsage.top_users.length > 0 ? (
+                      globalUsage.top_users.map((user, idx) => (
+                        <div key={user.user_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black">
+                              #{idx + 1}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{userNames[user.user_id] || user.user_id}</p>
+                              <p className="text-xs text-slate-400">{user.operations} operations</p>
+                            </div>
+                          </div>
+                          <Badge variant="indigo">{usageService.formatNumber(user.operations)}</Badge>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-slate-400 text-center py-8">No user data available</div>
+                    )}
+                  </div>
+               </Card>
+             </div>
+             
              <Card>
-                <h3 className="text-xl font-black text-slate-800 mb-8">AI Prompt Success Distribution</h3>
-                <div className="h-[400px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData}>
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
-                        <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'}} />
-                        <Bar dataKey="usage" radius={[10, 10, 10, 10]} barSize={50} fill="#fbbf24" />
-                        <Bar dataKey="growth" radius={[10, 10, 10, 10]} barSize={50} fill="#818cf8" />
-                      </BarChart>
-                   </ResponsiveContainer>
+                <h3 className="text-xl font-black text-slate-800 mb-8">Daily Activity (Last 7 Days)</h3>
+                <div className="h-[300px]">
+                  {usageLoading ? (
+                    <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData}>
+                        <defs>
+                          <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis 
+                          dataKey="name" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} 
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            borderRadius: '20px', 
+                            border: 'none', 
+                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+                          }} 
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="usage" 
+                          stroke="#818cf8" 
+                          strokeWidth={4} 
+                          fillOpacity={1} 
+                          fill="url(#colorUsage)" 
+                          name="Operations"
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="growth" 
+                          stroke="#fbbf24" 
+                          strokeWidth={4} 
+                          fillOpacity={1} 
+                          fill="url(#colorTokens)" 
+                          name="Tokens (÷100)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
                 </div>
              </Card>
           </div>
@@ -521,11 +841,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between px-2 gap-4">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight">Admin Command Center</h2>
-          <p className="text-slate-500 font-bold">Total control over the Collabry universe.</p>
+          <p className="text-slate-500 font-bold">
+            Total control over the Collabry universe. 
+            {totalUsers > 0 && (
+              <span className="ml-2 text-indigo-600">
+                • {totalUsers} registered users
+              </span>
+            )}
+            {realtimeStats && realtimeStats.last_hour.active_users > 0 && (
+              <span className="ml-2 text-emerald-600">
+                • {realtimeStats.last_hour.active_users} active in last hour
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex gap-2">
-           <Button variant="secondary" className="gap-2 px-6">
-             <ICONS.Sparkles size={18} /> Diagnostics
+           <Button variant="secondary" className="gap-2 px-6" onClick={loadRealtimeStats}>
+             <ICONS.Sparkles size={18} /> 
+             {usageLoading ? 'Loading...' : 'Refresh Data'}
            </Button>
            <Button variant="primary" className="gap-2 px-6 shadow-xl shadow-indigo-100">
              <ICONS.Plus size={18} /> New Event
@@ -536,6 +869,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       <div className="relative min-h-[500px]">
         {renderActiveSection()}
       </div>
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        confirmText={alertState.confirmText}
+      />
     </div>
   );
 };
