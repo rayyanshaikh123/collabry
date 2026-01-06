@@ -197,4 +197,51 @@ class HealthResponse(BaseModel):
     status: str = Field("healthy", description="Service status")
     version: str = Field("1.0.0", description="API version")
     components: Dict[str, str] = Field(default_factory=dict, description="Component statuses")
+    usage_stats: Optional[Dict[str, Any]] = Field(None, description="Real-time usage statistics")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================================
+# Usage Tracking Schemas
+# ============================================================================
+
+class UsageStatsResponse(BaseModel):
+    """User-specific usage statistics."""
+    user_id: str
+    period_days: int
+    total_operations: int
+    successful_operations: int
+    failed_operations: int
+    total_tokens: int
+    avg_response_time_ms: float
+    success_rate: float
+    operations_by_type: Dict[str, int]
+    daily_usage: Dict[str, Dict[str, int]]
+    most_recent_activity: Optional[datetime] = None
+    subscription_limit: Optional[int] = Field(None, description="Token limit based on subscription")
+    usage_percentage: Optional[float] = Field(None, description="Percentage of limit used")
+
+
+class GlobalUsageResponse(BaseModel):
+    """Global usage statistics for admin."""
+    period_days: int
+    total_operations: int
+    successful_operations: int
+    failed_operations: int
+    total_tokens: int
+    unique_users: int
+    avg_response_time_ms: float
+    success_rate: float
+    operations_by_type: Dict[str, int]
+    tokens_by_type: Dict[str, int]
+    operations_by_endpoint: Dict[str, int]
+    daily_usage: Dict[str, Any]
+    top_users: List[Dict[str, Any]]
+    timestamp: datetime
+
+
+class RealtimeStatsResponse(BaseModel):
+    """Real-time usage statistics."""
+    last_hour: Dict[str, Any]
+    last_5_minutes: Dict[str, int]
+    timestamp: datetime

@@ -74,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
     { id: AppRoute.FOCUS, label: 'Deep Focus', icon: ICONS.Focus },
     { id: AppRoute.FLASHCARDS, label: 'Memory', icon: ICONS.Flashcards },
+    
   ];
 
   const adminItems = [
@@ -151,6 +152,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   id={AppRoute.PROFILE}
                   label="My Journey"
                   icon={ICONS.Profile}
+                  currentRoute={currentRoute}
+                  isCollapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                  setMobileOpen={setMobileOpen}
+                />
+                <NavItem 
+                  id={AppRoute.PROFILE_USAGE}
+                  label="AI Usage"
+                  icon={ICONS.Focus}
                   currentRoute={currentRoute}
                   isCollapsed={isCollapsed}
                   onNavigate={onNavigate}

@@ -36,6 +36,11 @@ const userSchema = new mongoose.Schema(
       enum: ['student', 'admin', 'mentor'],
       default: 'student',
     },
+    subscriptionTier: {
+      type: String,
+      enum: ['free', 'basic', 'pro', 'enterprise'],
+      default: 'free',
+    },
     isActive: {
       type: Boolean,
       default: true,

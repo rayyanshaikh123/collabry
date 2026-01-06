@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "form-data": "^4.0.5",
-    "multer": "^2.0.2"
-  }
-}

@@ -12,10 +12,71 @@ import uvicorn
 import argparse
 from pathlib import Path
 import sys
+import platform
+import subprocess
+import time
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def kill_process_on_port(port):
+    """
+    Kill any process using the specified port.
+    
+    Args:
+        port: Port number to free up
+    """
+    system = platform.system()
+    
+    try:
+        if system == "Windows":
+            # Find process using the port
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            for line in result.stdout.split('\n'):
+                if f":{port}" in line and "LISTENING" in line:
+                    parts = line.split()
+                    if parts:
+                        pid = parts[-1]
+                        try:
+                            # Kill the process
+                            subprocess.run(
+                                ["taskkill", "/F", "/PID", pid],
+                                capture_output=True,
+                                check=True
+                            )
+                            print(f"✓ Stopped process {pid} using port {port}")
+                            time.sleep(1)  # Wait for port to be released
+                        except subprocess.CalledProcessError:
+                            pass
+        else:
+            # Unix-like systems (Linux, macOS)
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    try:
+                        subprocess.run(["kill", "-9", pid], check=True)
+                        print(f"✓ Stopped process {pid} using port {port}")
+                    except subprocess.CalledProcessError:
+                        pass
+                time.sleep(1)  # Wait for port to be released
+                        
+    except Exception as e:
+        print(f"⚠ Could not check/kill processes on port {port}: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start Collabry AI Core FastAPI server")
@@ -43,6 +104,10 @@ if __name__ == "__main__":
     )
     
     args = parser.parse_args()
+    
+    # Kill any existing process on the port
+    print(f"🔍 Checking port {args.port}...")
+    kill_process_on_port(args.port)
     
     print("=" * 60)
     print("🚀 Starting Collabry AI Core FastAPI Server")
