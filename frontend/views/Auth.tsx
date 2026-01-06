@@ -2,6 +2,7 @@
 
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Card, Button, Input } from '../components/UIElements';
 import { useAuthStore } from '../src/stores/auth.store';
 
@@ -76,9 +77,9 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/30 rounded-full -ml-48 -mb-48 blur-3xl" />
         
         <div className="max-w-lg z-10">
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center mb-8 border border-white/30 shadow-2xl">
+          <Link href="/" className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center mb-8 border border-white/30 shadow-2xl hover:bg-white/30 transition-all cursor-pointer">
             <span className="text-white font-black text-3xl">C</span>
-          </div>
+          </Link>
           <h1 className="text-5xl font-black mb-6 leading-tight">Better learning, <br/>built together.</h1>
           <p className="text-xl text-indigo-100 font-medium leading-relaxed mb-10 opacity-80">
             Join 20,000+ students leveraging AI and collaborative boards to master complex subjects faster.
@@ -110,9 +111,9 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
       <div className="flex-[0.8] flex flex-col justify-center items-center p-8 bg-slate-50">
         <div className="max-w-md w-full">
           <div className="text-center mb-10">
-            <div className="lg:hidden w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-100">
+            <Link href="/" className="lg:hidden w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all cursor-pointer">
               <span className="text-white font-bold text-2xl">C</span>
-            </div>
+            </Link>
             <h2 className="text-3xl font-black text-slate-800">{isRegister ? 'Create Account' : 'Welcome Back'}</h2>
             <p className="text-slate-500 mt-2">{isRegister ? 'Start your collaborative journey today.' : 'Please enter your details to sign in.'}</p>
           </div>

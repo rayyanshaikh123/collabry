@@ -6,6 +6,7 @@ import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { motion } from 'framer-motion';
 import { Highlighter } from '../components/ui/highlighter';
+import { ProgressiveBlur } from '../components/ui/progressive-blur';
 
 const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => void }> = ({ onGetStarted, onCycleTheme }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -19,9 +20,12 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
   };
 
   return (
-    <div className="min-h-screen bg-white overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-white overflow-hidden flex flex-col relative">
+      {/* Progressive blur effects */}
+      <ProgressiveBlur position="bottom" height="15vh" className="fixed bottom-0 left-0 right-0 z-50" />
+      
       {/* Navbar */}
-      <nav className="p-6 flex items-center justify-between max-w-7xl mx-auto w-full">
+      <nav className="p-6 flex items-center justify-between max-w-7xl mx-auto w-full relative z-20">
         <div className="flex items-center gap-3">
           <button 
             onClick={handleLogoClick}
@@ -115,34 +119,140 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {[
-              { step: '01', title: 'Sign Up', desc: 'Create your free account in seconds', icon: '👋', color: 'from-violet-400 to-purple-500' },
-              { step: '02', title: 'Upload Materials', desc: 'Drop your notes, PDFs, or links', icon: '📚', color: 'from-blue-400 to-cyan-500' },
-              { step: '03', title: 'Ask AI Anything', desc: 'Get instant explanations and summaries', icon: '🧠', color: 'from-rose-400 to-pink-500' },
-              { step: '04', title: 'Collaborate', desc: 'Study with friends in real-time', icon: '🤝', color: 'from-amber-400 to-orange-500' },
-            ].map((step, i) => (
-              <motion.div
-                key={i}
-                className="relative"
-                initial={{ opacity: 0, x: -50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.15, duration: 0.5 }}
-                viewport={{ once: true }}
-              >
-                <div className="bg-white rounded-[2rem] p-8 shadow-xl border-2 border-slate-50 hover:shadow-2xl transition-all group">
-                  <div className={`w-20 h-20 bg-gradient-to-br ${step.color} rounded-[1.5rem] flex items-center justify-center text-4xl mb-6 shadow-lg border-b-4 border-slate-200`}>
-                    {step.icon}
+          <div className="max-w-4xl mx-auto">
+            {/* Diary/Notebook container */}
+            <div className="relative">
+              {/* Full spiral binding */}
+              <div className="absolute left-8 top-0 bottom-0 w-12 flex flex-col justify-between py-6 z-10">
+                {Array(15).fill(0).map((_, i) => (
+                  <div key={i} className="w-8 h-8 rounded-full border-4 border-slate-400 bg-slate-100 shadow-inner"></div>
+                ))}
+              </div>
+
+              {/* Notebook pages */}
+              <div className="ml-16 bg-amber-50 rounded-r-3xl shadow-2xl border-2 border-amber-200 relative overflow-hidden">
+                {/* Ruled lines background */}
+                <div className="absolute inset-0 opacity-20" style={{
+                  backgroundImage: 'repeating-linear-gradient(transparent, transparent 35px, #d97706 35px, #d97706 36px)',
+                  backgroundSize: '100% 36px'
+                }}></div>
+
+                {/* Red margin line */}
+                <div className="absolute left-16 top-0 bottom-0 w-1 bg-red-300 opacity-40"></div>
+
+                {/* Content */}
+                <div className="relative p-12 pl-24 space-y-8">
+                  {/* Title with highlighter */}
+                  <div className="mb-8">
+                    <h3 className="text-4xl font-bold text-slate-800 mb-2 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                      <span className="relative z-10">How to Get Started</span>
+                      <div className="absolute inset-0 bg-yellow-300 opacity-30 transform -skew-x-3 -rotate-1" style={{ top: '40%', height: '50%' }}></div>
+                    </h3>
+                    <div className="w-32 h-1 bg-amber-400 rounded"></div>
                   </div>
-                  <div className="text-xs font-black text-indigo-500 tracking-[0.2em] uppercase mb-3">Step {step.step}</div>
-                  <h3 className="text-2xl font-black text-slate-800 mb-3">{step.title}</h3>
-                  <p className="text-slate-600 font-bold text-sm leading-relaxed">{step.desc}</p>
+
+                  {[
+                    { 
+                      step: '01', 
+                      title: 'Sign Up', 
+                      desc: 'Create your free account in seconds', 
+                      icon: '👋', 
+                      color: 'bg-violet-200 border-violet-400',
+                      highlight: 'bg-violet-300'
+                    },
+                    { 
+                      step: '02', 
+                      title: 'Upload Materials', 
+                      desc: 'Drop your notes, PDFs, or links', 
+                      icon: '📚', 
+                      color: 'bg-blue-200 border-blue-400',
+                      highlight: 'bg-cyan-300'
+                    },
+                    { 
+                      step: '03', 
+                      title: 'Ask AI Anything', 
+                      desc: 'Get instant explanations and summaries', 
+                      icon: '🧠', 
+                      color: 'bg-rose-200 border-rose-400',
+                      highlight: 'bg-pink-300'
+                    },
+                    { 
+                      step: '04', 
+                      title: 'Collaborate', 
+                      desc: 'Study with friends in real-time', 
+                      icon: '🤝', 
+                      color: 'bg-amber-200 border-amber-400',
+                      highlight: 'bg-orange-300'
+                    },
+                  ].map((step, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.15, duration: 0.5 }}
+                      viewport={{ once: true }}
+                      className="relative"
+                    >
+                      {/* Step number badge */}
+                      <div className="flex items-start gap-4 mb-4">
+                        <div className={`w-16 h-16 ${step.color} border-2 rounded-2xl flex items-center justify-center text-3xl shadow-md transform -rotate-2`}>
+                          {step.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-2xl font-bold text-indigo-600" style={{ fontFamily: 'Caveat, cursive' }}>
+                              {step.step}.
+                            </span>
+                            <h4 className="text-2xl font-bold text-slate-800 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                              <span className="relative z-10">{step.title}</span>
+                              <div className={`absolute inset-0 ${step.highlight} opacity-30 transform -skew-x-2 rotate-1`} style={{ top: '45%', height: '45%' }}></div>
+                            </h4>
+                          </div>
+                          <p className="text-lg text-slate-700 leading-relaxed" style={{ fontFamily: 'Caveat, cursive' }}>
+                            {step.desc}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Connector arrow (except for last item) */}
+                      {i < 3 && (
+                        <div className="flex items-center gap-2 ml-8 my-2">
+                          <div className="w-0.5 h-6 bg-indigo-300"></div>
+                          <span className="text-indigo-400 text-xl">↓</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {/* Success sticker with highlighter */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
+                    whileInView={{ opacity: 1, scale: 1, rotate: 3 }}
+                    transition={{ delay: 0.6, duration: 0.5 }}
+                    viewport={{ once: true }}
+                    className="mt-12 p-6 bg-emerald-200 border-4 border-emerald-400 rounded-3xl shadow-xl transform rotate-1 relative"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="text-4xl">✨</div>
+                      <div>
+                        <div className="text-2xl font-bold text-emerald-800 mb-1 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                          <span className="relative z-10">You're all set!</span>
+                          <div className="absolute inset-0 bg-emerald-400 opacity-40 transform -skew-x-2" style={{ top: '40%', height: '50%' }}></div>
+                        </div>
+                        <div className="text-lg text-emerald-700" style={{ fontFamily: 'Caveat, cursive' }}>
+                          Ready to start your study journey
+                        </div>
+                      </div>
+                    </div>
+                    {/* Corner fold effect */}
+                    <div className="absolute top-0 right-0 w-12 h-12 bg-emerald-300 transform rotate-45 translate-x-6 -translate-y-6 border-r-2 border-t-2 border-emerald-400"></div>
+                  </motion.div>
                 </div>
-                {i < 3 && (
-                  <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2 text-indigo-300 text-3xl font-black">→</div>
-                )}
-              </motion.div>
-            ))}
+
+                {/* Page curl effect */}
+                <div className="absolute bottom-0 right-0 w-24 h-24 bg-amber-100 rounded-tl-full border-l-2 border-t-2 border-amber-300 shadow-lg"></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
