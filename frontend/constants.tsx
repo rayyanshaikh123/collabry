@@ -30,7 +30,14 @@ import {
   Target,
   Play,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  Send,
+  X,
+  FileText,
+  Lightbulb,
+  Zap,
+  Upload
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -52,23 +59,36 @@ export const ICONS = {
   Trophy: Trophy,
   Flame: Flame,
   Plus: Plus,
+  plus: Plus,
   StickyNote: StickyNote,
   Type: Type,
   Image: ImageIcon,
   Pointer: MousePointer2,
   Download: Download,
+  download: Download,
   Share: Share2,
+  share: Share2,
   Menu: MoreVertical,
   Check: CheckCircle2,
+  check: CheckCircle2,
   CheckCircle: CheckCircle2,
   Uncheck: Circle,
   Chat: MessageCircle,
   Sparkles: Sparkles,
   Trash: Trash2,
+  trash: Trash2,
   Target: Target,
   Play: Play,
   ChevronLeft: ChevronLeft,
   ChevronRight: ChevronRight,
+  refresh: RefreshCw,
+  send: Send,
+  close: X,
+  fileText: FileText,
+  lightbulb: Lightbulb,
+  zap: Zap,
+  Upload: Upload,
+  X: X,
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [

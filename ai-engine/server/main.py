@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage
+from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, notebook
 from server.deps import get_current_user
 from server.middleware import UsageTrackingMiddleware
 from server.limit_middleware import UsageLimitMiddleware
@@ -189,6 +189,7 @@ app.include_router(summarize.router)
 app.include_router(qa.router)
 app.include_router(mindmap.router)
 app.include_router(usage.router)
+app.include_router(notebook.router)
 
 
 # Root endpoint
@@ -220,6 +221,11 @@ async def root():
             "mindmap": "POST /ai/mindmap - Generate mind map",
             "sessions": "GET /ai/sessions - List user sessions",
             "create_session": "POST /ai/sessions - Create new session",
+            "notebook_scrape": "POST /ai/notebook/scrape - Scrape website content",
+            "notebook_search": "POST /ai/notebook/search - Search the web",
+            "notebook_summarize": "POST /ai/notebook/summarize - Summarize content",
+            "notebook_key_points": "POST /ai/notebook/extract-key-points - Extract key points",
+            "notebook_summarize_stream": "GET /ai/notebook/summarize/stream - Streaming summarization (SSE)",
             "usage_stats": "GET /ai/usage/stats?days=7 - Public usage statistics (no auth)",
             "my_usage": "GET /ai/usage/me - Get my usage statistics",
             "global_usage": "GET /ai/usage/global?days=7 - Get global usage (admin, requires auth)",

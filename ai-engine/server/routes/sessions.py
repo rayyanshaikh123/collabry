@@ -123,13 +123,13 @@ async def create_session(
     """
     try:
         # Check session limit for free users
-        max_sessions = 3  # Free users limited to 3 sessions
+        max_sessions = 50  # Increased limit for development
         existing_count = sessions_collection.count_documents({"user_id": user_id})
         
         if existing_count >= max_sessions:
             raise HTTPException(
                 status_code=403,
-                detail=f"Free users are limited to {max_sessions} sessions. Please delete an old session or upgrade to premium."
+                detail=f"Session limit reached ({max_sessions} sessions). Please delete an old session."
             )
         
         # Create new session
@@ -315,9 +315,44 @@ async def delete_session(
         raise HTTPException(status_code=500, detail="Failed to delete session")
 
 
+@router.get(
+    "/{session_id}/chat/stream",
+    summary="Streaming chat for session (GET)",
+    description="Send a message via query params and get streaming AI response for a specific session",
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse}
+    }
+)
+async def session_chat_stream_get(
+    session_id: str,
+    message: str,
+    use_rag: bool = False,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Streaming chat endpoint using GET with query parameters (for SSE compatibility).
+    Automatically saves messages to the session.
+    
+    Args:
+        session_id: The session ID
+        message: The user's message (query param)
+        use_rag: Whether to use RAG retrieval (query param)
+        
+    Returns:
+        StreamingResponse with Server-Sent Events
+    """
+    # Create a ChatRequest object from query params
+    request = ChatRequest(message=message, use_rag=use_rag)
+    
+    # Reuse the POST handler logic
+    return await session_chat_stream(session_id, request, user_id)
+
+
 @router.post(
     "/{session_id}/chat/stream",
-    summary="Streaming chat for session",
+    summary="Streaming chat for session (POST)",
     description="Send a message and get streaming AI response for a specific session",
     responses={
         401: {"model": ErrorResponse},

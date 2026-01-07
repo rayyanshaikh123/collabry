@@ -22,13 +22,14 @@ const getAppRouteFromPath = (path: string): string => {
   const routeMap: Record<string, string> = {
     '/dashboard': 'dashboard',
     '/study-board': 'study-board',
+    '/study-notebook': 'study-notebook',
     '/planner': 'planner',
     '/focus': 'focus',
     '/profile': 'profile',
     '/usage': 'usage',
-    '/study-buddy': 'study-buddy',
-    '/visual-aids': 'visual-aids',
   };
+  // Handle dynamic routes like /study-notebook/[id]
+  if (path.startsWith('/study-notebook')) return 'study-notebook';
   return routeMap[path] || 'dashboard';
 };
 
@@ -75,12 +76,11 @@ export default function MainLayout({
     const pathMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'study-board': '/study-board',
+      'study-notebook': '/study-notebook',
       'planner': '/planner',
       'focus': '/focus',
       'profile': '/profile',
       'usage': '/usage',
-      'study-buddy': '/study-buddy',
-      'visual-aids': '/visual-aids',
     };
     router.push(pathMap[routeStr] || '/dashboard');
   };

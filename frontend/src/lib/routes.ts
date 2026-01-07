@@ -80,19 +80,12 @@ export const ROUTES: Record<AppRoute, RouteConfig> = {
     allowedRoles: ['student', 'mentor', 'admin'],
     title: 'Flashcards',
   },
-  [AppRoute.VISUAL_AIDS]: {
-    route: AppRoute.VISUAL_AIDS,
-    path: '/visual-aids',
+  [AppRoute.STUDY_NOTEBOOK]: {
+    route: AppRoute.STUDY_NOTEBOOK,
+    path: '/study-notebook',
     requiresAuth: true,
     allowedRoles: ['student', 'mentor', 'admin'],
-    title: 'Visual Aids',
-  },
-  [AppRoute.STUDY_BUDDY]: {
-    route: AppRoute.STUDY_BUDDY,
-    path: '/study-buddy',
-    requiresAuth: true,
-    allowedRoles: ['student', 'mentor', 'admin'],
-    title: 'Study Buddy',
+    title: 'Study Notebook',
   },
   [AppRoute.LEARNING_JOURNAL]: {
     route: AppRoute.LEARNING_JOURNAL,
