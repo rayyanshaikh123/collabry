@@ -5,19 +5,15 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8000';
+const SOCKET_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'http://localhost:5000';
 
 class SocketClient {
   private socket: Socket | null = null;
+  private boardSocket: Socket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
   connect(token: string) {
-    // Socket disabled - backend server not running
-    console.log('[Socket] Socket connection disabled (backend not running)');
-    return null;
-    
-    /* Commented out until backend server is running
     if (this.socket?.connected) {
       return this.socket;
     }
@@ -35,7 +31,26 @@ class SocketClient {
 
     this.setupEventHandlers();
     return this.socket;
-    */
+  }
+
+  connectBoards(token: string) {
+    if (this.boardSocket?.connected) {
+      return this.boardSocket;
+    }
+
+    this.boardSocket = io(`${SOCKET_URL}/boards`, {
+      auth: {
+        token,
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: this.maxReconnectAttempts,
+    });
+
+    this.setupBoardEventHandlers();
+    return this.boardSocket;
   }
 
   private setupEventHandlers() {
@@ -65,58 +80,91 @@ class SocketClient {
     });
   }
 
+  private setupBoardEventHandlers() {
+    if (!this.boardSocket) return;
+
+    this.boardSocket.on('connect', () => {
+      console.log('[Board Socket] Connected:', this.boardSocket?.id);
+    });
+
+    this.boardSocket.on('disconnect', (reason) => {
+      console.log('[Board Socket] Disconnected:', reason);
+    });
+
+    this.boardSocket.on('connect_error', (error) => {
+      console.error('[Board Socket] Connection error:', error);
+    });
+  }
+
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
+    if (this.boardSocket) {
+      this.boardSocket.disconnect();
+      this.boardSocket = null;
+    }
   }
 
   // Board collaboration events
-  joinBoard(boardId: string) {
-    // TODO: Implement board join logic
-    this.socket?.emit('board:join', { boardId });
+  joinBoard(boardId: string, callback?: (response: any) => void) {
+    this.boardSocket?.emit('board:join', { boardId }, callback);
   }
 
   leaveBoard(boardId: string) {
-    // TODO: Implement board leave logic
-    this.socket?.emit('board:leave', { boardId });
+    this.boardSocket?.emit('board:leave', { boardId });
   }
 
-  sendBoardUpdate(boardId: string, update: any) {
-    // TODO: Implement board update broadcast
-    this.socket?.emit('board:update', { boardId, update });
+  createElement(boardId: string, element: any, callback?: (response: any) => void) {
+    this.boardSocket?.emit('element:create', { boardId, element }, callback);
+  }
+
+  updateElement(boardId: string, elementId: string, changes: any, callback?: (response: any) => void) {
+    this.boardSocket?.emit('element:update', { boardId, elementId, changes }, callback);
+  }
+
+  deleteElement(boardId: string, elementId: string, callback?: (response: any) => void) {
+    this.boardSocket?.emit('element:delete', { boardId, elementId }, callback);
   }
 
   sendCursorPosition(boardId: string, position: { x: number; y: number }) {
-    // TODO: Implement cursor position broadcast
-    this.socket?.emit('board:cursor', { boardId, position });
+    this.boardSocket?.emit('cursor:move', { boardId, position });
   }
 
   // Event listeners
-  onBoardUpdate(callback: (data: any) => void) {
-    // TODO: Listen for board updates from other users
-    this.socket?.on('board:update', callback);
+  onElementCreated(callback: (data: any) => void) {
+    this.boardSocket?.on('element:created', callback);
+  }
+
+  onElementUpdated(callback: (data: any) => void) {
+    this.boardSocket?.on('element:updated', callback);
+  }
+
+  onElementDeleted(callback: (data: any) => void) {
+    this.boardSocket?.on('element:deleted', callback);
   }
 
   onUserJoined(callback: (data: any) => void) {
-    // TODO: Listen for user join events
-    this.socket?.on('board:user-joined', callback);
+    this.boardSocket?.on('user:joined', callback);
   }
 
   onUserLeft(callback: (data: any) => void) {
-    // TODO: Listen for user leave events
-    this.socket?.on('board:user-left', callback);
+    this.boardSocket?.on('user:left', callback);
   }
 
   onCursorMove(callback: (data: any) => void) {
-    // TODO: Listen for cursor movements
-    this.socket?.on('board:cursor', callback);
+    this.boardSocket?.on('cursor:moved', callback);
   }
 
-  // Remove event listeners
+  // Remove event listeners from main socket
   off(event: string, callback?: any) {
     this.socket?.off(event, callback);
+  }
+
+  // Remove event listeners from board socket
+  offBoardEvent(event: string, callback?: any) {
+    this.boardSocket?.off(event, callback);
   }
 
   // Check connection status

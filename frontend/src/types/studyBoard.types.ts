@@ -45,7 +45,10 @@ export interface StudyBoard {
 export interface BoardParticipant {
   userId: string;
   userName: string;
+  name: string; // Display name (email or username)
+  email?: string;
   userAvatar?: string;
+  color: string; // User's cursor/avatar color
   role: 'owner' | 'editor' | 'viewer';
   cursor?: CursorPosition;
   isActive: boolean;

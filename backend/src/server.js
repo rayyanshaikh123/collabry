@@ -1,6 +1,8 @@
 const app = require('./app');
+const http = require('http');
 const connectDB = require('./config/db');
 const config = require('./config/env');
+const { initializeSocket } = require('./socket');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -12,8 +14,14 @@ process.on('uncaughtException', (err) => {
 // Connect to database
 connectDB();
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+initializeSocket(server);
+
 // Start server
-const server = app.listen(config.port, () => {
+server.listen(config.port, () => {
   console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
 });
 
