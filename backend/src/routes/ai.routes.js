@@ -90,5 +90,6 @@ router.post('/qa', protect, proxyToAI);
 router.post('/qa/stream', protect, proxyToAI);
 router.post('/mindmap', protect, proxyToAI);
 router.post('/upload', protect, proxyToAI);
+router.post('/generate-study-plan', protect, proxyToAI);
 
 module.exports = router;
