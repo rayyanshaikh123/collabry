@@ -131,7 +131,6 @@ export const authService = {
 
   /**
    * Request password reset
-   * TODO: Connect to backend /api/auth/forgot-password
    */
   async forgotPassword(email: string): Promise<void> {
     const response = await apiClient.post('/auth/forgot-password', { email });
@@ -143,12 +142,11 @@ export const authService = {
 
   /**
    * Reset password with token
-   * TODO: Connect to backend /api/auth/reset-password
    */
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const response = await apiClient.post('/auth/reset-password', {
       token,
-      password: newPassword,
+      newPassword,
     });
     
     if (!response.success) {

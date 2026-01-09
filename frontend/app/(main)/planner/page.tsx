@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import Planner from '../../../views/Planner';
+import PlannerNew from '../../../views/PlannerNew';
 
 export default function PlannerPage() {
-  return <Planner />;
+  return <PlannerNew />;
 }

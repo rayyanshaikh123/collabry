@@ -39,7 +39,10 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
         <div className="hidden md:flex items-center gap-8">
           <button className="text-sm font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">Features</button>
           <button className="text-sm font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">Community</button>
-          <button className="text-sm font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest">Pricing</button>
+          <button className="text-sm font-black text-slate-500 hover:text-indigo-600 transition-colors uppercase tracking-widest relative inline-block group">
+            <span className="relative z-10">Pricing</span>
+            <div className="absolute inset-0 bg-yellow-300 opacity-0 group-hover:opacity-40 transition-opacity transform -skew-x-3 -rotate-1" style={{ top: '40%', height: '50%' }}></div>
+          </button>
           <Button variant="primary" size="sm" onClick={onGetStarted}>Sign In</Button>
         </div>
       </nav>

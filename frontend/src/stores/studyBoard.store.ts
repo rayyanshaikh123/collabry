@@ -15,17 +15,17 @@ import { socketClient } from '../lib/socket';
 
 interface StudyBoardState {
   // State
-  activeBoard: StudyBoard | null;
+  currentBoard: StudyBoard | null;
   boards: StudyBoard[];
   selectedElements: string[];
   participants: BoardParticipant[];
-  cursors: Map<string, CursorPosition>;
+  cursors: Record<string, CursorPosition>;
   syncStatus: 'synced' | 'syncing' | 'conflict' | 'error';
   isLoading: boolean;
   error: string | null;
 
   // Actions
-  setActiveBoard: (board: StudyBoard | null) => void;
+  setCurrentBoard: (board: StudyBoard | null) => void;
   setBoards: (boards: StudyBoard[]) => void;
   addBoard: (board: StudyBoard) => void;
   updateBoard: (boardId: string, updates: Partial<StudyBoard>) => void;
@@ -42,7 +42,7 @@ interface StudyBoardState {
   setParticipants: (participants: BoardParticipant[]) => void;
   addParticipant: (participant: BoardParticipant) => void;
   removeParticipant: (userId: string) => void;
-  updateParticipantCursor: (userId: string, cursor: CursorPosition) => void;
+  updateCursor: (userId: string, position: CursorPosition) => void;
   
   // Sync actions
   setSyncStatus: (status: 'synced' | 'syncing' | 'conflict' | 'error') => void;
@@ -64,18 +64,18 @@ interface StudyBoardState {
 
 export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
   // Initial state
-  activeBoard: null,
+  currentBoard: null,
   boards: [],
   selectedElements: [],
   participants: [],
-  cursors: new Map(),
+  cursors: {},
   syncStatus: 'synced',
   isLoading: false,
   error: null,
 
-  // Set active board
-  setActiveBoard: (board: StudyBoard | null) => {
-    set({ activeBoard: board });
+  // Set current board
+  setCurrentBoard: (board: StudyBoard | null) => {
+    set({ currentBoard: board });
   },
 
   // Set boards
@@ -171,28 +171,41 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
     set({ participants });
   },
 
-  // Add participant
+  // Add participant (prevent duplicates)
   addParticipant: (participant: BoardParticipant) => {
-    set((state) => ({
-      participants: [...state.participants, participant],
-    }));
+    set((state) => {
+      // Check if participant already exists
+      const exists = state.participants.some(p => p.userId === participant.userId);
+      if (exists) {
+        console.log('[StudyBoardStore] Participant already exists:', participant.userId);
+        return state;
+      }
+      return {
+        participants: [...state.participants, participant],
+      };
+    });
   },
 
   // Remove participant
   removeParticipant: (userId: string) => {
-    set((state) => ({
-      participants: state.participants.filter((p) => p.userId !== userId),
-      cursors: new Map([...state.cursors].filter(([id]) => id !== userId)),
-    }));
+    set((state) => {
+      const newCursors = { ...state.cursors };
+      delete newCursors[userId];
+      return {
+        participants: state.participants.filter((p) => p.userId !== userId),
+        cursors: newCursors
+      };
+    });
   },
 
-  // Update participant cursor
-  updateParticipantCursor: (userId: string, cursor: CursorPosition) => {
-    set((state) => {
-      const newCursors = new Map(state.cursors);
-      newCursors.set(userId, cursor);
-      return { cursors: newCursors };
-    });
+  // Update cursor
+  updateCursor: (userId: string, position: CursorPosition) => {
+    set((state) => ({
+      cursors: {
+        ...state.cursors,
+        [userId]: position
+      }
+    }));
   },
 
   // Set sync status
@@ -221,7 +234,7 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
     
     try {
       const board = await studyBoardService.getBoard(boardId);
-      set({ activeBoard: board, isLoading: false });
+      set({ currentBoard: board, isLoading: false });
     } catch (error: any) {
       set({
         error: error.message || 'Failed to fetch board',

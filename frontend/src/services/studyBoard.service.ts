@@ -15,10 +15,9 @@ import type {
 export const studyBoardService = {
   /**
    * Get all boards for current user
-   * TODO: Connect to backend /api/boards
    */
   async getBoards(): Promise<StudyBoard[]> {
-    const response = await apiClient.get<StudyBoard[]>('/boards');
+    const response = await apiClient.get<any>('/boards');
     
     if (response.success && response.data) {
       return response.data;
@@ -29,10 +28,9 @@ export const studyBoardService = {
 
   /**
    * Get single board by ID
-   * TODO: Connect to backend /api/boards/:id
    */
   async getBoard(boardId: string): Promise<StudyBoard> {
-    const response = await apiClient.get<StudyBoard>(`/boards/${boardId}`);
+    const response = await apiClient.get<any>(`/boards/${boardId}`);
     
     if (response.success && response.data) {
       return response.data;
@@ -43,10 +41,9 @@ export const studyBoardService = {
 
   /**
    * Create new board
-   * TODO: Connect to backend /api/boards
    */
   async createBoard(data: Partial<StudyBoard>): Promise<StudyBoard> {
-    const response = await apiClient.post<StudyBoard>('/boards', data);
+    const response = await apiClient.post<any>('/boards', data);
     
     if (response.success && response.data) {
       return response.data;
@@ -170,6 +167,25 @@ export const studyBoardService = {
     }
     
     throw new Error('Failed to fetch participants');
+  },
+
+  /**
+   * Invite member by email
+   */
+  async inviteMember(boardId: string, email: string, role: string = 'editor'): Promise<any> {
+    try {
+      const response = await apiClient.post<any>(`/boards/${boardId}/invite`, { email, role });
+      
+      if (response.success) {
+        return response.data || response;
+      }
+      
+      throw new Error(response.message || 'Failed to send invitation');
+    } catch (error: any) {
+      // Re-throw with better error message
+      const message = error.response?.data?.message || error.message || 'Failed to send invitation';
+      throw new Error(message);
+    }
   },
 };
 

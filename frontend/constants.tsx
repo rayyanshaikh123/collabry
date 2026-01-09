@@ -6,6 +6,7 @@ import {
   Clock, 
   CreditCard, 
   User, 
+  Users,
   ShieldCheck, 
   LogOut, 
   Settings, 
@@ -33,14 +34,26 @@ import {
   ChevronRight,
   RefreshCw,
   Send,
-  X,
-  FileText,
+ 
+ 
   Lightbulb,
   Zap,
   Upload,
   Globe,
   Star,
-  ExternalLink
+  ExternalLink,
+  FileText,
+  Phone,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  X,
+  AlertCircle,
+  Eye,
+  Copy,
+  Link,
+  Lock
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -53,6 +66,7 @@ export const ICONS = {
   Clock: Clock,
   Flashcards: CreditCard,
   Profile: User,
+  Users: Users,
   Admin: ShieldCheck,
   Logout: LogOut,
   Settings: Settings,
@@ -96,6 +110,19 @@ export const ICONS = {
   star: Star,
   externalLink: ExternalLink,
   book: BookOpen,
+  FileText: FileText,
+  Phone: Phone,
+  Mic: Mic,
+  MicOff: MicOff,
+  Video: Video,
+  VideoOff: VideoOff,
+ 
+  AlertCircle: AlertCircle,
+  Eye: Eye,
+  Copy: Copy,
+  Link: Link,
+  Lock: Lock,
+  PenTool: PenTool,
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [

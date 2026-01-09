@@ -7,8 +7,10 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin.routes');
 const visualAidsRoutes = require('./routes/visualAids.routes');
+const boardRoutes = require('./routes/board.routes');
 const aiRoutes = require('./routes/ai.routes');
 const notebookRoutes = require('./routes/notebook.routes');
+const studyPlannerRoutes = require('./routes/studyPlanner.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
@@ -26,8 +28,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/visual-aids', visualAidsRoutes);
+app.use('/api/boards', boardRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/notebook', notebookRoutes);
+app.use('/api/study-planner', studyPlannerRoutes);
 
 
 // Root route
