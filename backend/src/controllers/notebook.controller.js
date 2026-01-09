@@ -550,10 +550,12 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
 
   // Validate artifact exists
   if (type === 'quiz') {
-    const quiz = await Quiz.findOne({ _id: referenceId, userId: req.user._id });
+    // Quiz model stores owner in `createdBy`
+    const quiz = await Quiz.findOne({ _id: referenceId, createdBy: req.user._id });
     if (!quiz) throw new AppError('Quiz not found', 404);
   } else if (type === 'mindmap') {
-    const mindmap = await MindMap.findOne({ _id: referenceId, userId: req.user._id });
+    // MindMap model stores owner in `createdBy`
+    const mindmap = await MindMap.findOne({ _id: referenceId, createdBy: req.user._id });
     if (!mindmap) throw new AppError('Mind map not found', 404);
   }
 

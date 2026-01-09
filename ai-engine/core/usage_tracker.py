@@ -322,6 +322,41 @@ class UsageTracker:
         """Close MongoDB connection."""
         self.client.close()
 
+    def get_today_tokens(self, user_id: str) -> int:
+        """Return total tokens used by user for today (UTC midnight to now)."""
+        try:
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            doc = self.daily_stats_collection.find_one({"user_id": user_id, "date": today})
+            if not doc:
+                return 0
+            return int(doc.get("total_tokens", 0) or 0)
+        except Exception as e:
+            logger.error(f"Failed to get today's tokens for {user_id}: {e}")
+            return 0
+
+    def reset_user_daily_usage(self, user_id: str):
+        """Reset a user's daily aggregated stats for today to zero.
+
+        This affects the `daily_stats` collection only; raw `usage_logs` remain for audit.
+        """
+        try:
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            self.daily_stats_collection.update_one(
+                {"user_id": user_id, "date": today},
+                {
+                    "$set": {
+                        "total_operations": 0,
+                        "total_tokens": 0,
+                        "successful_operations": 0,
+                        "failed_operations": 0
+                    }
+                },
+                upsert=True
+            )
+            logger.info(f"Reset daily usage for user {user_id} (date={today.isoformat()})")
+        except Exception as e:
+            logger.error(f"Failed to reset daily usage for {user_id}: {e}")
+
 
 # Global instance
 usage_tracker = UsageTracker()

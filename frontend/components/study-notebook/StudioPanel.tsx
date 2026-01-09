@@ -12,7 +12,8 @@ export type ArtifactType =
   | 'video-overview'
   | 'reports'
   | 'infographic'
-  | 'slide-deck';
+  | 'slide-deck'
+  | 'course-finder';
 
 export interface Artifact {
   id: string;
@@ -26,6 +27,8 @@ interface StudioPanelProps {
   artifacts: Artifact[];
   onGenerateArtifact: (type: ArtifactType) => void;
   onSelectArtifact: (id: string) => void;
+  onDeleteArtifact?: (id: string) => void;
+  onEditArtifact?: (id: string) => void;
   selectedArtifact: Artifact | null;
   isGenerating?: boolean;
   hasSelectedSources: boolean;
@@ -35,6 +38,8 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
   artifacts,
   onGenerateArtifact,
   onSelectArtifact,
+  onDeleteArtifact,
+  onEditArtifact,
   selectedArtifact,
   isGenerating = false,
   hasSelectedSources,
@@ -55,6 +60,13 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
       label: 'Video Overview',
       color: 'pink',
       available: false, // Future
+    },
+    {
+      type: 'course-finder' as ArtifactType,
+      icon: '🎓',
+      label: 'Course Finder',
+      color: 'indigo',
+      available: true,
     },
     {
       type: 'flashcards' as ArtifactType,
@@ -117,30 +129,69 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
             ? 'Generate artifacts or ask AI in chat for summaries, key points, etc.'
             : 'Add sources to generate content'}
         </p>
+        {/* Compact artifact strip when collapsed - shows edit icons and tooltip */}
+        {artifacts.length > 0 && !showArtifacts && (
+          <div className="mt-3 px-1">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {artifacts.slice(0, 8).map((a, idx) => {
+                const action = studioActions.find((s) => s.type === a.type);
+                return (
+                  <div key={`${a.id}-${idx}`} className="relative">
+                    <button
+                      title={a.title}
+                      onClick={() => onSelectArtifact(a.id)}
+                      className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-sm shadow-sm"
+                    >
+                      <span className="text-lg">{action?.icon}</span>
+                    </button>
+                    {/* compact strip edit removed for cleaner UI */}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}
       <div className="p-4 space-y-2 border-b border-slate-200 bg-white">
         <div className="grid grid-cols-2 gap-2">
           {studioActions.map((action) => (
-            <Button
-              key={action.type}
-              variant={action.available ? 'outline' : 'ghost'}
-              size="sm"
-              onClick={() => action.available && onGenerateArtifact(action.type)}
-              disabled={!hasSelectedSources || isGenerating || !action.available}
-              className={`flex flex-col items-center justify-center h-20 gap-1 ${
-                action.available ? 'hover:border-indigo-500 hover:bg-indigo-50' : 'opacity-50'
-              }`}
-            >
-              <span className="text-2xl">{action.icon}</span>
-              <span className="text-xs font-bold">{action.label}</span>
-              {!action.available && (
-                <Badge variant="slate" className="text-[10px] mt-1">
-                  Coming Soon
-                </Badge>
+            <div key={action.type} className="relative">
+              <Button
+                variant={action.available ? 'outline' : 'ghost'}
+                size="sm"
+                onClick={() => action.available && onGenerateArtifact(action.type)}
+                disabled={!hasSelectedSources || isGenerating || !action.available}
+                className={`flex flex-col items-center justify-center h-20 gap-1 ${
+                  action.available ? 'hover:border-indigo-500 hover:bg-indigo-50' : 'opacity-50'
+                }`}
+              >
+                <span className="text-2xl">{action.icon}</span>
+                <span className="text-xs font-bold">{action.label}</span>
+                {!action.available && (
+                  <Badge variant="slate" className="text-[10px] mt-1">
+                    Coming Soon
+                  </Badge>
+                )}
+              </Button>
+
+              {/* Small edit button for generator presets (Quiz) - render as a sibling to avoid nested <button> */}
+              {action.type === 'quiz' && typeof onEditArtifact === 'function' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditArtifact('action-quiz');
+                  }}
+                  title="Edit Quiz settings"
+                  className="absolute right-2 top-2 p-1 bg-white border border-slate-100 rounded text-slate-600 hover:text-slate-800"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
+                  </svg>
+                </button>
               )}
-            </Button>
+            </div>
           ))}
         </div>
       </div>
@@ -175,39 +226,63 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
 
             {showArtifacts && (
               <div className="space-y-2">
-                {artifacts.map((artifact) => {
+                {artifacts.map((artifact, idx) => {
                   const action = studioActions.find((a) => a.type === artifact.type);
                   return (
-                    <div key={artifact.id} onClick={() => onSelectArtifact(artifact.id)}>
+                    <div key={`${artifact.id}-${idx}`} className="relative">
                       <Card
-                        className={`p-3 cursor-pointer transition-all ${
+                        onClick={() => onSelectArtifact(artifact.id)}
+                        className={`p-3 cursor-pointer transition-all relative ${
                           selectedArtifact?.id === artifact.id
                             ? 'border-indigo-500 bg-indigo-50 shadow-md'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                         }`}
                       >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl">{action?.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-sm text-slate-800 truncate">
-                            {artifact.title}
+                        <div className="flex items-start gap-3">
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-sm text-slate-800 truncate">
+                              {artifact.title}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant={action?.color as any} className="text-xs">
+                                {action?.label}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              {new Date(artifact.createdAt).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant={action?.color as any} className="text-xs">
-                              {action?.label}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-slate-400 mt-1">
-                            {new Date(artifact.createdAt).toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+
+                          {/* Controls - absolutely positioned so they're always visible */}
+                          <div className="absolute right-3 top-3 flex gap-2">
+                            {typeof onDeleteArtifact === 'function' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm('Delete this artifact?')) {
+                                    onDeleteArtifact(artifact.id);
+                                  }
+                                }}
+                                className="text-red-500 hover:text-red-700 p-1 rounded bg-white border border-slate-100"
+                                aria-label="Delete artifact"
+                                title="Delete artifact"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+
+                            
                           </div>
                         </div>
-                      </div>
-                    </Card>
+                      </Card>
                     </div>
                   );
                 })}

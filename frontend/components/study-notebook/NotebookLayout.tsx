@@ -21,10 +21,13 @@ interface NotebookLayoutProps {
   onClearChat: () => void;
   onRegenerateResponse: () => void;
   isChatLoading?: boolean;
+  onSaveQuizToStudio?: (questions: any[]) => void;
 
   // Studio
   artifacts: Artifact[];
   onGenerateArtifact: (type: ArtifactType) => void;
+  onDeleteArtifact?: (id: string) => void;
+  onEditArtifact?: (id: string) => void;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (id: string) => void;
   isGenerating?: boolean;
@@ -40,8 +43,11 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   onClearChat,
   onRegenerateResponse,
   isChatLoading = false,
+  onSaveQuizToStudio,
   artifacts,
   onGenerateArtifact,
+  onDeleteArtifact,
+  onEditArtifact,
   selectedArtifact,
   onSelectArtifact,
   isGenerating = false,
@@ -89,6 +95,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onRegenerateResponse={onRegenerateResponse}
             isLoading={isChatLoading}
             hasSelectedSources={hasSelectedSources}
+            onSaveQuizToStudio={onSaveQuizToStudio}
           />
         </div>
 
@@ -98,6 +105,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             artifacts={artifacts}
             onGenerateArtifact={onGenerateArtifact}
             onSelectArtifact={onSelectArtifact}
+            onDeleteArtifact={onDeleteArtifact}
+            onEditArtifact={onEditArtifact}
             selectedArtifact={selectedArtifact}
             isGenerating={isGenerating}
             hasSelectedSources={hasSelectedSources}
@@ -110,6 +119,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
         <ArtifactViewer
           artifact={selectedArtifact}
           onClose={() => onSelectArtifact('')}
+          onEdit={onEditArtifact}
         />
       )}
     </div>

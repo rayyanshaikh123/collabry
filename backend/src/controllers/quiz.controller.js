@@ -7,9 +7,8 @@ class QuizController {
    */
   async createQuiz(req, res, next) {
     try {
-      const userId = req.user.id;
+      const userId = req.user._id; // Use ObjectId for consistency
       const quiz = await quizService.createQuiz(userId, req.body);
-      
       res.status(201).json({
         success: true,
         data: quiz

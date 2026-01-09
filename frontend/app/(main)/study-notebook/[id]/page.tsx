@@ -13,10 +13,11 @@ import {
   useToggleSource, 
   useRemoveSource,
   useLinkArtifact,
+  useUnlinkArtifact,
   useCreateNotebook
 } from '../../../../src/hooks/useNotebook';
 import { useSessionMessages, useSaveMessage } from '../../../../src/hooks/useSessions';
-import { useGenerateQuiz, useGenerateMindMap } from '../../../../src/hooks/useVisualAids';
+import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '../../../../src/hooks/useVisualAids';
 import axios from 'axios';
 
 const AI_ENGINE_URL = 'http://localhost:8000';
@@ -47,10 +48,12 @@ export default function StudyNotebookPage() {
   const toggleSource = useToggleSource(notebookId);
   const removeSource = useRemoveSource(notebookId);
   const linkArtifact = useLinkArtifact(notebookId);
+  const unlinkArtifact = useUnlinkArtifact(notebookId);
 
   // AI operations
   const generateQuiz = useGenerateQuiz();
   const generateMindMap = useGenerateMindMap();
+  const createQuiz = useCreateQuiz();
   
   // Chat state - Hook already handles enabled check internally
   const { data: sessionMessagesData } = useSessionMessages(notebook?.aiSessionId || '');
@@ -62,6 +65,14 @@ export default function StudyNotebookPage() {
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // Local edits for artifact prompts (frontend-only)
+  const [artifactEdits, setArtifactEdits] = useState<Record<string, { prompt?: string; numberOfQuestions?: number; difficulty?: string }>>({});
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingArtifactId, setEditingArtifactId] = useState<string | null>(null);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editNumber, setEditNumber] = useState<number>(5);
+  const [editDifficulty, setEditDifficulty] = useState<string>('medium');
+  const DEFAULT_QUIZ_PROMPT = 'Create a practice quiz with multiple choice questions about:';
 
   // Auto-create notebook on mount if needed (only for 'default' route)
   useEffect(() => {
@@ -337,57 +348,101 @@ export default function StudyNotebookPage() {
     setIsGenerating(true);
 
     try {
-      if (type === 'quiz') {
-        // Combine source content
-        const content = selectedSources
-          .map(s => s.content || `[${s.name}]`)
-          .join('\n\n');
+      if (type === 'course-finder') {
+        // Extract topics from selected sources
+        const topics = selectedSources
+          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
 
-        const result = await generateQuiz.mutateAsync({
-          content,
-          count: 10,
-          difficulty: 'medium' as 'easy' | 'medium' | 'hard',
-          save: true,
-          title: `Quiz - ${notebook.title}`,
-          useRag: false,
-        });
+        // Send to AI to search for courses
+        const message = `Search the web for the best online courses, tutorials, and learning resources about: ${topics}. Find courses from platforms like Coursera, Udemy, edX, YouTube, etc. Include ratings and prices if available. return the results in a markdown list format with the web links of the courses.`;
+        
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      } else if (type === 'quiz') {
+        // Extract topics from selected sources
+        const topics = selectedSources
+          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
 
-        if (!result.savedQuizId) {
-          throw new Error('Quiz was not saved');
-        }
+        // If user edited the generator prompt (frontend-only), use it.
+        // Prefer persisted edits, but if the edit modal is currently open for the
+        // generator (`action-quiz`), also merge the live edit state so changes
+        // take effect immediately without requiring an explicit Save.
+        const persistedEdits = artifactEdits['action-quiz'] || {};
+        const liveEdits = (editModalOpen && editingArtifactId === 'action-quiz')
+          ? { prompt: editPrompt, numberOfQuestions: editNumber, difficulty: editDifficulty }
+          : {};
+        const actionEdits = { ...persistedEdits, ...liveEdits };
+        const numQuestions = actionEdits.numberOfQuestions ?? 5;
+        const difficulty = actionEdits.difficulty || 'medium';
+        const original = (actionEdits.prompt && actionEdits.prompt.trim().length > 0)
+          ? actionEdits.prompt
+          : DEFAULT_QUIZ_PROMPT;
 
-        // Link to notebook
-        await linkArtifact.mutateAsync({
-          type: 'quiz',
-          referenceId: result.savedQuizId,
-          title: `Quiz - ${notebook.title}`,
-        });
+        // Build message using the original prompt text plus injected metadata
+        const message = `${original} ${topics}
 
-        alert('Quiz generated successfully!');
+Format each question as follows:
+1. [Question text]?
+A) [Option 1]
+B) [Option 2]
+C) [Option 3]
+D) [Option 4]
+Answer: [A/B/C/D]
+Explanation: [Brief explanation of why this is correct]
+
+Requested number of questions: ${numQuestions}
+Difficulty: ${difficulty}
+
+Make sure the questions test understanding of key concepts from the material.`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
       } else if (type === 'mindmap') {
         const content = selectedSources
           .map(s => s.content || `[${s.name}]`)
           .join('\n\n');
 
+        // Request mind map generation. Backend expects { topic, maxNodes, save }
         const result = await generateMindMap.mutateAsync({
           topic: `${notebook.title} - Study Notes`,
-          depth: 3,
           maxNodes: 20,
-          saveToLibrary: true,
-          title: `Mind Map - ${notebook.title}`,
+          // Do not request DB save here unless a subjectId is provided; backend
+          // only saves when `save` is true AND `subjectId` is present.
+          save: false,
         });
 
-        if (!result.savedMapId) {
-          throw new Error('Mind map was not saved');
+        // The service may return either a generated map ({ nodes, edges }) or
+        // a saved mind map object (with _id). Accept multiple shapes.
+        const savedId = (result && (result.savedMapId || (result as any)._id || (result as any).data?._id)) || null;
+
+        if (savedId) {
+          await linkArtifact.mutateAsync({
+            type: 'mindmap',
+            referenceId: savedId,
+            title: `Mind Map - ${notebook.title}`,
+          });
+          alert('Mind map generated and saved to Studio!');
+        } else {
+          // Not saved to DB — present a non-fatal message and continue.
+          alert('Mind map generated (not saved to Studio). You can save it from the Visual Aids page.');
         }
 
-        await linkArtifact.mutateAsync({
-          type: 'mindmap',
-          referenceId: result.savedMapId,
-          title: `Mind Map - ${notebook.title}`,
-        });
-
-        alert('Mind map generated successfully!');
+        // Add mindmap to chat history as an assistant message so it appears in the chat
+        try {
+          const assistantMsg = {
+            id: Date.now().toString(),
+            role: 'assistant' as const,
+            content: JSON.stringify({ mindmap: result }),
+            timestamp: new Date().toISOString(),
+          };
+          setLocalMessages((prev) => [...prev, assistantMsg]);
+        } catch (e) {
+          console.warn('Failed to append mindmap to chat history:', e);
+        }
       } else {
         alert(`${type} generation coming soon!`);
       }
@@ -396,6 +451,138 @@ export default function StudyNotebookPage() {
       alert('Failed to generate artifact. Please try again.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleSaveQuizToStudio = async (questions: any[]) => {
+    if (!notebook) return;
+
+    try {
+      // First, create the quiz
+      // Try to preserve user-edited metadata (number/difficulty/prompt) when saving
+      const savedEdits = artifactEdits['action-quiz'] || selectedArtifact?.data || {};
+      const displayCount = savedEdits.numberOfQuestions || questions.length;
+      const quizDifficulty = savedEdits.difficulty || 'medium';
+      const quizPrompt = savedEdits.prompt || '';
+
+      const quizData = {
+        title: `Practice Quiz - ${displayCount} Questions`,
+        description: quizPrompt || 'Generated from study session',
+        sourceType: 'ai' as const,
+        questions: questions.map((q, index) => {
+          const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
+
+          // Determine correct answer text safely
+          let correctAnswerText = '';
+          if (typeof q.correctAnswer === 'number') {
+            correctAnswerText = options[q.correctAnswer] ?? '';
+          } else if (typeof q.correctAnswer === 'string') {
+            // If it's an option value
+            if (options.includes(q.correctAnswer)) {
+              correctAnswerText = q.correctAnswer;
+            } else {
+              // Might be letter A/B/C/D — convert to index
+              const letter = q.correctAnswer.trim().toUpperCase();
+              if (/^[A-Z]$/.test(letter)) {
+                const idx = letter.charCodeAt(0) - 65; // A -> 0
+                correctAnswerText = options[idx] ?? q.correctAnswer ?? '';
+              } else {
+                correctAnswerText = q.answer ?? q.correctAnswer ?? '';
+              }
+            }
+          } else if (q.answer && typeof q.answer === 'string') {
+            correctAnswerText = q.answer;
+          }
+
+          return {
+            question: q.question,
+            options,
+            correctAnswer: correctAnswerText,
+            explanation: q.explanation || '',
+            difficulty: (q.difficulty as any) || quizDifficulty,
+            points: 1,
+            order: index
+          };
+        }),
+        settings: {
+          shuffleQuestions: false,
+          shuffleOptions: false,
+          showExplanations: true,
+          allowReview: true
+        }
+      };
+
+      // Create the quiz in the database
+      const createdQuiz = await createQuiz.mutateAsync(quizData);
+
+      // Now link it to the notebook
+      await linkArtifact.mutateAsync({
+        type: 'quiz',
+        referenceId: createdQuiz._id,
+        title: quizData.title,
+      });
+
+      alert('Quiz saved to Studio successfully!');
+    } catch (error) {
+      console.error('Failed to save quiz:', error);
+      alert('Failed to save quiz to Studio');
+    }
+  };
+
+  const openEditModal = (artifactId: string) => {
+    const existing = artifactEdits[artifactId] || {};
+    // Prefer data embedded in the notebook artifact if available
+    const notebookArtifact = notebook?.artifacts?.find((a: any) => a._id === artifactId);
+    const artifactData = notebookArtifact?.data || {};
+    setEditingArtifactId(artifactId);
+    setEditPrompt(
+      existing.prompt || artifactData?.prompt || `Create a practice quiz with exactly ${existing.numberOfQuestions || artifactData?.numberOfQuestions || 5} multiple choice questions about:`
+    );
+    setEditNumber(existing.numberOfQuestions || artifactData?.numberOfQuestions || 5);
+    setEditDifficulty(existing.difficulty || artifactData?.difficulty || 'medium');
+    setEditModalOpen(true);
+  };
+
+  const saveEditModal = () => {
+    if (!editingArtifactId) return;
+    setArtifactEdits((prev) => ({
+      ...prev,
+      [editingArtifactId]: {
+        prompt: editPrompt,
+        numberOfQuestions: editNumber,
+        difficulty: editDifficulty,
+      }
+    }));
+    // If the edited artifact is currently selected in the viewer, update that state as well
+    if (selectedArtifact?.id === editingArtifactId) {
+      setSelectedArtifact((prev) => prev ? ({
+        ...prev,
+        data: {
+          ...prev.data,
+          prompt: editPrompt,
+          numberOfQuestions: editNumber,
+          difficulty: editDifficulty,
+        }
+      }) : prev);
+    }
+
+    setEditModalOpen(false);
+    alert('Saved prompt changes locally (frontend only).');
+  };
+
+  const handleDeleteArtifact = async (artifactId: string) => {
+    if (!notebook) return;
+    try {
+      // Clear viewer first to avoid React unmount ordering issues
+      if (selectedArtifact?.id === artifactId) {
+        setSelectedArtifact(null);
+      }
+      // Fire mutation (don't rely on UI state during awaiting)
+      await unlinkArtifact.mutateAsync(artifactId);
+      alert('Artifact deleted');
+    } catch (error) {
+      console.error('Failed to delete artifact:', error);
+      alert('Failed to delete artifact');
     }
   };
 
@@ -450,6 +637,7 @@ export default function StudyNotebookPage() {
   }
 
   return (
+    <>
     <NotebookLayout
       sources={notebook.sources.map(s => ({
         id: s._id,
@@ -468,17 +656,70 @@ export default function StudyNotebookPage() {
       onClearChat={handleClearChat}
       onRegenerateResponse={handleRegenerateResponse}
       isChatLoading={isChatLoading}
-      artifacts={notebook.artifacts.map(a => ({
-        id: a._id,
-        type: a.type as ArtifactType,
-        title: a.title,
-        createdAt: a.createdAt,
-        data: { referenceId: a.referenceId }
-      }))}
+      onSaveQuizToStudio={handleSaveQuizToStudio}
+      artifacts={notebook.artifacts.map(a => {
+        const edits = artifactEdits[a._id] || {};
+        return ({
+          id: a._id,
+          type: a.type as ArtifactType,
+          title: edits.numberOfQuestions ? `${a.title} (${edits.numberOfQuestions} q)` : a.title,
+          createdAt: a.createdAt,
+          data: { referenceId: a.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
+        });
+      })}
       onGenerateArtifact={handleGenerateArtifact}
       onSelectArtifact={handleSelectArtifact}
       isGenerating={isGenerating}
+      onDeleteArtifact={handleDeleteArtifact}
+      onEditArtifact={openEditModal}
       selectedArtifact={selectedArtifact}
     />
+
+    {/* Edit Modal (frontend-only) */}
+    {editModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent backdrop-blur-sm">
+        <div className="w-11/12 max-w-xl bg-white rounded-lg p-4 shadow-xl border border-slate-200">
+          <h3 className="text-lg font-bold mb-2">Edit Quiz Prompt & Settings</h3>
+          <label className="text-xs text-slate-600">Prompt</label>
+          {/* When editing the generator action (action-quiz) show original prompt as readonly
+              and display a live preview that reflects number and difficulty. For saved quiz
+              artifacts the prompt remains editable. */}
+          <textarea
+            value={editPrompt}
+            onChange={(e) => setEditPrompt(e.target.value)}
+            className="w-full border rounded p-2 mt-1 mb-3 h-28"
+            readOnly={editingArtifactId === 'action-quiz'}
+          />
+
+          {editingArtifactId === 'action-quiz' && (
+            <div className="mb-3">
+              <label className="text-xs text-slate-600">Preview</label>
+              <pre className="whitespace-pre-wrap text-xs bg-slate-50 border rounded p-2 mt-1 h-32 overflow-auto">{`${(editPrompt && editPrompt.trim().length > 0 ? editPrompt : DEFAULT_QUIZ_PROMPT)}\n\nRequested number of questions: ${editNumber}\nDifficulty: ${editDifficulty}`}</pre>
+            </div>
+          )}
+
+          <div className="flex gap-2 mb-3">
+            <div className="flex-1">
+              <label className="text-xs text-slate-600">Number of Questions</label>
+              <input type="number" min={1} max={50} value={editNumber} onChange={(e) => setEditNumber(Number(e.target.value))} className="w-full border rounded p-2 mt-1" />
+            </div>
+            <div className="w-40">
+              <label className="text-xs text-slate-600">Difficulty</label>
+              <select value={editDifficulty} onChange={(e) => setEditDifficulty(e.target.value)} className="w-full border rounded p-2 mt-1">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setEditModalOpen(false)} className="px-3 py-1 bg-slate-100 rounded">Cancel</button>
+            <button onClick={saveEditModal} className="px-3 py-1 bg-indigo-600 text-white rounded">Save</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

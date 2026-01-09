@@ -7,7 +7,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import CourseCard from './CourseCard';
+import QuizCard from './QuizCard';
+import MindMapViewer from './MindMapViewer';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
+import { extractQuizFromMarkdown } from '../../lib/quizParser';
 
 export interface ChatMessage {
   id: string;
@@ -24,6 +27,7 @@ interface ChatPanelProps {
   onRegenerateResponse: () => void;
   isLoading?: boolean;
   hasSelectedSources: boolean;
+  onSaveQuizToStudio?: (questions: any[]) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -33,6 +37,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onRegenerateResponse,
   isLoading = false,
   hasSelectedSources,
+  onSaveQuizToStudio,
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -190,10 +195,26 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     </div>
                   ) : message.role === 'user' ? (
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  ) : (
+                    ) : (
                     <>
                       {(() => {
-                        const { cleanMarkdown, courses } = extractCoursesFromMarkdown(message.content);
+                        // If message content is a JSON payload with a mindmap, render the MindMapViewer
+                        try {
+                          const parsed = JSON.parse(message.content);
+                          if (parsed && parsed.mindmap) {
+                            return (
+                              <div className="mt-2">
+                                <MindMapViewer mindmapJson={parsed.mindmap} format="both" className="w-full" />
+                              </div>
+                            );
+                          }
+                        } catch (e) {
+                          // not JSON — fall through to markdown parsing
+                        }
+
+                        const { cleanMarkdown: markdownAfterCourses, courses } = extractCoursesFromMarkdown(message.content);
+                        const { cleanMarkdown, quiz } = extractQuizFromMarkdown(markdownAfterCourses);
+
                         return (
                           <>
                             {/* Render markdown content */}
@@ -214,6 +235,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 >
                                   {cleanMarkdown}
                                 </ReactMarkdown>
+                              </div>
+                            )}
+                            
+                            {/* Render quiz */}
+                            {quiz && quiz.length > 0 && (
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-slate-50 rounded-xl">
+                                <div className="flex items-center gap-2 mb-4">
+                                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                                    <ICONS.lightbulb className="w-4 h-4 text-white" />
+                                  </div>
+                                  <h4 className="text-base font-black text-slate-800">Practice Quiz</h4>
+                                  <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                    {quiz.length} {quiz.length === 1 ? 'Question' : 'Questions'}
+                                  </span>
+                                </div>
+                                <QuizCard 
+                                  questions={quiz} 
+                                  onSaveToStudio={onSaveQuizToStudio ? () => onSaveQuizToStudio(quiz) : undefined}
+                                />
                               </div>
                             )}
                             
