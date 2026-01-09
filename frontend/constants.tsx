@@ -37,7 +37,10 @@ import {
   FileText,
   Lightbulb,
   Zap,
-  Upload
+  Upload,
+  Globe,
+  Star,
+  ExternalLink
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -89,6 +92,10 @@ export const ICONS = {
   zap: Zap,
   Upload: Upload,
   X: X,
+  globe: Globe,
+  star: Star,
+  externalLink: ExternalLink,
+  book: BookOpen,
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [

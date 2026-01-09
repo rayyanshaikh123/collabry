@@ -6,6 +6,8 @@ import { ICONS } from '../../constants';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import CourseCard from './CourseCard';
+import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 
 export interface ChatMessage {
   id: string;
@@ -34,9 +36,52 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const carouselRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [canScrollLeft, setCanScrollLeft] = useState<{ [key: string]: boolean }>({});
+  const [canScrollRight, setCanScrollRight] = useState<{ [key: string]: boolean }>({});
+
+  const checkScrollButtons = (messageId: string) => {
+    const carousel = carouselRefs.current[messageId];
+    if (!carousel) return;
+
+    setCanScrollLeft(prev => ({
+      ...prev,
+      [messageId]: carousel.scrollLeft > 0
+    }));
+    setCanScrollRight(prev => ({
+      ...prev,
+      [messageId]: carousel.scrollLeft < carousel.scrollWidth - carousel.clientWidth - 10
+    }));
+  };
+
+  const scrollCarousel = (messageId: string, direction: 'left' | 'right') => {
+    const carousel = carouselRefs.current[messageId];
+    if (!carousel) return;
+
+    const scrollAmount = 336; // Card width (320px) + gap (16px)
+    const newScrollLeft = direction === 'left'
+      ? carousel.scrollLeft - scrollAmount
+      : carousel.scrollLeft + scrollAmount;
+
+    carousel.scrollTo({
+      left: newScrollLeft,
+      behavior: 'smooth'
+    });
+
+    setTimeout(() => checkScrollButtons(messageId), 300);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    // Initialize scroll button states for all carousels
+    Object.keys(carouselRefs.current).forEach(messageId => {
+      if (carouselRefs.current[messageId]) {
+        checkScrollButtons(messageId);
+      }
+    });
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -146,23 +191,91 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   ) : message.role === 'user' ? (
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   ) : (
-                    <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:my-3 prose-a:text-indigo-600 prose-strong:text-slate-800 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm, remarkBreaks]}
-                        components={{
-                          p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
-                          h1: ({node, ...props}) => <h1 className="mt-4 mb-2 first:mt-0" {...props} />,
-                          h2: ({node, ...props}) => <h2 className="mt-4 mb-2 first:mt-0" {...props} />,
-                          h3: ({node, ...props}) => <h3 className="mt-3 mb-2 first:mt-0" {...props} />,
-                          ul: ({node, ...props}) => <ul className="my-3 space-y-1" {...props} />,
-                          ol: ({node, ...props}) => <ol className="my-3 space-y-1" {...props} />,
-                          li: ({node, ...props}) => <li className="my-1" {...props} />,
-                          blockquote: ({node, ...props}) => <blockquote className="my-3 border-l-4 border-indigo-400 pl-4 italic" {...props} />,
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
-                    </div>
+                    <>
+                      {(() => {
+                        const { cleanMarkdown, courses } = extractCoursesFromMarkdown(message.content);
+                        return (
+                          <>
+                            {/* Render markdown content */}
+                            {cleanMarkdown && (
+                              <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:my-3 prose-a:text-indigo-600 prose-strong:text-slate-800 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
+                                <ReactMarkdown 
+                                  remarkPlugins={[remarkGfm, remarkBreaks]}
+                                  components={{
+                                    p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
+                                    h1: ({node, ...props}) => <h1 className="mt-4 mb-2 first:mt-0" {...props} />,
+                                    h2: ({node, ...props}) => <h2 className="mt-4 mb-2 first:mt-0" {...props} />,
+                                    h3: ({node, ...props}) => <h3 className="mt-3 mb-2 first:mt-0" {...props} />,
+                                    ul: ({node, ...props}) => <ul className="my-3 space-y-1" {...props} />,
+                                    ol: ({node, ...props}) => <ol className="my-3 space-y-1" {...props} />,
+                                    li: ({node, ...props}) => <li className="my-1" {...props} />,
+                                    blockquote: ({node, ...props}) => <blockquote className="my-3 border-l-4 border-indigo-400 pl-4 italic" {...props} />,
+                                  }}
+                                >
+                                  {cleanMarkdown}
+                                </ReactMarkdown>
+                              </div>
+                            )}
+                            
+                            {/* Render course cards */}
+                            {courses.length > 0 && (
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl">
+                                {/* Header */}
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+                                      <ICONS.book className="w-4 h-4 text-white" />
+                                    </div>
+                                    <h4 className="text-base font-black text-slate-800">Recommended Courses</h4>
+                                    <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                      {courses.length} {courses.length === 1 ? 'Course' : 'Courses'}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Navigation buttons */}
+                                  {courses.length > 1 && (
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        onClick={() => scrollCarousel(message.id, 'left')}
+                                        disabled={!canScrollLeft[message.id]}
+                                        className="w-8 h-8 bg-white rounded-lg border-2 border-indigo-200 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-indigo-200 transition-all shadow-sm group"
+                                      >
+                                        <ICONS.ChevronLeft className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" />
+                                      </button>
+                                      <button
+                                        onClick={() => scrollCarousel(message.id, 'right')}
+                                        disabled={!canScrollRight[message.id]}
+                                        className="w-8 h-8 bg-white rounded-lg border-2 border-indigo-200 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-indigo-200 transition-all shadow-sm group"
+                                      >
+                                        <ICONS.ChevronRight className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Carousel container */}
+                                <div className="relative">
+                                  <div
+                                    ref={(el) => {
+                                      carouselRefs.current[message.id] = el;
+                                    }}
+                                    onScroll={() => checkScrollButtons(message.id)}
+                                    className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scroll-smooth snap-x snap-mandatory"
+                                    style={{ scrollbarColor: 'rgb(165 180 252) rgb(241 245 249)' }}
+                                  >
+                                    {courses.map((course, idx) => (
+                                      <div key={idx} className="snap-start">
+                                        <CourseCard course={course} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
                   )}
                   <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {new Date(message.timestamp).toLocaleTimeString('en-US', {
