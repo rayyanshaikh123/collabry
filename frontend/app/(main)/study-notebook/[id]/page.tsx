@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import NotebookLayout from '../../../../components/study-notebook/NotebookLayout';
 import CreateNotebookForm from '../../../../components/study-notebook/CreateNotebookForm';
-import { Source } from '../../../../components/study-notebook/SourcesPanel';
+import { Source as SourcePanelType } from '../../../../components/study-notebook/SourcesPanel';
 import { ChatMessage } from '../../../../components/study-notebook/ChatPanel';
-import { Artifact, ArtifactType } from '../../../../components/study-notebook/StudioPanel';
+import { Artifact as ArtifactPanelType, ArtifactType } from '../../../../components/study-notebook/StudioPanel';
+import { Notebook, Source, Artifact } from '../../../../src/services/notebook.service';
 import { 
   useNotebook, 
   useAddSource, 
@@ -20,6 +21,7 @@ import { useSessionMessages, useSaveMessage } from '../../../../src/hooks/useSes
 import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '../../../../src/hooks/useVisualAids';
 import { extractMindMapFromMarkdown } from '../../../../lib/mindmapParser';
 import axios from 'axios';
+import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../../../../src/lib/alert';
 
 const AI_ENGINE_URL = 'http://localhost:8000';
 
@@ -42,7 +44,8 @@ export default function StudyNotebookPage() {
   const { data: notebookData, isLoading: isLoadingNotebook } = useNotebook(
     notebookId !== 'default' ? notebookId : undefined
   );
-  const notebook = notebookData?.success ? notebookData.data : notebookData;
+  // Type guard to ensure we always have a Notebook type
+  const notebook = (notebookData?.success ? notebookData.data : notebookData) as Notebook | undefined;
 
   // Mutations
   const addSource = useAddSource(notebookId);
@@ -64,7 +67,7 @@ export default function StudyNotebookPage() {
   const [isStreaming, setIsStreaming] = useState(false);
 
   // Studio state
-  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   // Local edits for artifact prompts (frontend-only)
   const [artifactEdits, setArtifactEdits] = useState<Record<string, { prompt?: string; numberOfQuestions?: number; difficulty?: string }>>({});
@@ -75,6 +78,16 @@ export default function StudyNotebookPage() {
   const [editDifficulty, setEditDifficulty] = useState<string>('medium');
   const DEFAULT_QUIZ_PROMPT = 'Create a practice quiz with multiple choice questions about:';
 
+  // Source modals state
+  const [addTextModalOpen, setAddTextModalOpen] = useState(false);
+  const [addNotesModalOpen, setAddNotesModalOpen] = useState(false);
+  const [addWebsiteModalOpen, setAddWebsiteModalOpen] = useState(false);
+  const [textContent, setTextContent] = useState('');
+  const [textTitle, setTextTitle] = useState('');
+  const [notesContent, setNotesContent] = useState('');
+  const [notesTitle, setNotesTitle] = useState('New Note');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+
   // Auto-create notebook on mount if needed (only for 'default' route)
   useEffect(() => {
     if (notebookId === 'default' && !isLoadingNotebook && !creationAttempted.current && !createNotebook.isPending) {
@@ -82,7 +95,7 @@ export default function StudyNotebookPage() {
       createNotebook.mutate({ title: 'My Study Notebook' }, {
         onSuccess: (response) => {
           // Handle both wrapped and unwrapped responses
-          const newNotebookId = response?.data?._id || response?._id;
+          const newNotebookId = (response as any)?.data?._id || (response as any)?._id;
           if (newNotebookId) {
             // Small delay to ensure cache is updated
             setTimeout(() => {
@@ -120,9 +133,6 @@ export default function StudyNotebookPage() {
   };
 
   const handleAddSource = async (type: Source['type']) => {
-    const formData = new FormData();
-    formData.append('type', type);
-
     if (type === 'pdf') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -130,55 +140,120 @@ export default function StudyNotebookPage() {
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
+          const formData = new FormData();
+          formData.append('type', type);
           formData.append('file', file);
           formData.append('name', file.name);
           try {
             await addSource.mutateAsync(formData);
+            showSuccess('PDF uploaded successfully!');
           } catch (error) {
             console.error('Failed to add PDF:', error);
-            alert('Failed to upload PDF. Please try again.');
+            showError('Failed to upload PDF. Please try again.');
           }
         }
       };
       input.click();
-    } else if (type === 'text' || type === 'notes') {
-      const content = prompt('Enter your note:');
-      if (content) {
-        const name = prompt('Note title:', 'New Note') || 'New Note';
-        formData.append('content', content);
-        formData.append('name', name);
-        try {
-          await addSource.mutateAsync(formData);
-        } catch (error) {
-          console.error('Failed to add note:', error);
-          alert('Failed to add note. Please try again.');
-        }
-      }
+    } else if (type === 'text') {
+      setTextContent('');
+      setTextTitle('');
+      setAddTextModalOpen(true);
+    } else if (type === 'notes') {
+      setNotesContent('');
+      setNotesTitle('New Note');
+      setAddNotesModalOpen(true);
     } else if (type === 'website') {
-      const url = prompt('Enter website URL:');
-      if (url) {
-        formData.append('url', url);
-        formData.append('name', new URL(url).hostname);
-        try {
-          await addSource.mutateAsync(formData);
-        } catch (error) {
-          console.error('Failed to add website:', error);
-          alert('Failed to add website. Please try again.');
-        }
+      setWebsiteUrl('');
+      setAddWebsiteModalOpen(true);
+    }
+  };
+
+  const handleSubmitText = async () => {
+    if (!textContent.trim()) {
+      showWarning('Please enter some text content.');
+      return;
+    }
+    if (!textTitle.trim()) {
+      showWarning('Please enter a title.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('type', 'text');
+    formData.append('content', textContent);
+    formData.append('name', textTitle);
+    try {
+      await addSource.mutateAsync(formData);
+      setAddTextModalOpen(false);
+      setTextContent('');
+      setTextTitle('');
+      showSuccess('Text source added successfully!');
+    } catch (error) {
+      console.error('Failed to add text:', error);
+      showError('Failed to add text source. Please try again.');
+    }
+  };
+
+  const handleSubmitNotes = async () => {
+    if (!notesContent.trim()) {
+      showWarning('Please enter some note content.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('type', 'notes');
+    formData.append('content', notesContent);
+    formData.append('name', notesTitle || 'New Note');
+    try {
+      await addSource.mutateAsync(formData);
+      setAddNotesModalOpen(false);
+      setNotesContent('');
+      setNotesTitle('New Note');
+      showSuccess('Note added successfully!');
+    } catch (error) {
+      console.error('Failed to add note:', error);
+      showError('Failed to add note. Please try again.');
+    }
+  };
+
+  const handleSubmitWebsite = async () => {
+    if (!websiteUrl.trim()) {
+      showWarning('Please enter a website URL.');
+      return;
+    }
+    try {
+      // Validate URL
+      const url = new URL(websiteUrl);
+      const formData = new FormData();
+      formData.append('type', 'website');
+      formData.append('url', url.toString());
+      formData.append('name', url.hostname);
+      await addSource.mutateAsync(formData);
+      setAddWebsiteModalOpen(false);
+      setWebsiteUrl('');
+      showSuccess('Website added successfully!');
+    } catch (error) {
+      if (error instanceof TypeError) {
+        showError('Please enter a valid URL (e.g., https://example.com)');
+      } else {
+        console.error('Failed to add website:', error);
+        showError('Failed to add website. Please try again.');
       }
     }
   };
 
   const handleRemoveSource = (id: string) => {
-    if (confirm('Are you sure you want to remove this source?')) {
-      removeSource.mutate(id);
-    }
+    showConfirm(
+      'Are you sure you want to remove this source?',
+      () => removeSource.mutate(id),
+      'Remove Source',
+      'Remove',
+      'Cancel'
+    );
   };
 
   // Chat Handlers
   const handleSendMessage = async (message: string) => {
     if (!notebook?.aiSessionId) {
-      alert('Chat session not initialized. Please refresh the page.');
+      showError('Chat session not initialized. Please refresh the page.');
       return;
     }
 
@@ -224,9 +299,9 @@ export default function StudyNotebookPage() {
       }
 
       // Get selected sources context
-      const selectedSources = notebook.sources.filter(s => s.selected);
+      const selectedSources = notebook.sources.filter((s) => s.selected);
       const useRag = selectedSources.length > 0;
-      const selectedSourceIds = selectedSources.map(s => s._id);
+      const selectedSourceIds = selectedSources.map((s) => s._id);
       
       console.log('💬 Chat request:', {
         selectedSources: selectedSources.length,
@@ -495,9 +570,13 @@ export default function StudyNotebookPage() {
   };
 
   const handleClearChat = () => {
-    if (confirm('Are you sure you want to clear the chat history?')) {
-      setLocalMessages([]);
-    }
+    showConfirm(
+      'Are you sure you want to clear the chat history?',
+      () => setLocalMessages([]),
+      'Clear Chat History',
+      'Clear',
+      'Cancel'
+    );
   };
 
   const handleRegenerateResponse = () => {
@@ -521,7 +600,7 @@ export default function StudyNotebookPage() {
 
     const selectedSources = notebook.sources.filter(s => s.selected);
     if (selectedSources.length === 0) {
-      alert('Please select at least one source to generate artifacts.');
+      showWarning('Please select at least one source to generate artifacts.');
       return;
     }
 
@@ -531,7 +610,7 @@ export default function StudyNotebookPage() {
       if (type === 'course-finder') {
         // Extract topics from selected sources
         const topics = selectedSources
-          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
           .join(', ');
 
         // Build strict prompt for course finder - MUST use web_search tool and format correctly
@@ -591,7 +670,7 @@ Now call web_search tool and format the results exactly as specified.`;
       } else if (type === 'quiz') {
         // Extract topics from selected sources
         const topics = selectedSources
-          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
           .join(', ');
 
         // If user edited the generator prompt (frontend-only), use it.
@@ -654,7 +733,7 @@ Output ONLY the questions in the format specified above. Do not include any othe
       } else if (type === 'mindmap') {
         // Extract topics from selected sources
         const topics = selectedSources
-          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
           .join(', ');
 
         // Calculate adaptive size - medium size with minimum 10 nodes
@@ -721,11 +800,11 @@ Read the retrieved context and create the mind map JSON with real content.`;
         setIsGenerating(false);
         return;
       } else {
-        alert(`${type} generation coming soon!`);
+        showInfo(`${type} generation coming soon!`);
       }
     } catch (error) {
       console.error('Failed to generate artifact:', error);
-      alert('Failed to generate artifact. Please try again.');
+      showError('Failed to generate artifact. Please try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -737,7 +816,7 @@ Read the retrieved context and create the mind map JSON with real content.`;
     try {
       // First, create the quiz
       // Try to preserve user-edited metadata (number/difficulty/prompt) when saving
-      const savedEdits = artifactEdits['action-quiz'] || selectedArtifact?.data || {};
+      const savedEdits = artifactEdits['action-quiz'] || (selectedArtifact?.data as any) || {};
       const displayCount = savedEdits.numberOfQuestions || questions.length;
       const quizDifficulty = savedEdits.difficulty || 'medium';
       const quizPrompt = savedEdits.prompt || '';
@@ -745,7 +824,7 @@ Read the retrieved context and create the mind map JSON with real content.`;
       const quizData = {
         title: `Practice Quiz - ${displayCount} Questions`,
         description: quizPrompt || 'Generated from study session',
-        sourceType: 'ai' as const,
+        subject: notebook.title || 'Study Notes', // Add required subject field
         questions: questions.map((q, index) => {
           const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
 
@@ -771,10 +850,13 @@ Read the retrieved context and create the mind map JSON with real content.`;
             correctAnswerText = q.answer;
           }
 
+          // Find the index of the correct answer in options
+          const correctAnswerIndex = options.findIndex((opt: string) => opt === correctAnswerText);
+          
           return {
             question: q.question,
             options,
-            correctAnswer: correctAnswerText,
+            correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : 0, // Use index, default to 0 if not found
             explanation: q.explanation || '',
             difficulty: (q.difficulty as any) || quizDifficulty,
             points: 1,
@@ -799,10 +881,10 @@ Read the retrieved context and create the mind map JSON with real content.`;
         title: quizData.title,
       });
 
-      alert('Quiz saved to Studio successfully!');
+      showSuccess('Quiz saved to Studio successfully!');
     } catch (error) {
       console.error('Failed to save quiz:', error);
-      alert('Failed to save quiz to Studio');
+      showError('Failed to save quiz to Studio');
     }
   };
 
@@ -830,22 +912,22 @@ Read the retrieved context and create the mind map JSON with real content.`;
           referenceId: savedId,
           title: `Mind Map - ${notebook.title}`,
         });
-        alert('Mind map saved to Studio successfully!');
+        showSuccess('Mind map saved to Studio successfully!');
       } else {
         // Fallback: Try to save directly via API
-        alert('Mind map generated but could not be saved. Please try again.');
+        showWarning('Mind map generated but could not be saved. Please try again.');
       }
     } catch (error) {
       console.error('Failed to save mindmap:', error);
-      alert('Failed to save mindmap to Studio');
+      showError('Failed to save mindmap to Studio');
     }
   };
 
   const openEditModal = (artifactId: string) => {
     const existing = artifactEdits[artifactId] || {};
     // Prefer data embedded in the notebook artifact if available
-    const notebookArtifact = notebook?.artifacts?.find((a: any) => a._id === artifactId);
-    const artifactData = notebookArtifact?.data || {};
+    const notebookArtifact = notebook?.artifacts?.find((a) => a._id === artifactId);
+    const artifactData = (notebookArtifact as any)?.data || {};
     setEditingArtifactId(artifactId);
     setEditPrompt(
       existing.prompt || artifactData?.prompt || `Create a practice quiz with exactly ${existing.numberOfQuestions || artifactData?.numberOfQuestions || 5} multiple choice questions about:`
@@ -879,7 +961,7 @@ Read the retrieved context and create the mind map JSON with real content.`;
     }
 
     setEditModalOpen(false);
-    alert('Saved prompt changes locally (frontend only).');
+    showSuccess('Saved prompt changes locally (frontend only).');
   };
 
   const handleDeleteArtifact = async (artifactId: string) => {
@@ -891,10 +973,10 @@ Read the retrieved context and create the mind map JSON with real content.`;
       }
       // Fire mutation (don't rely on UI state during awaiting)
       await unlinkArtifact.mutateAsync(artifactId);
-      alert('Artifact deleted');
+      showSuccess('Artifact deleted');
     } catch (error) {
       console.error('Failed to delete artifact:', error);
-      alert('Failed to delete artifact');
+      showError('Failed to delete artifact');
     }
   };
 
@@ -906,9 +988,13 @@ Read the retrieved context and create the mind map JSON with real content.`;
     
     const artifact = notebook.artifacts.find((a) => a._id === id);
     if (artifact) {
+      // Convert service Artifact to component Artifact type
+      const artifactType = (artifact.type === 'quiz' || artifact.type === 'mindmap' || artifact.type === 'flashcards') 
+        ? artifact.type 
+        : 'quiz' as ArtifactType; // Default fallback
       setSelectedArtifact({
         id: artifact._id,
-        type: artifact.type as ArtifactType,
+        type: artifactType,
         title: artifact.title,
         createdAt: artifact.createdAt,
         data: { referenceId: artifact.referenceId }
@@ -923,10 +1009,10 @@ Read the retrieved context and create the mind map JSON with real content.`;
 
   if (isLoadingNotebook || createNotebook.isPending) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading notebook...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading notebook...</p>
         </div>
       </div>
     );
@@ -934,12 +1020,12 @@ Read the retrieved context and create the mind map JSON with real content.`;
 
   if (!notebook) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <p className="text-gray-600">Notebook not found</p>
+          <p className="text-gray-600 dark:text-gray-400">Notebook not found</p>
           <button
             onClick={() => router.push('/study-notebook/new')}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="mt-4 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors"
           >
             Create New Notebook
           </button>
@@ -951,9 +1037,9 @@ Read the retrieved context and create the mind map JSON with real content.`;
   return (
     <>
     <NotebookLayout
-      sources={notebook.sources.map(s => ({
+      sources={notebook.sources.map((s) => ({
         id: s._id,
-        type: s.type as Source['type'],
+        type: s.type as SourcePanelType['type'],
         name: s.name,
         size: s.size ? `${(s.size / 1024 / 1024).toFixed(2)} MB` : undefined,
         dateAdded: 'Just now', // Backend doesn't include timestamp in embedded source
@@ -970,7 +1056,7 @@ Read the retrieved context and create the mind map JSON with real content.`;
       isChatLoading={isChatLoading}
       onSaveQuizToStudio={handleSaveQuizToStudio}
       onSaveMindMapToStudio={handleSaveMindMapToStudio}
-      artifacts={notebook.artifacts.map(a => {
+      artifacts={notebook.artifacts.map((a) => {
         const edits = artifactEdits[a._id] || {};
         return ({
           id: a._id,
@@ -988,37 +1074,187 @@ Read the retrieved context and create the mind map JSON with real content.`;
       selectedArtifact={selectedArtifact}
     />
 
+    {/* Add Text Modal */}
+    {addTextModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+        <div className="w-11/12 max-w-2xl bg-white dark:bg-slate-900 rounded-lg p-6 shadow-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4">Add Text Source</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Title *</label>
+              <input
+                type="text"
+                value={textTitle}
+                onChange={(e) => setTextTitle(e.target.value)}
+                placeholder="Enter a title for this text source"
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Content *</label>
+              <textarea
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                placeholder="Paste or type your text content here..."
+                rows={10}
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={() => {
+                setAddTextModalOpen(false);
+                setTextContent('');
+                setTextTitle('');
+              }}
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitText}
+              className="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors"
+            >
+              Add Text
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Add Notes Modal */}
+    {addNotesModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+        <div className="w-11/12 max-w-2xl bg-white dark:bg-slate-900 rounded-lg p-6 shadow-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4">Add Note</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Note Title</label>
+              <input
+                type="text"
+                value={notesTitle}
+                onChange={(e) => setNotesTitle(e.target.value)}
+                placeholder="New Note"
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Note Content *</label>
+              <textarea
+                value={notesContent}
+                onChange={(e) => setNotesContent(e.target.value)}
+                placeholder="Write your notes here..."
+                rows={10}
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 resize-none"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={() => {
+                setAddNotesModalOpen(false);
+                setNotesContent('');
+                setNotesTitle('New Note');
+              }}
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitNotes}
+              className="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors"
+            >
+              Add Note
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Add Website Modal */}
+    {addWebsiteModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+        <div className="w-11/12 max-w-xl bg-white dark:bg-slate-900 rounded-lg p-6 shadow-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4">Add Website Source</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Website URL *</label>
+              <input
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Enter a valid URL (e.g., https://example.com). The AI can scrape the content for you.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              onClick={() => {
+                setAddWebsiteModalOpen(false);
+                setWebsiteUrl('');
+              }}
+              className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitWebsite}
+              className="px-4 py-2 bg-indigo-600 dark:bg-indigo-700 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors"
+            >
+              Add Website
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Edit Modal (frontend-only) */}
     {editModalOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent backdrop-blur-sm">
-        <div className="w-11/12 max-w-xl bg-white rounded-lg p-4 shadow-xl border border-slate-200">
-          <h3 className="text-lg font-bold mb-2">Edit Quiz Prompt & Settings</h3>
-          <label className="text-xs text-slate-600">Prompt</label>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+        <div className="w-11/12 max-w-xl bg-white dark:bg-slate-900 rounded-lg p-4 shadow-xl border border-slate-200 dark:border-slate-700">
+          <h3 className="text-lg font-bold mb-2 text-slate-800 dark:text-slate-200">Edit Quiz Prompt & Settings</h3>
+          <label className="text-xs text-slate-600 dark:text-slate-400">Prompt</label>
           {/* When editing the generator action (action-quiz) show original prompt as readonly
               and display a live preview that reflects number and difficulty. For saved quiz
               artifacts the prompt remains editable. */}
           <textarea
             value={editPrompt}
             onChange={(e) => setEditPrompt(e.target.value)}
-            className="w-full border rounded p-2 mt-1 mb-3 h-28"
+            className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded p-2 mt-1 mb-3 h-28 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600"
             readOnly={editingArtifactId === 'action-quiz'}
           />
 
           {editingArtifactId === 'action-quiz' && (
             <div className="mb-3">
-              <label className="text-xs text-slate-600">Preview</label>
-              <pre className="whitespace-pre-wrap text-xs bg-slate-50 border rounded p-2 mt-1 h-32 overflow-auto">{`${(editPrompt && editPrompt.trim().length > 0 ? editPrompt : DEFAULT_QUIZ_PROMPT)}\n\nRequested number of questions: ${editNumber}\nDifficulty: ${editDifficulty}`}</pre>
+              <label className="text-xs text-slate-600 dark:text-slate-400">Preview</label>
+              <pre className="whitespace-pre-wrap text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-2 mt-1 h-32 overflow-auto text-slate-900 dark:text-slate-200">{`${(editPrompt && editPrompt.trim().length > 0 ? editPrompt : DEFAULT_QUIZ_PROMPT)}\n\nRequested number of questions: ${editNumber}\nDifficulty: ${editDifficulty}`}</pre>
             </div>
           )}
 
           <div className="flex gap-2 mb-3">
             <div className="flex-1">
-              <label className="text-xs text-slate-600">Number of Questions</label>
-              <input type="number" min={1} max={50} value={editNumber} onChange={(e) => setEditNumber(Number(e.target.value))} className="w-full border rounded p-2 mt-1" />
+              <label className="text-xs text-slate-600 dark:text-slate-400">Number of Questions</label>
+              <input 
+                type="number" 
+                min={1} 
+                max={50} 
+                value={editNumber} 
+                onChange={(e) => setEditNumber(Number(e.target.value))} 
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded p-2 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600" 
+              />
             </div>
             <div className="w-40">
-              <label className="text-xs text-slate-600">Difficulty</label>
-              <select value={editDifficulty} onChange={(e) => setEditDifficulty(e.target.value)} className="w-full border rounded p-2 mt-1">
+              <label className="text-xs text-slate-600 dark:text-slate-400">Difficulty</label>
+              <select 
+                value={editDifficulty} 
+                onChange={(e) => setEditDifficulty(e.target.value)} 
+                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 rounded p-2 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600"
+              >
                 <option value="easy">Easy</option>
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
@@ -1027,8 +1263,18 @@ Read the retrieved context and create the mind map JSON with real content.`;
           </div>
 
           <div className="flex justify-end gap-2">
-            <button onClick={() => setEditModalOpen(false)} className="px-3 py-1 bg-slate-100 rounded">Cancel</button>
-            <button onClick={saveEditModal} className="px-3 py-1 bg-indigo-600 text-white rounded">Save</button>
+            <button 
+              onClick={() => setEditModalOpen(false)} 
+              className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={saveEditModal} 
+              className="px-3 py-1 bg-indigo-600 dark:bg-indigo-700 text-white rounded hover:bg-indigo-700 dark:hover:bg-indigo-800 transition-colors"
+            >
+              Save
+            </button>
           </div>
         </div>
       </div>

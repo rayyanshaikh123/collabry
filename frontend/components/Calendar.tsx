@@ -96,7 +96,7 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
     <Card className="p-6">
       {/* Calendar Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-black text-slate-800">
+        <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200">
           {monthNames[month]} {year}
         </h3>
         <div className="flex gap-2">
@@ -112,7 +112,7 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
       {/* Day names */}
       <div className="grid grid-cols-7 gap-2 mb-2">
         {dayNames.map(day => (
-          <div key={day} className="text-center text-xs font-bold text-slate-500 py-2">
+          <div key={day} className="text-center text-xs font-bold text-slate-500 dark:text-slate-400 py-2">
             {day}
           </div>
         ))}
@@ -135,12 +135,12 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
               onClick={() => onDateClick?.(date)}
               className={`
                 min-h-24 p-2 rounded-xl border-2 cursor-pointer transition-all
-                ${isCurrentDay ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200' : 'border-slate-100'}
+                ${isCurrentDay ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-200 dark:ring-indigo-900/50' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800'}
                 ${isOtherMonth ? 'opacity-40' : ''}
-                hover:border-indigo-200 hover:shadow-md
+                hover:border-indigo-200 dark:hover:border-indigo-700 hover:shadow-md
               `}
             >
-              <div className={`text-sm font-bold mb-1 ${isCurrentDay ? 'text-indigo-600' : 'text-slate-700'}`}>
+              <div className={`text-sm font-bold mb-1 ${isCurrentDay ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-300'}`}>
                 {date.getDate()}
               </div>
               
@@ -154,7 +154,7 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
                         e.stopPropagation();
                         onPlanClick?.(plan);
                       }}
-                      className="text-xs p-1 rounded truncate bg-purple-100 text-purple-700 font-semibold"
+                      className="text-xs p-1 rounded truncate bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 font-semibold"
                       title={`${plan.title} (${plan.isStart ? 'Start' : 'End'})`}
                     >
                       📚 {plan.title.slice(0, 12)} {plan.isStart ? '▶' : '⏹'}
@@ -175,10 +175,10 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
                       }}
                       className={`text-xs p-1 rounded truncate ${
                         task.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-700'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
                           : task.priority === 'urgent'
-                          ? 'bg-rose-100 text-rose-700'
-                          : 'bg-blue-100 text-blue-700'
+                          ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
+                          : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                       }`}
                       title={task.title}
                     >
@@ -186,7 +186,7 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
                     </div>
                   ))}
                   {dateTasks.length > 2 && (
-                    <div className="text-xs text-slate-500 text-center">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
                       +{dateTasks.length - 2} more
                     </div>
                   )}
@@ -198,26 +198,26 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
       </div>
       
       {/* Legend */}
-      <div className="mt-6 pt-4 border-t-2 border-slate-100 flex flex-wrap gap-4 text-xs">
+      <div className="mt-6 pt-4 border-t-2 border-slate-100 dark:border-slate-800 flex flex-wrap gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-purple-100 rounded" />
-          <span className="text-slate-600">Plans (▶ Start / ⏹ End)</span>
+          <div className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 rounded" />
+          <span className="text-slate-600 dark:text-slate-400">Plans (▶ Start / ⏹ End)</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-emerald-100 rounded" />
-          <span className="text-slate-600">Completed</span>
+          <div className="w-4 h-4 bg-emerald-100 dark:bg-emerald-900/30 rounded" />
+          <span className="text-slate-600 dark:text-slate-400">Completed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-rose-100 rounded" />
-          <span className="text-slate-600">Urgent</span>
+          <div className="w-4 h-4 bg-rose-100 dark:bg-rose-900/30 rounded" />
+          <span className="text-slate-600 dark:text-slate-400">Urgent</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-100 rounded" />
-          <span className="text-slate-600">Pending</span>
+          <div className="w-4 h-4 bg-blue-100 dark:bg-blue-900/30 rounded" />
+          <span className="text-slate-600 dark:text-slate-400">Pending</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-indigo-50 border-2 border-indigo-300 rounded" />
-          <span className="text-slate-600">Today</span>
+          <div className="w-4 h-4 bg-indigo-50 dark:bg-indigo-900/30 border-2 border-indigo-300 dark:border-indigo-700 rounded" />
+          <span className="text-slate-600 dark:text-slate-400">Today</span>
         </div>
       </div>
     </Card>

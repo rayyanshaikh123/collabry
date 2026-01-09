@@ -10,14 +10,18 @@ import type { ThemeType } from '../types';
 interface UIState {
   // State
   theme: ThemeType;
+  darkMode: boolean;
   isSidebarOpen: boolean;
   isMobileSidebarOpen: boolean;
   activeModal: string | null;
   isLoading: boolean;
   notifications: Notification[];
+  alert: AlertState;
 
   // Actions
   setTheme: (theme: ThemeType) => void;
+  toggleDarkMode: () => void;
+  setDarkMode: (enabled: boolean) => void;
   toggleSidebar: () => void;
   toggleMobileSidebar: () => void;
   openModal: (modalId: string) => void;
@@ -26,6 +30,8 @@ interface UIState {
   addNotification: (notification: Omit<Notification, 'id'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
+  showAlert: (alert: Omit<AlertState, 'isOpen'>) => void;
+  hideAlert: () => void;
 }
 
 interface Notification {
@@ -36,16 +42,33 @@ interface Notification {
   duration?: number;
 }
 
+interface AlertState {
+  isOpen: boolean;
+  title?: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  onConfirm?: () => void;
+  confirmText?: string;
+  cancelText?: string;
+  onCancel?: () => void;
+}
+
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
       // Initial state
       theme: 'indigo',
+      darkMode: false,
       isSidebarOpen: true,
       isMobileSidebarOpen: false,
       activeModal: null,
       isLoading: false,
       notifications: [],
+      alert: {
+        isOpen: false,
+        message: '',
+        type: 'info',
+      },
 
       // Set theme
       setTheme: (theme: ThemeType) => {
@@ -54,6 +77,33 @@ export const useUIStore = create<UIState>()(
         // Apply theme to DOM
         const root = document.documentElement;
         root.setAttribute('data-theme', theme);
+      },
+
+      // Toggle dark mode
+      toggleDarkMode: () => {
+        const newDarkMode = !get().darkMode;
+        set({ darkMode: newDarkMode });
+        
+        // Apply dark mode to DOM
+        const root = document.documentElement;
+        if (newDarkMode) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      },
+
+      // Set dark mode
+      setDarkMode: (enabled: boolean) => {
+        set({ darkMode: enabled });
+        
+        // Apply dark mode to DOM
+        const root = document.documentElement;
+        if (enabled) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
       },
 
       // Toggle sidebar
@@ -112,11 +162,33 @@ export const useUIStore = create<UIState>()(
       clearNotifications: () => {
         set({ notifications: [] });
       },
+
+      // Show alert
+      showAlert: (alertData) => {
+        set({
+          alert: {
+            ...alertData,
+            isOpen: true,
+            cancelText: alertData.cancelText || 'Cancel',
+          },
+        });
+      },
+
+      // Hide alert
+      hideAlert: () => {
+        set((state) => ({
+          alert: {
+            ...state.alert,
+            isOpen: false,
+          },
+        }));
+      },
     }),
     {
       name: 'ui-storage',
       partialize: (state) => ({
         theme: state.theme,
+        darkMode: state.darkMode,
         isSidebarOpen: state.isSidebarOpen,
       }),
     }

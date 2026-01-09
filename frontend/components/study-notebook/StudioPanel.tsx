@@ -113,18 +113,18 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 border-l border-slate-200">
+    <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 border-l border-slate-200 dark:border-slate-700">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-white">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-black text-slate-800">Studio</h2>
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">Studio</h2>
           {artifacts.length > 0 && (
             <Badge variant="indigo" className="text-xs">
               {artifacts.length}
             </Badge>
           )}
         </div>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           {hasSelectedSources
             ? 'Generate artifacts or ask AI in chat for summaries, key points, etc.'
             : 'Add sources to generate content'}
@@ -140,7 +140,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                     <button
                       title={a.title}
                       onClick={() => onSelectArtifact(a.id)}
-                      className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-sm shadow-sm"
+                      className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-sm shadow-sm"
                     >
                       <span className="text-lg">{action?.icon}</span>
                     </button>
@@ -154,7 +154,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="p-4 space-y-2 border-b border-slate-200 bg-white">
+      <div className="p-4 space-y-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="grid grid-cols-2 gap-2">
           {studioActions.map((action) => (
             <div key={action.type} className="relative">
@@ -164,7 +164,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                 onClick={() => action.available && onGenerateArtifact(action.type)}
                 disabled={!hasSelectedSources || isGenerating || !action.available}
                 className={`flex flex-col items-center justify-center h-20 gap-1 ${
-                  action.available ? 'hover:border-indigo-500 hover:bg-indigo-50' : 'opacity-50'
+                  action.available ? 'hover:border-indigo-500 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : 'opacity-50'
                 }`}
               >
                 <span className="text-2xl">{action.icon}</span>
@@ -184,7 +184,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                     onEditArtifact('action-quiz');
                   }}
                   title="Edit Quiz settings"
-                  className="absolute right-2 top-2 p-1 bg-white border border-slate-100 rounded text-slate-600 hover:text-slate-800"
+                  className="absolute right-2 top-2 p-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
@@ -202,10 +202,10 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-xs">
               <div className="text-6xl mb-4">🎨</div>
-              <h3 className="text-sm font-black text-slate-800 mb-2">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-2">
                 Studio output will be saved here
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 After adding sources, click to add Audio Overview, Study Guide, Mind Map, and more!
               </p>
             </div>
@@ -213,7 +213,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-black text-slate-700">Generated Content</h3>
+              <h3 className="text-sm font-black text-slate-700 dark:text-slate-300">Generated Content</h3>
               <Button
                 variant="ghost"
                 size="sm"
@@ -234,14 +234,14 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                         onClick={() => onSelectArtifact(artifact.id)}
                         className={`p-3 cursor-pointer transition-all relative ${
                           selectedArtifact?.id === artifact.id
-                            ? 'border-indigo-500 bg-indigo-50 shadow-md'
-                            : 'border-slate-200 bg-white hover:border-slate-300'
+                            ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 shadow-md'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           
                           <div className="flex-1 min-w-0">
-                            <div className="font-bold text-sm text-slate-800 truncate">
+                            <div className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate">
                               {artifact.title}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
@@ -249,7 +249,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                                 {action?.label}
                               </Badge>
                             </div>
-                            <div className="text-xs text-slate-400 mt-1">
+                            <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
                               {new Date(artifact.createdAt).toLocaleString('en-US', {
                                 month: 'short',
                                 day: 'numeric',
@@ -269,7 +269,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                                     onDeleteArtifact(artifact.id);
                                   }
                                 }}
-                                className="text-red-500 hover:text-red-700 p-1 rounded bg-white border border-slate-100"
+                                className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-500 p-1 rounded bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700"
                                 aria-label="Delete artifact"
                                 title="Delete artifact"
                               >
@@ -294,12 +294,12 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
 
       {/* Generation Status */}
       {isGenerating && (
-        <div className="p-4 border-t border-slate-200 bg-white">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-3">
-            <ICONS.refresh className="w-5 h-5 animate-spin text-indigo-600" />
+            <ICONS.refresh className="w-5 h-5 animate-spin text-indigo-600 dark:text-indigo-400" />
             <div className="flex-1">
-              <p className="text-sm font-bold text-slate-800">Generating...</p>
-              <p className="text-xs text-slate-500">This may take a moment</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Generating...</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">This may take a moment</p>
             </div>
           </div>
         </div>

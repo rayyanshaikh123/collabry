@@ -164,8 +164,8 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
       <div className={className}>
         <div className="flex items-center justify-center p-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-2"></div>
-            <p className="text-sm text-slate-600">Rendering mindmap…</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 dark:border-emerald-500 mx-auto mb-2"></div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Rendering mindmap…</p>
           </div>
         </div>
       </div>
@@ -176,9 +176,9 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
     console.error('MindMapViewer error:', error);
     return (
       <div className={className}>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800 font-bold mb-1">Error rendering mindmap</p>
-          <p className="text-xs text-red-600">{error}</p>
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-sm text-red-800 dark:text-red-400 font-bold mb-1">Error rendering mindmap</p>
+          <p className="text-xs text-red-600 dark:text-red-500">{error}</p>
         </div>
       </div>
     );
@@ -212,9 +212,9 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
   if (mermaidCode) {
     return (
       <div className={className}>
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-          <p className="text-xs text-slate-600 mb-2 font-bold">Mermaid Diagram:</p>
-          <pre className="whitespace-pre-wrap text-xs bg-white border rounded p-2 overflow-auto max-h-96">{mermaidCode}</pre>
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mb-2 font-bold">Mermaid Diagram:</p>
+          <pre className="whitespace-pre-wrap text-xs bg-white dark:bg-slate-900 border dark:border-slate-700 rounded p-2 overflow-auto max-h-96 text-slate-900 dark:text-slate-200">{mermaidCode}</pre>
         </div>
       </div>
     );
@@ -234,9 +234,9 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
 
   return (
     <div className={className}>
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-        <p className="text-sm text-yellow-800 font-bold mb-1">No mindmap output available</p>
-        <p className="text-xs text-yellow-600">The mindmap data was parsed but rendering failed. Check console for details.</p>
+      <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 text-center">
+        <p className="text-sm text-yellow-800 dark:text-yellow-400 font-bold mb-1">No mindmap output available</p>
+        <p className="text-xs text-yellow-600 dark:text-yellow-500">The mindmap data was parsed but rendering failed. Check console for details.</p>
       </div>
     </div>
   );

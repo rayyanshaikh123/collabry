@@ -95,7 +95,12 @@ body {
   background: radial-gradient(circle at top left, var(--brand-50) 0%, #ffffff 100%);
   color: #334155;
   font-family: 'Quicksand', sans-serif;
-  transition: background 0.5s ease;
+  transition: background 0.5s ease, color 0.3s ease;
+}
+
+.dark body {
+  background: radial-gradient(circle at top left, var(--brand-950) 0%, #0f172a 100%);
+  color: #e2e8f0;
 }
 
 h1, h2, h3, h4, .font-display {
@@ -120,14 +125,30 @@ h1, h2, h3, h4, .font-display {
   border-radius: 10px;
 }
 
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 10px;
+}
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 10px;
   border: 2px solid #f1f5f9;
 }
 
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 10px;
+  border: 2px solid #1e293b;
+}
+
 .whiteboard-grid {
   background-image: radial-gradient(#e2e8f0 2px, transparent 2px);
+  background-size: 30px 30px;
+}
+
+.dark .whiteboard-grid {
+  background-image: radial-gradient(#334155 2px, transparent 2px);
   background-size: 30px 30px;
 }
 
@@ -277,19 +298,23 @@ h1, h2, h3, h4, .font-display {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  @apply bg-slate-100 rounded-full;
+  @apply bg-slate-100 dark:bg-slate-800 rounded-full;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  @apply bg-indigo-300 rounded-full;
+  @apply bg-indigo-300 dark:bg-indigo-600 rounded-full;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  @apply bg-indigo-400;
+  @apply bg-indigo-400 dark:bg-indigo-500;
 }
 
 /* Firefox scrollbar */
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: rgb(165 180 252) rgb(241 245 249);
+}
+
+.dark .scrollbar-thin {
+  scrollbar-color: rgb(99 102 241) rgb(30 41 59);
 }

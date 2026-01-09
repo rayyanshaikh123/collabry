@@ -58,28 +58,28 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   const hasSelectedSources = sources.some((s) => s.selected);
 
   return (
-    <div className="h-full flex flex-col relative bg-white overflow-hidden -m-4 md:-m-8 box-border">
+    <div className="h-[calc(100vh-64px)] flex flex-col relative bg-white dark:bg-slate-950 overflow-hidden -m-4 md:-m-8 box-border">
       {/* Top Bar */}
-      <div className="h-16 bg-white border-b border-slate-200 flex items-center px-6 shadow-sm flex-shrink-0 box-border">
+      <div className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-6 shadow-sm flex-shrink-0 box-border">
         <button
           onClick={() => router.push('/study-notebook')}
-          className="mr-4 p-2 hover:bg-indigo-50 rounded-lg transition-colors"
+          className="mr-4 p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
           title="Back to Notebooks"
         >
-          <ICONS.ChevronLeft className="w-5 h-5 text-slate-700" />
+          <ICONS.ChevronLeft className="w-5 h-5 text-slate-700 dark:text-slate-300" />
         </button>
         <div className="flex items-center gap-4">
           <div className="text-2xl">📓</div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Study Notebook</h1>
-            <p className="text-xs text-slate-600">AI-powered collaborative learning</p>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-200">Study Notebook</h1>
+            <p className="text-xs text-slate-600 dark:text-slate-400">AI-powered collaborative learning</p>
           </div>
         </div>
       </div>
 
       {/* Main Content - 3 Column Layout */}
       <div className="flex-1 flex overflow-hidden min-h-0 box-border">{/* Left Panel - Sources */}
-        <div className="w-80 flex-shrink-0 overflow-hidden border-r border-slate-200 box-border">
+        <div className="w-80 flex-shrink-0 overflow-hidden border-r border-slate-200 dark:border-slate-800 box-border">
           <SourcesPanel
             sources={sources}
             onToggleSource={onToggleSource}
@@ -89,7 +89,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
         </div>
 
         {/* Center Panel - Chat */}
-        <div className="flex-1 min-w-0 overflow-hidden border-r border-slate-200 box-border">
+        <div className="flex-1 min-w-0 overflow-hidden border-r border-slate-200 dark:border-slate-800 box-border">
           <ChatPanel
             messages={messages}
             onSendMessage={onSendMessage}

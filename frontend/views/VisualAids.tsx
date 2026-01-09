@@ -26,18 +26,18 @@ const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, a
       <div className={`relative w-full h-full transition-transform duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
         {/* Front */}
         <div className="absolute inset-0 backface-hidden">
-          <Card className="h-full flex flex-col items-center justify-center text-center border-b-8 border-indigo-600 shadow-xl p-8 bg-white group-hover:shadow-2xl transition-all">
+          <Card className="h-full flex flex-col items-center justify-center text-center border-b-8 border-indigo-600 dark:border-indigo-500 shadow-xl p-8 bg-white dark:bg-slate-900 group-hover:shadow-2xl transition-all">
             <Badge variant="indigo" className="absolute top-6 left-6">Question</Badge>
-            <h4 className="text-xl font-black text-slate-800 leading-tight">{question}</h4>
-            <p className="mt-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">Tap to flip 👆</p>
+            <h4 className="text-xl font-black text-slate-800 dark:text-slate-200 leading-tight">{question}</h4>
+            <p className="mt-8 text-[10px] font-black text-slate-300 dark:text-slate-500 uppercase tracking-widest">Tap to flip 👆</p>
           </Card>
         </div>
         {/* Back */}
         <div className="absolute inset-0 backface-hidden rotate-y-180">
-          <Card className="h-full flex flex-col items-center justify-center text-center border-b-8 border-emerald-500 shadow-xl p-8 bg-emerald-50 group-hover:shadow-2xl transition-all">
+          <Card className="h-full flex flex-col items-center justify-center text-center border-b-8 border-emerald-500 dark:border-emerald-600 shadow-xl p-8 bg-emerald-50 dark:bg-emerald-900/30 group-hover:shadow-2xl transition-all">
             <Badge variant="emerald" className="absolute top-6 left-6">Answer</Badge>
-            <h4 className="text-lg font-bold text-slate-700 leading-relaxed">{answer}</h4>
-            <p className="mt-8 text-[10px] font-black text-emerald-300 uppercase tracking-widest">Mastered! ✅</p>
+            <h4 className="text-lg font-bold text-slate-700 dark:text-slate-300 leading-relaxed">{answer}</h4>
+            <p className="mt-8 text-[10px] font-black text-emerald-300 dark:text-emerald-400 uppercase tracking-widest">Mastered! ✅</p>
           </Card>
         </div>
       </div>
@@ -228,25 +228,25 @@ const VisualAidsView: React.FC = () => {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Visual Learning Aids</h2>
-          <p className="text-slate-500 font-bold">Transform complex ideas into simple visual shapes.</p>
+          <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200 tracking-tight">Visual Learning Aids</h2>
+          <p className="text-slate-500 dark:text-slate-400 font-bold">Transform complex ideas into simple visual shapes.</p>
         </div>
-        <div className="flex bg-white p-1.5 rounded-[2rem] border-2 border-slate-100 shadow-sm">
+        <div className="flex bg-white dark:bg-slate-800 p-1.5 rounded-[2rem] border-2 border-slate-100 dark:border-slate-700 shadow-sm">
           <button 
             onClick={() => setActiveTab('quizzes')}
-            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'quizzes' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-indigo-500'}`}
+            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'quizzes' ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50' : 'text-slate-400 dark:text-slate-500 hover:text-indigo-500 dark:hover:text-indigo-400'}`}
           >
             Quizzes
           </button>
           <button 
             onClick={() => setActiveTab('mindmap')}
-            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'mindmap' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-indigo-500'}`}
+            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'mindmap' ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50' : 'text-slate-400 dark:text-slate-500 hover:text-indigo-500 dark:hover:text-indigo-400'}`}
           >
             Mind Map
           </button>
           <button 
             onClick={() => setActiveTab('concepts')}
-            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'concepts' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-indigo-500'}`}
+            className={`px-6 py-2.5 rounded-[1.5rem] text-sm font-black transition-all ${activeTab === 'concepts' ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50' : 'text-slate-400 dark:text-slate-500 hover:text-indigo-500 dark:hover:text-indigo-400'}`}
           >
             Concept Cards
           </button>
@@ -257,11 +257,11 @@ const VisualAidsView: React.FC = () => {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center justify-between px-2">
             <div>
-              <h3 className="text-2xl font-black text-slate-800">
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200">
                 {displayQuiz?.title || 'Select a Quiz'}
               </h3>
               {displayQuiz?.description && (
-                <p className="text-sm text-slate-500 mt-1">{displayQuiz.description}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{displayQuiz.description}</p>
               )}
             </div>
             <div className="flex gap-2">
@@ -297,8 +297,8 @@ const VisualAidsView: React.FC = () => {
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-40 h-6 bg-amber-200 border-4 border-amber-300 rounded-lg shadow-lg"></div>
               </div>
               <div className="text-center">
-                <h4 className="text-xl font-black text-indigo-600 mb-2">Brewing Questions ✨</h4>
-                <p className="text-sm text-slate-500">AI is generating your quiz questions...</p>
+                <h4 className="text-xl font-black text-indigo-600 dark:text-indigo-400 mb-2">Brewing Questions ✨</h4>
+                <p className="text-sm text-slate-500 dark:text-slate-400">AI is generating your quiz questions...</p>
                 <div className="flex justify-center gap-1 mt-4">
                   <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
                   <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
@@ -308,22 +308,22 @@ const VisualAidsView: React.FC = () => {
             </div>
           ) : loadingQuizzes || loadingQuiz ? (
             <div className="text-center py-12">
-              <p className="text-slate-500">Loading quizzes...</p>
+              <p className="text-slate-500 dark:text-slate-400">Loading quizzes...</p>
             </div>
           ) : activeQuizAttempt ? (
             // Quiz Taking Interface
             <div className="space-y-6">
               {/* Timer and Progress */}
-              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border-2 border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-4">
                   <div className="text-center">
-                    <div className="text-3xl font-black text-indigo-600">{formatTime(timeRemaining)}</div>
-                    <div className="text-xs text-slate-500 font-bold">Time Remaining</div>
+                    <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{formatTime(timeRemaining)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">Time Remaining</div>
                   </div>
-                  <div className="h-12 w-px bg-slate-200" />
+                  <div className="h-12 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
-                    <div className="text-3xl font-black text-slate-800">{currentQuestionIndex + 1}/{displayQuestions.length}</div>
-                    <div className="text-xs text-slate-500 font-bold">Question</div>
+                    <div className="text-3xl font-black text-slate-800 dark:text-slate-200">{currentQuestionIndex + 1}/{displayQuestions.length}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 font-bold">Question</div>
                   </div>
                 </div>
                 <Button variant="outline" onClick={handleSubmitQuiz}>
@@ -336,7 +336,7 @@ const VisualAidsView: React.FC = () => {
               <Card className="p-8 border-2 border-indigo-200">
                 <div className="space-y-6">
                   <div className="flex items-start justify-between">
-                    <h3 className="text-2xl font-black text-slate-800 flex-1">
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 flex-1">
                       {displayQuestions[currentQuestionIndex]?.question}
                     </h3>
                     <Badge variant="indigo">Q{currentQuestionIndex + 1}</Badge>
@@ -349,28 +349,28 @@ const VisualAidsView: React.FC = () => {
                         onClick={() => handleSelectAnswer(currentQuestionIndex, option)}
                         className={`w-full p-4 text-left rounded-xl border-2 transition-all font-medium ${
                           selectedAnswers[currentQuestionIndex] === option
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-900'
-                            : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                            ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                             selectedAnswers[currentQuestionIndex] === option
-                              ? 'border-indigo-500 bg-indigo-500'
-                              : 'border-slate-300'
+                              ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-500 dark:bg-indigo-600'
+                              : 'border-slate-300 dark:border-slate-600'
                           }`}>
                             {selectedAnswers[currentQuestionIndex] === option && (
-                              <div className="w-2 h-2 bg-white rounded-full" />
+                              <div className="w-2 h-2 bg-white dark:bg-slate-200 rounded-full" />
                             )}
                           </div>
-                          <span>{option}</span>
+                          <span className="text-slate-900 dark:text-slate-200">{option}</span>
                         </div>
                       </button>
                     ))}
                   </div>
 
                   {/* Navigation */}
-                  <div className="flex items-center justify-between pt-4 border-t-2 border-slate-100">
+                  <div className="flex items-center justify-between pt-4 border-t-2 border-slate-100 dark:border-slate-800">
                     <Button
                       variant="outline"
                       onClick={handlePreviousQuestion}
@@ -379,7 +379,7 @@ const VisualAidsView: React.FC = () => {
                       <ICONS.ChevronLeft size={16} className="mr-2" />
                       Previous
                     </Button>
-                    <div className="text-sm text-slate-500 font-medium">
+                    <div className="text-sm text-slate-500 dark:text-slate-400 font-medium">
                       {Object.keys(selectedAnswers).length}/{displayQuestions.length} answered
                     </div>
                     {currentQuestionIndex < displayQuestions.length - 1 ? (
@@ -405,17 +405,17 @@ const VisualAidsView: React.FC = () => {
               </Card>
 
               {/* Question Navigator */}
-              <div className="flex flex-wrap gap-2 p-4 bg-white rounded-2xl border-2 border-slate-100">
+              <div className="flex flex-wrap gap-2 p-4 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-100 dark:border-slate-800">
                 {displayQuestions.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentQuestionIndex(idx)}
                     className={`w-10 h-10 rounded-lg font-bold transition-all ${
                       idx === currentQuestionIndex
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-indigo-500 dark:bg-indigo-600 text-white'
                         : selectedAnswers[idx]
-                        ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-300'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-2 border-emerald-300 dark:border-emerald-800'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     {idx + 1}
@@ -427,17 +427,17 @@ const VisualAidsView: React.FC = () => {
             // Quiz Cards List
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {quizzes.map((quiz) => (
-                <Card key={quiz._id} hoverable className="p-6 border-2 border-slate-100 hover:border-indigo-300 transition-all">
+                <Card key={quiz._id} hoverable className="p-6 border-2 border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="text-xl font-black text-slate-800 mb-1">{quiz.title}</h3>
-                        <p className="text-sm text-slate-500">{quiz.description}</p>
+                        <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-1">{quiz.title}</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{quiz.description}</p>
                       </div>
                       <Badge variant="indigo">{quiz.questions?.length || 0}Q</Badge>
                     </div>
 
-                    <div className="flex items-center gap-4 text-sm text-slate-600">
+                    <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
                       <div className="flex items-center gap-1">
                         <ICONS.Clock size={14} />
                         <span>{quiz.timeLimit} min</span>
@@ -470,11 +470,11 @@ const VisualAidsView: React.FC = () => {
               >
                 <Card
                   hoverable
-                  className="p-6 border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all flex items-center justify-center"
+                  className="p-6 border-2 border-dashed border-indigo-300 dark:border-indigo-700 hover:border-indigo-500 dark:hover:border-indigo-600 transition-all flex items-center justify-center"
                 >
                   <div className="text-center">
-                    <ICONS.Plus size={32} className="mx-auto text-indigo-500 mb-2" />
-                    <p className="font-bold text-indigo-600">Generate New Quiz</p>
+                    <ICONS.Plus size={32} className="mx-auto text-indigo-500 dark:text-indigo-400 mb-2" />
+                    <p className="font-bold text-indigo-600 dark:text-indigo-400">Generate New Quiz</p>
                   </div>
                 </Card>
               </div>
@@ -482,27 +482,27 @@ const VisualAidsView: React.FC = () => {
           ) : displayQuestions.length > 0 ? (
             <div className="space-y-4">
               {displayQuestions.slice(0, 3).map((question, idx) => (
-                <Card key={question._id || idx} className="p-6 border-l-4 border-indigo-500">
+                <Card key={question._id || idx} className="p-6 border-l-4 border-indigo-500 dark:border-indigo-600">
                   <div className="flex items-start gap-4">
                     <Badge variant="indigo" className="mt-1">{idx + 1}</Badge>
                     <div className="flex-1">
-                      <h4 className="text-lg font-bold text-slate-800 mb-4">{question.question}</h4>
+                      <h4 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">{question.question}</h4>
                       <div className="space-y-2">
                         {question.options.map((option, optIdx) => (
                           <div 
                             key={optIdx}
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
                               optIdx === question.correctAnswer 
-                                ? 'border-emerald-500 bg-emerald-50' 
-                                : 'border-slate-200 hover:border-indigo-300'
+                                ? 'border-emerald-500 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' 
+                                : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
                             }`}
                           >
-                            <span className="font-medium">{option}</span>
+                            <span className="font-medium text-slate-900 dark:text-slate-200">{option}</span>
                           </div>
                         ))}
                       </div>
                       {question.explanation && (
-                        <p className="mt-4 text-sm text-slate-600 bg-blue-50 p-3 rounded-lg">
+                        <p className="mt-4 text-sm text-slate-600 dark:text-slate-300 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-lg">
                           <strong>Explanation:</strong> {question.explanation}
                         </p>
                       )}
@@ -524,7 +524,7 @@ const VisualAidsView: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-slate-500">No quizzes yet. Generate your first quiz!</p>
+              <p className="text-slate-500 dark:text-slate-400">No quizzes yet. Generate your first quiz!</p>
               <Button 
                 variant="primary" 
                 className="mt-4 gap-2"

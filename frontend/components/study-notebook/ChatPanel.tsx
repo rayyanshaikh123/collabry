@@ -108,12 +108,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-black text-slate-800">AI Chat</h2>
-          <p className="text-xs text-slate-500">
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">AI Chat</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {hasSelectedSources
               ? 'Ask questions about your sources'
               : 'Add sources to start chatting'}
@@ -153,10 +153,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
               <div className="text-6xl mb-4">💬</div>
-              <h3 className="text-xl font-black text-slate-800 mb-2">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">
                 Add a source to get started
               </h3>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Upload PDFs, add text, or link websites to chat with your AI study buddy
               </p>
             </div>
@@ -165,10 +165,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
               <div className="text-6xl mb-4">👋</div>
-              <h3 className="text-xl font-black text-slate-800 mb-2">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">
                 Ready to help you study!
               </h3>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Ask me questions about your sources, request summaries, or explore concepts
               </p>
             </div>
@@ -183,18 +183,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 <div
                   className={`max-w-[80%] ${
                     message.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm'
-                      : 'bg-slate-100 text-slate-800 rounded-2xl rounded-tl-sm'
+                      ? 'bg-indigo-600 dark:bg-indigo-700 text-white rounded-2xl rounded-tr-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-sm'
                   } px-5 py-3 shadow-sm`}
                 >
                   {message.isLoading ? (
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-                      <span className="text-xs text-slate-500">Thinking...</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Thinking...</span>
                     </div>
                   ) : message.role === 'user' ? (
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -320,14 +320,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           <>
                             {/* Render mindmap */}
                             {mindmap && mindmap.nodes && mindmap.nodes.length > 0 && (
-                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-xl">
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-emerald-50 dark:from-emerald-900/30 via-teal-50 dark:via-teal-900/30 to-cyan-50 dark:to-cyan-900/30 rounded-xl">
                                 <div className="flex items-center justify-between mb-4">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-md">
+                                    <div className="w-8 h-8 bg-emerald-600 dark:bg-emerald-700 rounded-lg flex items-center justify-center shadow-md">
                                       <span className="text-white text-lg">🧠</span>
                                     </div>
-                                    <h4 className="text-base font-black text-slate-800">Mind Map</h4>
-                                    <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                    <h4 className="text-base font-black text-slate-800 dark:text-slate-200">Mind Map</h4>
+                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
                                       {mindmap.nodes.length} {mindmap.nodes.length === 1 ? 'Node' : 'Nodes'}
                                     </span>
                                   </div>
@@ -355,7 +355,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                             {/* Render markdown content */}
                             {cleanMarkdown && (
-                              <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:my-3 prose-a:text-indigo-600 prose-strong:text-slate-800 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
+                              <div className="prose prose-sm max-w-none prose-slate dark:prose-invert prose-headings:font-black prose-headings:text-slate-800 dark:prose-headings:text-slate-200 prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-p:my-3 prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-strong:text-slate-800 dark:prose-strong:text-slate-200 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
                                 <ReactMarkdown 
                                   remarkPlugins={[remarkGfm, remarkBreaks]}
                                   components={{
@@ -376,13 +376,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             
                             {/* Render quiz */}
                             {quiz && quiz.length > 0 && (
-                              <div className="mt-5 -mx-5 px-5 py-5 bg-slate-50 rounded-xl">
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                                 <div className="flex items-center gap-2 mb-4">
-                                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                                  <div className="w-8 h-8 bg-indigo-600 dark:bg-indigo-700 rounded-lg flex items-center justify-center shadow-md">
                                     <ICONS.lightbulb className="w-4 h-4 text-white" />
                                   </div>
-                                  <h4 className="text-base font-black text-slate-800">Practice Quiz</h4>
-                                  <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                  <h4 className="text-base font-black text-slate-800 dark:text-slate-200">Practice Quiz</h4>
+                                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
                                     {quiz.length} {quiz.length === 1 ? 'Question' : 'Questions'}
                                   </span>
                                 </div>
@@ -395,15 +395,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             
                             {/* Render course cards */}
                             {courses.length > 0 && (
-                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl">
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-r from-indigo-50 dark:from-indigo-900/30 via-purple-50 dark:via-purple-900/30 to-pink-50 dark:to-pink-900/30 rounded-xl">
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-4">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-md">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-indigo-600 dark:to-purple-700 rounded-lg flex items-center justify-center shadow-md">
                                       <ICONS.book className="w-4 h-4 text-white" />
                                     </div>
-                                    <h4 className="text-base font-black text-slate-800">Recommended Courses</h4>
-                                    <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                    <h4 className="text-base font-black text-slate-800 dark:text-slate-200">Recommended Courses</h4>
+                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
                                       {courses.length} {courses.length === 1 ? 'Course' : 'Courses'}
                                     </span>
                                   </div>
@@ -414,16 +414,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                       <button
                                         onClick={() => scrollCarousel(message.id, 'left')}
                                         disabled={!canScrollLeft[message.id]}
-                                        className="w-8 h-8 bg-white rounded-lg border-2 border-indigo-200 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-indigo-200 transition-all shadow-sm group"
+                                        className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
                                       >
-                                        <ICONS.ChevronLeft className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" />
+                                        <ICONS.ChevronLeft className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
                                       </button>
                                       <button
                                         onClick={() => scrollCarousel(message.id, 'right')}
                                         disabled={!canScrollRight[message.id]}
-                                        className="w-8 h-8 bg-white rounded-lg border-2 border-indigo-200 flex items-center justify-center hover:bg-indigo-600 hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-indigo-200 transition-all shadow-sm group"
+                                        className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
                                       >
-                                        <ICONS.ChevronRight className="w-4 h-4 text-indigo-600 group-hover:text-white transition-colors" />
+                                        <ICONS.ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
                                       </button>
                                     </div>
                                   )}
@@ -453,7 +453,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       })()}
                     </>
                   )}
-                  <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
+                  <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-indigo-200 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
                     {new Date(message.timestamp).toLocaleTimeString('en-US', {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -468,7 +468,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       </div>
 
       {/* Input */}
-      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+      <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <div className="flex-1">
             <textarea
@@ -481,7 +481,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   : 'Add sources to start chatting...'
               }
               disabled={!hasSelectedSources || isLoading}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 disabled:text-slate-400 resize-none text-sm"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/50 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500 resize-none text-sm"
               rows={3}
             />
           </div>
@@ -499,7 +499,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
           </Button>
         </form>
-        <p className="text-xs text-slate-400 mt-2 text-center">
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
           Press Enter to send • Shift + Enter for new line
         </p>
       </div>
