@@ -6,6 +6,8 @@ import { Card, Button, Badge } from '../../../components/UIElements';
 import { ICONS } from '../../../constants';
 import { useAuthStore } from '../../../src/stores/auth.store';
 import { studyBoardService } from '../../../src/services/studyBoard.service';
+import TemplateSelectorModal from '../../../components/TemplateSelectorModal';
+import { BoardTemplate, getTemplateShapes } from '../../../lib/boardTemplates';
 
 interface Board {
   _id: string;
@@ -31,6 +33,7 @@ export default function StudyBoardListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   useEffect(() => {
     fetchBoards();
@@ -50,14 +53,21 @@ export default function StudyBoardListPage() {
     }
   };
 
-  const createNewBoard = async () => {
+  const createNewBoard = async (template?: BoardTemplate) => {
     try {
       setIsCreating(true);
       const newBoard = await studyBoardService.createBoard({
-        title: `New Board ${boards.length + 1}`,
-        description: 'Collaborative study board',
-        isPublic: false
+        title: template ? `${template.name} - ${boards.length + 1}` : `New Board ${boards.length + 1}`,
+        description: template ? template.description : 'Collaborative study board',
+        isPublic: false,
+        template: template?.id,
       });
+      
+      // Store template shapes with fresh IDs in sessionStorage
+      if (template && template.shapes.length > 0) {
+        const shapesWithIds = getTemplateShapes(template);
+        sessionStorage.setItem(`board-${(newBoard as any)._id}-template`, JSON.stringify(shapesWithIds));
+      }
       
       // Navigate to the new board
       router.push(`/study-board/${(newBoard as any)._id}`);
@@ -67,6 +77,11 @@ export default function StudyBoardListPage() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleTemplateSelect = (template: BoardTemplate) => {
+    setShowTemplateModal(false);
+    createNewBoard(template);
   };
 
   const openBoard = (boardId: string) => {
@@ -95,7 +110,7 @@ export default function StudyBoardListPage() {
         <Button 
           variant="primary" 
           className="gap-2"
-          onClick={createNewBoard}
+          onClick={() => setShowTemplateModal(true)}
           disabled={isCreating}
         >
           <ICONS.Plus size={16} />
@@ -124,7 +139,7 @@ export default function StudyBoardListPage() {
             <p className="text-slate-500 mb-6">
               Create your first collaborative study board to start working with others
             </p>
-            <Button variant="primary" onClick={createNewBoard} disabled={isCreating}>
+            <Button variant="primary" onClick={() => setShowTemplateModal(true)} disabled={isCreating}>
               <ICONS.Plus size={16} className="mr-2" />
               {isCreating ? 'Creating...' : 'Create Your First Board'}
             </Button>
@@ -189,6 +204,13 @@ export default function StudyBoardListPage() {
           ))}
         </div>
       )}
+
+      {/* Template Selector Modal */}
+      <TemplateSelectorModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        onSelectTemplate={handleTemplateSelect}
+      />
     </div>
   );
 }

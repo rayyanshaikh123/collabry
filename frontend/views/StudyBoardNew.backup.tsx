@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Tldraw, createTLStore, defaultShapeUtils, TLRecord, TLStoreSnapshot } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { Button } from '../components/UIElements';
@@ -13,61 +13,6 @@ import VoiceChat from '../components/VoiceChat';
 import InviteMemberModal from '../components/InviteMemberModal';
 import BoardSettingsModal from '../components/BoardSettingsModal';
 import { studyBoardService } from '../src/services/studyBoard.service';
-
-// Memoized Participant Avatar Component
-const ParticipantAvatar = memo(({ participant, index }: { participant: any; index: number }) => (
-  <div 
-    key={`${participant.userId}-${index}`}
-    className="w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white font-black text-xs shadow-md"
-    style={{ backgroundColor: participant.color }}
-    title={participant.name}
-  >
-    {participant.name.charAt(0).toUpperCase()}
-  </div>
-));
-ParticipantAvatar.displayName = 'ParticipantAvatar';
-
-// Memoized Cursor Component
-const LiveCursor = memo(({ userId, cursor, participant }: { userId: string; cursor: any; participant: any }) => {
-  if (!participant) return null;
-  
-  return (
-    <div
-      className="absolute transition-transform duration-100"
-      style={{
-        left: cursor.x,
-        top: cursor.y,
-        transform: 'translate(-50%, -50%)'
-      }}
-    >
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill={participant.color}
-        className="drop-shadow-lg"
-      >
-        <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z" />
-      </svg>
-      <div 
-        className="ml-6 -mt-2 px-2 py-1 rounded text-white text-xs font-bold whitespace-nowrap shadow-lg"
-        style={{ backgroundColor: participant.color }}
-      >
-        {participant.name.split('@')[0]}
-      </div>
-    </div>
-  );
-});
-LiveCursor.displayName = 'LiveCursor';
-
-// Debounce utility
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number) {
-  let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-}
 
 const CollaborativeBoard: React.FC = () => {
   const router = useRouter();
@@ -95,32 +40,33 @@ const CollaborativeBoard: React.FC = () => {
   const isApplyingRemoteChange = useRef(false);
   const [editor, setEditor] = useState<any>(null);
   const [pendingElements, setPendingElements] = useState<any[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
-  const cursorPositionRef = useRef({ x: 0, y: 0 });
 
   // Handle tldraw editor mount
   const handleMount = useCallback((editorInstance: any) => {
+    console.log('[StudyBoard] Tldraw editor mounted');
     setEditor(editorInstance);
   }, []);
-
-  // Debounced update element to batch rapid changes
-  const debouncedUpdateElement = useMemo(
-    () => debounce((boardId: string, elementId: string, changeSet: any) => {
-      socketClient.updateElement(boardId, elementId, changeSet);
-    }, 100),
-    []
-  );
 
   // Sync tldraw store changes to other users via editor
   useEffect(() => {
     if (!editor || !boardId || !isConnected) return;
 
+    console.log('[StudyBoard] Setting up editor store listener for boardId:', boardId);
+
     const handleStoreChange = (event: any) => {
-      // Don't broadcast changes that came from remote
-      if (isApplyingRemoteChange.current) return;
+      console.log('[StudyBoard] *** STORE CHANGE CALLBACK FIRED ***', event);
       
+      // Don't broadcast changes that came from remote
+      if (isApplyingRemoteChange.current) {
+        console.log('[StudyBoard] Skipping - remote change');
+        return;
+      }
+      
+      // Ensure changes object exists - tldraw wraps it in event.changes
       const changes = event?.changes;
-      if (!changes) return;
+      if (!changes) {
+        return;
+      }
 
       const { added, updated, removed } = changes;
       
@@ -130,12 +76,22 @@ const CollaborativeBoard: React.FC = () => {
         (updated && Object.values(updated).some(([_, r]: any) => r?.typeName === 'shape')) ||
         (removed && Object.values(removed).some((r: any) => r?.typeName === 'shape'));
       
-      if (!hasShapeChanges) return;
+      if (!hasShapeChanges) {
+        return; // Skip non-shape changes
+      }
+      
+      console.log('[StudyBoard] Shape change detected:', {
+        added: added ? Object.keys(added).length : 0,
+        updated: updated ? Object.keys(updated).length : 0,
+        removed: removed ? Object.keys(removed).length : 0,
+        changesSample: { added, updated, removed }
+      });
 
       // Broadcast added records
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            console.log('[StudyBoard] Broadcasting element:create', record.id, record.type);
             socketClient.createElement(boardId, {
               id: record.id,
               type: record.type,
@@ -149,15 +105,22 @@ const CollaborativeBoard: React.FC = () => {
               isLocked: record.isLocked || false,
               opacity: record.opacity || 1,
               meta: record.meta || {},
+            }, (response) => {
+              if (response.error) {
+                console.error('[StudyBoard] Failed to create element:', response.error);
+              } else {
+                console.log('[StudyBoard] Element created successfully:', response);
+              }
             });
           }
         });
       }
 
-      // Broadcast updated records with debouncing
+      // Broadcast updated records
       if (updated) {
         Object.values(updated).forEach(([from, to]: any) => {
           if (to?.typeName === 'shape') {
+            // Only send the changed properties
             const changeSet: any = {};
             if (from.x !== to.x) changeSet.x = to.x;
             if (from.y !== to.y) changeSet.y = to.y;
@@ -169,7 +132,14 @@ const CollaborativeBoard: React.FC = () => {
             if (JSON.stringify(from.props) !== JSON.stringify(to.props)) changeSet.props = to.props;
             
             if (Object.keys(changeSet).length > 0) {
-              debouncedUpdateElement(boardId, to.id, changeSet);
+              console.log('[StudyBoard] Broadcasting element:update', to.id, changeSet);
+              socketClient.updateElement(boardId, to.id, changeSet, (response) => {
+                if (response.error) {
+                  console.error('[StudyBoard] Failed to update element:', response.error);
+                } else {
+                  console.log('[StudyBoard] Element updated successfully:', response);
+                }
+              });
             }
           }
         });
@@ -179,109 +149,30 @@ const CollaborativeBoard: React.FC = () => {
       if (removed) {
         Object.values(removed).forEach((record: any) => {
           if (record?.typeName === 'shape') {
-            socketClient.deleteElement(boardId, record.id);
+            console.log('[StudyBoard] Broadcasting element:delete', record.id);
+            socketClient.deleteElement(boardId, record.id, (response) => {
+              if (response.error) {
+                console.error('[StudyBoard] Failed to delete element:', response.error);
+              } else {
+                console.log('[StudyBoard] Element deleted successfully:', response);
+              }
+            });
           }
         });
       }
     };
 
+    // Listen to store changes - remove source filter to capture all changes
+    console.log('[StudyBoard] Setting up editor store listener');
     const dispose = editor.store.listen(handleStoreChange, { 
       scope: 'document' 
     });
 
-    return () => dispose();
-  }, [editor, boardId, isConnected, debouncedUpdateElement]);
-
-  // Memoized socket event handlers
-  const handleElementCreated = useCallback((data: any) => {
-    if (!editor || editor.store.get(data.element.id)) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      const shapeRecord: any = {
-        id: data.element.id,
-        typeName: data.element.typeName || 'shape',
-        type: data.element.type,
-        x: data.element.x || 0,
-        y: data.element.y || 0,
-        props: data.element.props || {},
-        parentId: data.element.parentId || 'page:page',
-        index: data.element.index || 'a1',
-        rotation: data.element.rotation || 0,
-        isLocked: data.element.isLocked || false,
-        opacity: data.element.opacity || 1,
-        meta: data.element.meta || {},
-      };
-      
-      editor.store.put([shapeRecord]);
-    } catch (error) {
-      console.error('Error adding remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  const handleElementUpdated = useCallback((data: any) => {
-    if (!editor) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      const existing = editor.store.get(data.elementId);
-      if (existing) {
-        editor.store.put([{
-          ...existing,
-          ...data.changes,
-        }]);
-      }
-    } catch (error) {
-      console.error('Error updating remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  const handleElementDeleted = useCallback((data: any) => {
-    if (!editor) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      if (editor.store.get(data.elementId)) {
-        editor.store.remove([data.elementId]);
-      }
-    } catch (error) {
-      console.error('Error deleting remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  const handleUserJoined = useCallback((data: any) => {
-    if (data.userId !== user?.id) {
-      addParticipant({
-        userId: data.userId,
-        name: data.email,
-        color: data.color,
-        isActive: true
-      });
-    }
-  }, [user?.id, addParticipant]);
-
-  const handleUserLeft = useCallback((data: any) => {
-    removeParticipant(data.userId);
-  }, [removeParticipant]);
-
-  const handleCursorMove = useCallback((data: any) => {
-    updateCursor(data.userId, data.position);
-  }, [updateCursor]);
+    return () => {
+      console.log('[StudyBoard] Disposing editor store listener');
+      dispose();
+    };
+  }, [editor, boardId, isConnected]);
 
   // Initialize board connection
   useEffect(() => {
@@ -291,6 +182,7 @@ const CollaborativeBoard: React.FC = () => {
       try {
         setIsLoading(true);
         
+        // Connect to board socket
         const token = localStorage.getItem('accessToken');
         if (!token) {
           router.push('/login');
@@ -299,6 +191,7 @@ const CollaborativeBoard: React.FC = () => {
 
         socketClient.connectBoards(token);
 
+        // Join board room
         socketClient.joinBoard(boardId, (response: any) => {
           if (response.error) {
             console.error('Failed to join board:', response.error);
@@ -307,23 +200,18 @@ const CollaborativeBoard: React.FC = () => {
             return;
           }
 
+          console.log('[StudyBoard] Joined board:', response.board);
           setCurrentBoard(response.board);
           
-          // Check for template shapes in sessionStorage
-          const templateShapes = sessionStorage.getItem(`board-${boardId}-template`);
-          if (templateShapes) {
-            try {
-              const shapes = JSON.parse(templateShapes);
-              setPendingElements(shapes);
-              // Clear from sessionStorage after loading
-              sessionStorage.removeItem(`board-${boardId}-template`);
-            } catch (error) {
-              console.error('Failed to parse template shapes:', error);
-            }
-          } else if (response.board?.elements && response.board.elements.length > 0) {
+          // Store elements to load them when editor is ready
+          if (response.board?.elements && response.board.elements.length > 0) {
+            console.log('[StudyBoard] Storing', response.board.elements.length, 'elements to load when editor is ready');
             setPendingElements(response.board.elements);
+          } else {
+            console.log('[StudyBoard] No existing elements to load');
           }
           
+          // Set initial participants
           response.participants?.forEach((p: any) => {
             if (p.userId !== user.id) {
               addParticipant({
@@ -339,9 +227,30 @@ const CollaborativeBoard: React.FC = () => {
           setIsLoading(false);
         });
 
-        socketClient.onUserJoined(handleUserJoined);
-        socketClient.onUserLeft(handleUserLeft);
-        socketClient.onCursorMove(handleCursorMove);
+        // Listen for other users joining
+        socketClient.onUserJoined((data: any) => {
+          console.log('User joined:', data);
+          // Don't add yourself to the participants list
+          if (data.userId !== user.id) {
+            addParticipant({
+              userId: data.userId,
+              name: data.email,
+              color: data.color,
+              isActive: true
+            });
+          }
+        });
+
+        // Listen for users leaving
+        socketClient.onUserLeft((data: any) => {
+          console.log('User left:', data);
+          removeParticipant(data.userId);
+        });
+
+        // Listen for cursor movements
+        socketClient.onCursorMove((data: any) => {
+          updateCursor(data.userId, data.position);
+        });
 
       } catch (error) {
         console.error('Failed to initialize board:', error);
@@ -351,23 +260,35 @@ const CollaborativeBoard: React.FC = () => {
 
     initBoard();
 
+    // Cleanup on unmount
     return () => {
       if (boardId) {
         socketClient.leaveBoard(boardId);
       }
     };
-  }, [boardId, user, router, setCurrentBoard, addParticipant, handleUserJoined, handleUserLeft, handleCursorMove]);
+  }, [boardId, user, router, setCurrentBoard, addParticipant, removeParticipant, updateCursor]);
 
-  // Setup element event listeners
+  // Setup element event listeners separately - only when editor is ready
   useEffect(() => {
     if (!editor || !boardId) return;
 
-    // Load pending elements
+    console.log('[StudyBoard] Setting up element event listeners');
+
+    // Load pending elements when editor becomes ready (only once)
     if (pendingElements.length > 0) {
+      console.log('[StudyBoard] Loading', pendingElements.length, 'pending elements into editor');
+      console.log('[StudyBoard] Pending elements sample:', pendingElements[0]);
       isApplyingRemoteChange.current = true;
       
       try {
-        const validElements = pendingElements.filter((el: any) => el && el.id && el.type);
+        // Validate and filter elements before loading
+        const validElements = pendingElements.filter((el: any) => {
+          const isValid = el && el.id && el.type;
+          if (!isValid) {
+            console.warn('[StudyBoard] Skipping invalid element:', el);
+          }
+          return isValid;
+        });
 
         const shapes = validElements.map((el: any) => ({
           id: el.id,
@@ -384,12 +305,15 @@ const CollaborativeBoard: React.FC = () => {
           meta: el.meta || {},
         }));
         
+        console.log(`[StudyBoard] Adding ${shapes.length} valid shapes to editor (filtered ${pendingElements.length - validElements.length} invalid)`);
         if (shapes.length > 0) {
+          console.log('[StudyBoard] First shape:', shapes[0]);
           editor.store.put(shapes);
         }
+        // Clear pending elements after loading
         setTimeout(() => setPendingElements([]), 0);
       } catch (error) {
-        console.error('Error loading pending elements:', error);
+        console.error('[StudyBoard] Error loading pending elements:', error);
       } finally {
         setTimeout(() => {
           isApplyingRemoteChange.current = false;
@@ -397,56 +321,144 @@ const CollaborativeBoard: React.FC = () => {
       }
     }
 
+    // Listen for element changes
+    const handleElementCreated = (data: any) => {
+      console.log('[StudyBoard] Element created by another user:', data);
+      
+      if (!editor) {
+        console.warn('[StudyBoard] Editor not ready, skipping creation');
+        return;
+      }
+      
+      // Skip if this shape already exists
+      if (editor.store.get(data.element.id)) {
+        console.log('[StudyBoard] Shape already exists, skipping');
+        return;
+      }
+      
+      isApplyingRemoteChange.current = true;
+      
+      try {
+        // Create the shape in tldraw store
+        const shapeRecord: any = {
+          id: data.element.id,
+          typeName: data.element.typeName || 'shape',
+          type: data.element.type,
+          x: data.element.x || 0,
+          y: data.element.y || 0,
+          props: data.element.props || {},
+          parentId: data.element.parentId || 'page:page',
+          index: data.element.index || 'a1',
+          rotation: data.element.rotation || 0,
+          isLocked: data.element.isLocked || false,
+          opacity: data.element.opacity || 1,
+          meta: data.element.meta || {},
+        };
+        
+        console.log('[StudyBoard] Adding shape to store:', shapeRecord);
+        editor.store.put([shapeRecord]);
+      } catch (error) {
+        console.error('[StudyBoard] Error adding remote shape:', error);
+      } finally {
+        // Use setTimeout to ensure the flag is reset after the store has processed
+        setTimeout(() => {
+          isApplyingRemoteChange.current = false;
+        }, 0);
+      }
+    };
+
+    const handleElementUpdated = (data: any) => {
+      console.log('[StudyBoard] Element updated by another user:', data);
+      
+      if (!editor) {
+        console.warn('[StudyBoard] Editor not ready, skipping update');
+        return;
+      }
+      
+      isApplyingRemoteChange.current = true;
+      
+      try {
+        const existing = editor.store.get(data.elementId);
+        if (existing) {
+          console.log('[StudyBoard] Updating existing shape:', data.elementId, data.changes);
+          editor.store.put([{
+            ...existing,
+            ...data.changes,
+          }]);
+        } else {
+          console.warn('[StudyBoard] Cannot update non-existent shape:', data.elementId);
+        }
+      } catch (error) {
+        console.error('[StudyBoard] Error updating remote shape:', error);
+      } finally {
+        setTimeout(() => {
+          isApplyingRemoteChange.current = false;
+        }, 0);
+      }
+    };
+
+    const handleElementDeleted = (data: any) => {
+      console.log('[StudyBoard] Element deleted by another user:', data);
+      
+      if (!editor) {
+        console.warn('[StudyBoard] Editor not ready, skipping deletion');
+        return;
+      }
+      
+      isApplyingRemoteChange.current = true;
+      
+      try {
+        if (editor.store.get(data.elementId)) {
+          console.log('[StudyBoard] Removing shape from store:', data.elementId);
+          editor.store.remove([data.elementId]);
+        }
+      } catch (error) {
+        console.error('[StudyBoard] Error deleting remote shape:', error);
+      } finally {
+        setTimeout(() => {
+          isApplyingRemoteChange.current = false;
+        }, 0);
+      }
+    };
+
+    // Register listeners
     socketClient.onElementCreated(handleElementCreated);
     socketClient.onElementUpdated(handleElementUpdated);
     socketClient.onElementDeleted(handleElementDeleted);
 
+    // Cleanup - remove these specific listeners on unmount
     return () => {
+      console.log('[StudyBoard] Cleaning up element event listeners');
       socketClient.offBoardEvent('element:created', handleElementCreated);
       socketClient.offBoardEvent('element:updated', handleElementUpdated);
       socketClient.offBoardEvent('element:deleted', handleElementDeleted);
     };
-  }, [editor, boardId, handleElementCreated, handleElementUpdated, handleElementDeleted]);
+  }, [editor, boardId]); // Removed pendingElements to prevent re-run after clearing
 
-  // Optimized cursor tracking with requestAnimationFrame
-  const sendCursorUpdate = useCallback(() => {
-    if (boardId && isConnected) {
-      socketClient.sendCursorPosition(boardId, cursorPositionRef.current);
-    }
-    animationFrameRef.current = null;
-  }, [boardId, isConnected]);
-
+  // Handle cursor movement
   const handlePointerMove = useCallback((e: PointerEvent) => {
     if (!boardId || !isConnected) return;
+    
+    // Throttle cursor updates
+    const now = Date.now();
+    if ((window as any).lastCursorUpdate && now - (window as any).lastCursorUpdate < 50) {
+      return;
+    }
+    (window as any).lastCursorUpdate = now;
 
     const canvas = (e.target as HTMLElement).closest('canvas');
     if (canvas) {
       const rect = canvas.getBoundingClientRect();
-      cursorPositionRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      };
-
-      // Use requestAnimationFrame for smooth cursor updates
-      if (!animationFrameRef.current) {
-        animationFrameRef.current = requestAnimationFrame(sendCursorUpdate);
-      }
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      socketClient.sendCursorPosition(boardId, { x, y });
     }
-  }, [boardId, isConnected, sendCursorUpdate]);
+  }, [boardId, isConnected]);
 
   useEffect(() => {
     window.addEventListener('pointermove', handlePointerMove);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
+    return () => window.removeEventListener('pointermove', handlePointerMove);
   }, [handlePointerMove]);
-
-  // Memoized participant list
-  const visibleParticipants = useMemo(() => participants.slice(0, 3), [participants]);
-  const participantCount = participants.length;
 
   if (isLoading) {
     return (
@@ -498,8 +510,8 @@ const CollaborativeBoard: React.FC = () => {
               )}
             </h2>
             <p className="text-xs text-slate-400 font-bold uppercase tracking-tight">
-              {participantCount > 0 
-                ? `${participantCount} other${participantCount > 1 ? 's' : ''} studying here`
+              {participants.length > 0 
+                ? `${participants.length} other${participants.length > 1 ? 's' : ''} studying here`
                 : 'You are alone in this board'}
             </p>
           </div>
@@ -507,12 +519,19 @@ const CollaborativeBoard: React.FC = () => {
         <div className="flex items-center gap-3">
           {/* Participant Avatars */}
           <div className="flex -space-x-3 mr-4">
-            {visibleParticipants.map((p, i) => (
-              <ParticipantAvatar key={p.userId} participant={p} index={i} />
+            {participants.slice(0, 3).map((p, i) => (
+              <div 
+                key={`${p.userId}-${i}`}
+                className="w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white font-black text-xs shadow-md"
+                style={{ backgroundColor: p.color }}
+                title={p.name}
+              >
+                {p.name.charAt(0).toUpperCase()}
+              </div>
             ))}
-            {participantCount > 3 && (
+            {participants.length > 3 && (
               <div className="w-10 h-10 rounded-2xl border-4 border-white bg-indigo-500 text-[11px] font-black text-white flex items-center justify-center shadow-md">
-                +{participantCount - 3}
+                +{participants.length - 3}
               </div>
             )}
           </div>
@@ -559,7 +578,35 @@ const CollaborativeBoard: React.FC = () => {
           <div className="absolute inset-0 pointer-events-none z-10">
             {Object.entries(cursors).map(([userId, cursor]) => {
               const participant = participants.find(p => p.userId === userId);
-              return <LiveCursor key={userId} userId={userId} cursor={cursor} participant={participant} />;
+              if (!participant) return null;
+              
+              return (
+                <div
+                  key={userId}
+                  className="absolute transition-transform duration-100"
+                  style={{
+                    left: cursor.x,
+                    top: cursor.y,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                >
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill={participant.color}
+                    className="drop-shadow-lg"
+                  >
+                    <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z" />
+                  </svg>
+                  <div 
+                    className="ml-6 -mt-2 px-2 py-1 rounded text-white text-xs font-bold whitespace-nowrap shadow-lg"
+                    style={{ backgroundColor: participant.color }}
+                  >
+                    {participant.name.split('@')[0]}
+                  </div>
+                </div>
+              );
             })}
           </div>
         </div>
@@ -584,9 +631,10 @@ const CollaborativeBoard: React.FC = () => {
         onInvite={async (email, role) => {
           try {
             await studyBoardService.inviteMember(boardId, email, role);
+            console.log('Invitation sent successfully');
           } catch (error: any) {
             console.error('Failed to send invitation:', error);
-            throw error;
+            throw error; // Re-throw so modal can catch it
           }
         }}
       />
