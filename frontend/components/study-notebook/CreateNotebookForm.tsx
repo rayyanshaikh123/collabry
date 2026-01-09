@@ -39,11 +39,17 @@ export default function CreateNotebookForm() {
         description: description.trim() 
       });
 
-      const notebookId = response?.data?._id;
+      console.log('Create notebook response:', response);
+
+      // Handle both response formats: wrapped (ApiResponse) and direct
+      const notebookId = response?.data?._id || response?._id;
 
       if (!notebookId) {
+        console.error('Failed to get notebook ID from response:', response);
         throw new Error('Failed to get notebook ID');
       }
+
+      console.log('Notebook created with ID:', notebookId);
 
       // Upload sources if any
       if (files.length > 0) {

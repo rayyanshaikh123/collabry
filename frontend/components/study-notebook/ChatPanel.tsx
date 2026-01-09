@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Input } from '../UIElements';
 import { ICONS } from '../../constants';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 export interface ChatMessage {
   id: string;
@@ -144,8 +146,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   ) : message.role === 'user' ? (
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   ) : (
-                    <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-a:text-indigo-600 prose-strong:text-slate-800">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:my-3 prose-a:text-indigo-600 prose-strong:text-slate-800 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm, remarkBreaks]}
+                        components={{
+                          p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
+                          h1: ({node, ...props}) => <h1 className="mt-4 mb-2 first:mt-0" {...props} />,
+                          h2: ({node, ...props}) => <h2 className="mt-4 mb-2 first:mt-0" {...props} />,
+                          h3: ({node, ...props}) => <h3 className="mt-3 mb-2 first:mt-0" {...props} />,
+                          ul: ({node, ...props}) => <ul className="my-3 space-y-1" {...props} />,
+                          ol: ({node, ...props}) => <ol className="my-3 space-y-1" {...props} />,
+                          li: ({node, ...props}) => <li className="my-1" {...props} />,
+                          blockquote: ({node, ...props}) => <blockquote className="my-3 border-l-4 border-indigo-400 pl-4 italic" {...props} />,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
                     </div>
                   )}
                   <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
@@ -172,7 +188,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               onKeyPress={handleKeyPress}
               placeholder={
                 hasSelectedSources
-                  ? 'Ask a question about your sources...'
+                  ? 'Ask anything - I can search web, scrape sites, summarize, etc...'
                   : 'Add sources to start chatting...'
               }
               disabled={!hasSelectedSources || isLoading}

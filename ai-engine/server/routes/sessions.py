@@ -393,38 +393,84 @@ async def session_chat_stream(
         )
         
         async def event_generator():
-            """Generate SSE events that stream word-by-word for smooth output."""
+            """Generate SSE events that stream in real-time from agent."""
             full_response = ""
             
-            # Execute agent and collect all chunks
-            import asyncio
-            chunks_buffer = []
-            def collect_chunk(chunk: str):
-                chunks_buffer.append(chunk)
-            
-            agent.handle_user_input_stream(request.message, collect_chunk)
-            
-            # Split into words for smooth streaming
-            for chunk in chunks_buffer:
-                if chunk.strip():
-                    full_response += chunk
-                    # Split by whitespace while preserving it
-                    words = chunk.split(' ')
-                    for i, word in enumerate(words):
-                        if word:  # Skip empty strings
-                            # Add space after word except for last word
-                            if i < len(words) - 1:
-                                yield f"data: {word} \n\n"
-                            else:
-                                yield f"data: {word}\n\n"
-                            # Small delay for smooth streaming (15ms per word)
-                            await asyncio.sleep(0.015)
-            
-            # DON'T save here - frontend will save after streaming completes
-            # This prevents React Query refetch from interfering with streaming
-            
-            # Send completion event with response for frontend to save
-            yield f"event: done\ndata: {full_response}\n\n"
+            try:
+                # Execute agent with streaming callback
+                def stream_chunk(chunk: str):
+                    """Callback for each chunk from agent."""
+                    nonlocal full_response
+                    if chunk.strip():
+                        full_response += chunk
+                        return chunk
+                    return None
+                
+                # Execute agent - this will call stream_chunk for each piece of output
+                # Pass source_ids to filter RAG by selected sources only
+                agent.handle_user_input_stream(
+                    request.message, 
+                    stream_chunk,
+                    source_ids=request.source_ids
+                )
+                
+                # Now stream the collected response character by character to preserve markdown
+                if full_response:
+                    import asyncio
+                    # Stream character by character to preserve newlines and markdown
+                    for char in full_response:
+                        # Escape special characters for SSE
+                        if char == '\n':
+                            # Send newline as literal \n for markdown to process
+                            yield f"data: \\n\n\n"
+                        else:
+                            yield f"data: {char}\n\n"
+                        await asyncio.sleep(0.008)  # 8ms delay for smooth streaming
+                
+                # Send completion event
+                yield f"event: done\ndata: \n\n"
+                
+                # Save messages after streaming completes
+                try:
+                    # Save user message
+                    user_msg = {
+                        "session_id": session_id,
+                        "role": "user",
+                        "content": request.message,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "created_at": datetime.utcnow()
+                    }
+                    messages_collection.insert_one(user_msg)
+                    
+                    # Save assistant response
+                    assistant_msg = {
+                        "session_id": session_id,
+                        "role": "assistant",
+                        "content": full_response,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "created_at": datetime.utcnow()
+                    }
+                    messages_collection.insert_one(assistant_msg)
+                    
+                    # Update session's last message
+                    sessions_collection.update_one(
+                        {"_id": session_obj_id},
+                        {
+                            "$set": {
+                                "last_message": request.message[:50],
+                                "updated_at": datetime.utcnow()
+                            }
+                        }
+                    )
+                    
+                    logger.info(f"Saved messages for session {session_id}")
+                except Exception as save_error:
+                    logger.error(f"Failed to save messages: {save_error}")
+                    
+            except Exception as e:
+                logger.exception(f"Error in agent execution: {e}")
+                yield f"data: ❌ Error: {str(e)}\n\n"
+                yield f"event: done\ndata: \n\n"
         
         return StreamingResponse(
             event_generator(),

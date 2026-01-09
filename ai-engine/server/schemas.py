@@ -15,6 +15,8 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="User message", min_length=1)
     session_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
     stream: bool = Field(False, description="Enable streaming response")
+    use_rag: bool = Field(False, description="Whether to use RAG retrieval from sources")
+    source_ids: Optional[List[str]] = Field(None, description="Filter RAG by specific source IDs (when multiple sources in notebook)")
 
 
 class ChatResponse(BaseModel):

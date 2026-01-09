@@ -6,12 +6,158 @@ const asyncHandler = require('../utils/asyncHandler');
 const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
+const pdfParse = require('pdf-parse');
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
 // Ensure uploads directory exists
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/sources');
 fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
+
+/**
+ * Helper function to extract text content from source
+ */
+async function extractSourceContent(source) {
+  if (source.type === 'text' || source.type === 'notes') {
+    return source.content || '';
+  } else if (source.type === 'pdf' || source.type === 'document') {
+    if (source.filePath) {
+      try {
+        console.log(`Extracting text from PDF: ${source.filePath}`);
+        
+        // Read PDF file
+        const dataBuffer = await fs.readFile(source.filePath);
+        
+        // Parse PDF and extract text (with options to suppress warnings)
+        const pdfData = await pdfParse(dataBuffer, {
+          max: 0, // Extract all pages
+          verbosity: 0 // Suppress warnings
+        });
+        const text = pdfData.text;
+        
+        console.log(`✓ Extracted ${text.length} characters from PDF: ${source.name}`);
+        
+        if (!text || text.length < 10) {
+          console.warn(`⚠ Very little text extracted from PDF: ${source.name}`);
+          return `[PDF Document: ${source.name} - No text content extracted. This might be an image-based PDF that requires OCR.]`;
+        }
+        
+        return text;
+      } catch (err) {
+        console.error('Failed to extract text from PDF:', err.message);
+        // Return a descriptive placeholder instead of failing completely
+        return `[PDF Document: ${source.name} - Unable to extract text. Error: ${err.message}. Please try converting the PDF to text or using a different format.]`;
+      }
+    }
+    return `[Document: ${source.name} - No file path]`;
+  } else if (source.type === 'website') {
+    return `[Website: ${source.url}]`;
+  }
+  return '';
+}
+
+/**
+ * Ingest source content into AI engine's RAG system
+ */
+async function ingestSourceToRAG(notebook, source, authToken) {
+  try {
+    console.log(`\n${'='.repeat(70)}`);
+    console.log(`RAG INGESTION: ${source.name}`);
+    console.log(`${'='.repeat(70)}`);
+    
+    // Extract content from source
+    const content = await extractSourceContent(source);
+    
+    console.log(`Extracted content length: ${content.length} characters`);
+    
+    // Skip if extraction failed or content is an error message
+    if (!content || content.length < 10) {
+      console.log('⚠ Skipping RAG ingest - no content or too short');
+      return;
+    }
+    
+    // Skip if content is an error placeholder
+    if (content.startsWith('[PDF Document:') && content.includes('Unable to extract')) {
+      console.log('⚠ Skipping RAG ingest - PDF extraction failed');
+      return;
+    }
+
+    // Send to AI engine's ingest endpoint
+    console.log(`Sending to AI engine: ${AI_ENGINE_URL}/ai/upload`);
+    
+    const response = await axios.post(
+      `${AI_ENGINE_URL}/ai/upload`,
+      {
+        content: content,
+        filename: source.name,
+        metadata: {
+          notebook_id: notebook._id.toString(),
+          source_id: source._id.toString(),
+          session_id: notebook.aiSessionId,
+          source_type: source.type,
+          url: source.url
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      }
+    );
+
+    console.log(`✓ RAG ingestion request sent!`);
+    console.log(`  Task ID: ${response.data.task_id}`);
+    console.log(`  Initial Status: ${response.data.status}`);
+    
+    // Poll task status until completed
+    const taskId = response.data.task_id;
+    let status = response.data.status;
+    let attempts = 0;
+    const maxAttempts = 30; // 30 seconds max
+    
+    while (status === 'processing' && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      attempts++;
+      
+      try {
+        const statusResponse = await axios.get(
+          `${AI_ENGINE_URL}/ai/upload/status/${taskId}`,
+          {
+            headers: { 'Authorization': `Bearer ${authToken}` },
+            timeout: 5000
+          }
+        );
+        status = statusResponse.data.status;
+        console.log(`  Polling (${attempts}s): ${status}`);
+      } catch (pollErr) {
+        console.warn(`  Warning: Failed to poll task status:`, pollErr.message);
+        break; // Continue anyway if polling fails
+      }
+    }
+    
+    if (status === 'completed') {
+      console.log(`✅ RAG ingestion completed successfully!`);
+    } else if (status === 'failed') {
+      console.error(`❌ RAG ingestion failed!`);
+    } else {
+      console.warn(`⚠ RAG ingestion timeout (still ${status})`);
+    }
+    console.log(`${'='.repeat(70)}\n`);
+  } catch (err) {
+    console.error(`\n${'='.repeat(70)}`);
+    console.error('❌ RAG INGESTION FAILED');
+    console.error(`Error: ${err.message}`);
+    if (err.response) {
+      console.error(`Response status: ${err.response.status}`);
+      console.error(`Response data:`, err.response.data);
+    }
+    console.error(`${'='.repeat(70)}\n`);
+    // Don't throw - this is async and shouldn't block source addition
+  }
+}
+
 
 /**
  * @desc    Get all notebooks for current user
@@ -153,12 +299,21 @@ exports.deleteNotebook = asyncHandler(async (req, res) => {
   if (notebook.aiSessionId) {
     const token = req.headers.authorization;
     try {
+      // Delete session from AI engine (includes MongoDB cleanup)
       await axios.delete(
         `${AI_ENGINE_URL}/ai/sessions/${notebook.aiSessionId}`,
         { headers: { Authorization: token } }
       );
+      
+      // Delete all documents from FAISS for this session
+      await axios.delete(
+        `${AI_ENGINE_URL}/ai/documents/session/${notebook.aiSessionId}`,
+        { headers: { Authorization: token } }
+      );
+      
+      console.log(`✓ Deleted AI session and FAISS documents for: ${notebook.aiSessionId}`);
     } catch (error) {
-      console.error('Failed to delete AI session:', error.message);
+      console.error('Failed to delete AI session/documents:', error.message);
     }
   }
 
@@ -229,6 +384,20 @@ exports.addSource = asyncHandler(async (req, res) => {
   // Return the newly added source
   const addedSource = notebook.sources[notebook.sources.length - 1];
 
+  // Extract JWT token from request
+  const authToken = req.headers.authorization?.split(' ')[1];
+
+  // Ingest source into AI engine's RAG system (WAIT for completion)
+  if (authToken && notebook.aiSessionId) {
+    try {
+      await ingestSourceToRAG(notebook, addedSource, authToken);
+      console.log('✅ RAG ingestion completed before response');
+    } catch (err) {
+      console.error('❌ RAG ingestion failed:', err.message);
+      // Continue anyway, return the source even if ingestion fails
+    }
+  }
+
   res.status(201).json({
     success: true,
     data: addedSource
@@ -260,8 +429,23 @@ exports.removeSource = asyncHandler(async (req, res) => {
   if (source.filePath) {
     try {
       await fs.unlink(source.filePath);
+      console.log(`✓ Deleted file: ${source.filePath}`);
     } catch (error) {
       console.error(`Failed to delete file: ${source.filePath}`, error.message);
+    }
+  }
+
+  // Delete from FAISS index
+  if (notebook.aiSessionId) {
+    const token = req.headers.authorization;
+    try {
+      await axios.delete(
+        `${AI_ENGINE_URL}/ai/documents/source/${source._id}`,
+        { headers: { Authorization: token } }
+      );
+      console.log(`✓ Deleted FAISS documents for source: ${source._id}`);
+    } catch (error) {
+      console.error('Failed to delete source from FAISS:', error.message);
     }
   }
 

@@ -86,9 +86,11 @@ export default function StudyNotebookPage() {
     }
   }, [notebookId, isLoadingNotebook, createNotebook.isPending]);
 
-  // Load messages from AI session
+  // Load messages from AI session (only on initial mount)
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
   useEffect(() => {
-    if (sessionMessagesData && !isStreaming) {
+    if (sessionMessagesData && !isStreaming && !messagesLoaded) {
+      console.log('Loading messages from server:', sessionMessagesData);
       const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => ({
         id: msg.timestamp,
         role: msg.role as 'user' | 'assistant' | 'system',
@@ -96,8 +98,9 @@ export default function StudyNotebookPage() {
         timestamp: msg.timestamp,
       }));
       setLocalMessages(formattedMessages);
+      setMessagesLoaded(true);
     }
-  }, [sessionMessagesData, isStreaming]);
+  }, [sessionMessagesData, isStreaming, messagesLoaded]);
 
   // Source Handlers
   const handleToggleSource = (id: string) => {
@@ -175,7 +178,12 @@ export default function StudyNotebookPage() {
       timestamp: new Date().toISOString(),
     };
     
-    setLocalMessages((prev) => [...prev, userMessage]);
+    console.log('Adding user message:', userMessage);
+    setLocalMessages((prev) => {
+      const updated = [...prev, userMessage];
+      console.log('LocalMessages after user:', updated);
+      return updated;
+    });
     setIsChatLoading(true);
     setIsStreaming(true);
 
@@ -188,7 +196,11 @@ export default function StudyNotebookPage() {
       timestamp: new Date().toISOString(),
       isLoading: true,
     };
-    setLocalMessages((prev) => [...prev, loadingMessage]);
+    setLocalMessages((prev) => {
+      const updated = [...prev, loadingMessage];
+      console.log('LocalMessages after loading:', updated);
+      return updated;
+    });
 
     try {
       // Get auth token
@@ -201,27 +213,30 @@ export default function StudyNotebookPage() {
 
       // Get selected sources context
       const selectedSources = notebook.sources.filter(s => s.selected);
-      const context = selectedSources.map(s => 
-        `Source: ${s.name}\nType: ${s.type}\nContent: ${s.content || '[File content]'}`
-      ).join('\n\n');
+      const useRag = selectedSources.length > 0;
+      const selectedSourceIds = selectedSources.map(s => s._id);
+      
+      console.log('💬 Chat request:', {
+        selectedSources: selectedSources.length,
+        sourceIds: selectedSourceIds,
+        useRag
+      });
 
-      const requestBody = {
-        message: message,
-        context: context || undefined,
-        use_rag: selectedSources.length > 0
-      };
-
-      // Stream response
+      // Stream response using POST
       const response = await fetch(
-        `${AI_ENGINE_URL}/ai/sessions/${notebook.aiSessionId}/chat/stream?${new URLSearchParams({
-          message: message,
-          use_rag: selectedSources.length > 0 ? 'true' : 'false'
-        })}`,
+        `${AI_ENGINE_URL}/ai/sessions/${notebook.aiSessionId}/chat/stream`,
         {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            message: message,
+            use_rag: useRag,
+            session_id: notebook.aiSessionId,
+            source_ids: selectedSourceIds
+          })
         }
       );
 
@@ -243,25 +258,29 @@ export default function StudyNotebookPage() {
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') continue;
+              const data = line.slice(6); // Don't trim - preserve spaces
               
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.content) {
-                  fullResponse += parsed.content;
-                  // Update message in real-time
-                  setLocalMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === loadingId
-                        ? { ...msg, content: fullResponse, isLoading: false }
-                        : msg
-                    )
-                  );
-                }
-              } catch (e) {
-                console.error('Failed to parse SSE data:', e);
-              }
+              // Skip empty data or done events
+              if (!data || data.trim() === '[DONE]') continue;
+              
+              // Convert escaped newlines back to actual newlines for markdown
+              const processedData = data.replace(/\\n/g, '\n');
+              
+              console.log('Received chunk:', JSON.stringify(data));
+              fullResponse += processedData;
+              
+              // Update message in real-time
+              setLocalMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === loadingId
+                    ? { ...msg, content: fullResponse, isLoading: false }
+                    : msg
+                )
+              );
+            } else if (line.startsWith('event: done')) {
+              // Stream completed
+              console.log('Stream done. Full response:', fullResponse);
+              break;
             }
           }
         }

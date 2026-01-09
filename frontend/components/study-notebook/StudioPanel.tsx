@@ -114,7 +114,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
         </div>
         <p className="text-xs text-slate-500">
           {hasSelectedSources
-            ? 'Create learning artifacts from your sources'
+            ? 'Generate artifacts or ask AI in chat for summaries, key points, etc.'
             : 'Add sources to generate content'}
         </p>
       </div>
