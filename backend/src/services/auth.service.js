@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 const AppError = require('../utils/AppError');
+const crypto = require('crypto');
+const emailService = require('../utils/emailService');
 
 /**
  * Register a new user
@@ -135,8 +137,111 @@ const refreshTokens = async (refreshToken) => {
   }
 };
 
+/**
+ * Request password reset
+ * @param {String} email - User email
+ * @returns {Object} - Success message
+ */
+const forgotPassword = async (email) => {
+  if (!email) {
+    throw new AppError('Please provide email address', 400);
+  }
+
+  // Find user by email
+  const user = await User.findOne({ email });
+  if (!user) {
+    // Don't reveal if user exists for security
+    return {
+      message: 'If an account with that email exists, we sent a password reset link',
+    };
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  // Hash token before storing in database
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Save hashed token and expiry (1 hour)
+  user.resetPasswordToken = hashedToken;
+  user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+  await user.save();
+
+  // Send email with unhashed token
+  try {
+    await emailService.sendPasswordResetEmail(user.email, user.name, resetToken);
+  } catch (error) {
+    // If email fails, clear token from database
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+    
+    console.error('Email sending failed:', error);
+    throw new AppError('Failed to send password reset email. Please try again.', 500);
+  }
+
+  return {
+    message: 'Password reset link sent to your email',
+  };
+};
+
+/**
+ * Reset password with token
+ * @param {String} token - Reset token from email
+ * @param {String} newPassword - New password
+ * @returns {Object} - Success message
+ */
+const resetPassword = async (token, newPassword) => {
+  if (!token || !newPassword) {
+    throw new AppError('Token and new password are required', 400);
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError('Password must be at least 6 characters', 400);
+  }
+
+  // Hash the token from URL to compare with database
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
+
+  // Find user with valid token and not expired
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    throw new AppError('Invalid or expired reset token', 400);
+  }
+
+  // Update password (will be hashed by pre-save middleware)
+  user.password = newPassword;
+  user.resetPasswordToken = null;
+  user.resetPasswordExpires = null;
+  await user.save();
+
+  // Send confirmation email
+  try {
+    await emailService.sendPasswordResetConfirmation(user.email, user.name);
+  } catch (error) {
+    console.error('Confirmation email failed:', error);
+    // Don't throw error, password is already reset
+  }
+
+  return {
+    message: 'Password reset successful',
+  };
+};
+
 module.exports = {
   registerUser,
   loginUser,
   refreshTokens,
+  forgotPassword,
+  resetPassword,
 };

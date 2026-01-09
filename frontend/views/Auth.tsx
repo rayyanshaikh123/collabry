@@ -149,7 +149,11 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
-                {!isRegister && <button type="button" className="text-[10px] font-bold text-indigo-600 hover:underline uppercase">Forgot Password?</button>}
+                {!isRegister && (
+                  <Link href="/forgot-password" className="text-[10px] font-bold text-indigo-600 hover:underline uppercase">
+                    Forgot Password?
+                  </Link>
+                )}
               </div>
               <Input 
                 type="password" 
