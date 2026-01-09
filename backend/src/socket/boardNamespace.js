@@ -45,7 +45,10 @@ module.exports = (io) => {
         const board = await Board.findById(boardId);
         
         if (!board) {
-          return callback({ error: 'Board not found' });
+          if (typeof callback === 'function') {
+            return callback({ error: 'Board not found' });
+          }
+          return;
         }
 
         // Check if user is a member or owner
@@ -53,7 +56,10 @@ module.exports = (io) => {
                         board.members.some(m => m.userId.toString() === socket.userId);
 
         if (!isMember && !board.isPublic) {
-          return callback({ error: 'Access denied' });
+          if (typeof callback === 'function') {
+            return callback({ error: 'Access denied' });
+          }
+          return;
         }
 
         // Join the room
@@ -110,24 +116,28 @@ module.exports = (io) => {
 
         console.log(`[Board ${boardId}] Sending ${cleanElements.length} cleaned elements (original: ${board.elements.length})`);
         
-        callback({ 
-          success: true,
-          board: {
-            ...board.toObject(),
-            elements: cleanElements
-          },
-          participants: participants.map(p => ({
-            userId: p.userId,
-            email: p.email,
-            color: p.color,
-            cursor: p.cursor
-          }))
-        });
+        if (typeof callback === 'function') {
+          callback({ 
+            success: true,
+            board: {
+              ...board.toObject(),
+              elements: cleanElements
+            },
+            participants: participants.map(p => ({
+              userId: p.userId,
+              email: p.email,
+              color: p.color,
+              cursor: p.cursor
+            }))
+          });
+        }
 
         console.log(`✅ ${socket.userEmail} joined board: ${boardId}`);
       } catch (error) {
         console.error('Error joining board:', error);
-        callback({ error: error.message });
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 
@@ -148,7 +158,10 @@ module.exports = (io) => {
         const board = await Board.findById(boardId);
         if (!board) {
           console.error(`[Board ${boardId}] Board not found`);
-          return callback({ error: 'Board not found' });
+          if (typeof callback === 'function') {
+            return callback({ error: 'Board not found' });
+          }
+          return;
         }
 
         // Add element with metadata
@@ -191,10 +204,14 @@ module.exports = (io) => {
 
         console.log(`[Board ${boardId}] Broadcasted element:created to room`);
 
-        callback({ success: true, element: cleanElement });
+        if (typeof callback === 'function') {
+          callback({ success: true, element: cleanElement });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error creating element:`, error);
-        callback({ error: error.message });
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 
@@ -272,13 +289,19 @@ module.exports = (io) => {
 
             if (!retryBoard) {
               console.error(`[Board ${boardId}] Board not found even on retry`);
-              return callback({ error: 'Board not found' });
+              if (typeof callback === 'function') {
+                return callback({ error: 'Board not found' });
+              }
+              return;
             }
 
             element = retryBoard.elements.find(el => el.id === elementId);
             console.log(`[Board ${boardId}] Element already existed, updated on retry: ${elementId}`);
             // Don't broadcast since it was likely already created
-            return callback({ success: true });
+            if (typeof callback === 'function') {
+              return callback({ success: true });
+            }
+            return;
           }
 
           element = updatedBoard.elements.find(el => el.id === elementId);
@@ -327,10 +350,14 @@ module.exports = (io) => {
           console.log(`[Board ${boardId}] Broadcasted element:updated to room`);
         }
 
-        callback({ success: true });
+        if (typeof callback === 'function') {
+          callback({ success: true });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error updating element:`, error);
-        callback({ error: error.message });
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 
@@ -353,7 +380,10 @@ module.exports = (io) => {
 
         if (!board) {
           console.error(`[Board ${boardId}] Board not found`);
-          return callback({ error: 'Board not found' });
+          if (typeof callback === 'function') {
+            return callback({ error: 'Board not found' });
+          }
+          return;
         }
 
         console.log(`[Board ${boardId}] Element deleted from DB atomically. Remaining elements: ${board.elements.length}`);
@@ -367,10 +397,14 @@ module.exports = (io) => {
 
         console.log(`[Board ${boardId}] Broadcasted element:deleted to room`);
 
-        callback({ success: true });
+        if (typeof callback === 'function') {
+          callback({ success: true });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error deleting element:`, error);
-        callback({ error: error.message });
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 
@@ -430,10 +464,14 @@ module.exports = (io) => {
           timestamp: new Date()
         });
 
-        callback({ success: true });
+        if (typeof callback === 'function') {
+          callback({ success: true });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error batch updating elements:`, error);
-        callback({ error: error.message });
+        if (typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 

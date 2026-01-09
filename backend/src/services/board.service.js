@@ -370,6 +370,176 @@ class BoardService {
       }
     };
   }
+
+  /**
+   * Get all boards (Admin only)
+   */
+  async getAllBoards(options = {}) {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      isPublic = null,
+      isArchived = null,
+      sortBy = 'lastActivity',
+      sortOrder = 'desc'
+    } = options;
+
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (isPublic !== null) {
+      query.isPublic = isPublic;
+    }
+
+    if (isArchived !== null) {
+      query.isArchived = isArchived;
+    }
+
+    const skip = (page - 1) * limit;
+    const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+
+    const [boards, total] = await Promise.all([
+      Board.find(query)
+        .populate('owner', 'name email avatar')
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Board.countDocuments(query)
+    ]);
+
+    return {
+      boards,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit)
+      }
+    };
+  }
+
+  /**
+   * Get board analytics (Admin)
+   */
+  async getBoardAnalytics(boardId) {
+    const board = await Board.findById(boardId)
+      .populate('owner', 'name email')
+      .populate('members.userId', 'name email');
+
+    if (!board) {
+      throw new AppError('Board not found', 404);
+    }
+
+    return {
+      board: {
+        id: board._id,
+        title: board.title,
+        owner: board.owner,
+        isPublic: board.isPublic,
+        isArchived: board.isArchived,
+        createdAt: board.createdAt,
+        lastActivity: board.lastActivity
+      },
+      stats: {
+        totalElements: board.elements.length,
+        totalMembers: board.members.length + 1, // +1 for owner
+        elementsByType: this.getElementsByType(board.elements),
+        collaborators: board.members.map(m => ({
+          user: m.userId,
+          role: m.role,
+          joinedAt: m.joinedAt
+        }))
+      }
+    };
+  }
+
+  /**
+   * Suspend a board (Admin)
+   */
+  async suspendBoard(boardId, reason) {
+    const board = await Board.findById(boardId);
+
+    if (!board) {
+      throw new AppError('Board not found', 404);
+    }
+
+    board.isArchived = true;
+    board.suspendedAt = new Date();
+    board.suspensionReason = reason;
+    await board.save();
+
+    return board;
+  }
+
+  /**
+   * Force delete a board (Admin)
+   */
+  async forceDeleteBoard(boardId) {
+    const board = await Board.findByIdAndDelete(boardId);
+
+    if (!board) {
+      throw new AppError('Board not found', 404);
+    }
+
+    return { message: 'Board deleted permanently' };
+  }
+
+  /**
+   * Get board statistics (Admin)
+   */
+  async getBoardStats() {
+    const [
+      total,
+      publicBoards,
+      privateBoards,
+      archived,
+      recentlyCreated,
+      mostActive
+    ] = await Promise.all([
+      Board.countDocuments(),
+      Board.countDocuments({ isPublic: true }),
+      Board.countDocuments({ isPublic: false }),
+      Board.countDocuments({ isArchived: true }),
+      Board.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate('owner', 'name email')
+        .lean(),
+      Board.find()
+        .sort({ lastActivity: -1 })
+        .limit(5)
+        .populate('owner', 'name email')
+        .lean()
+    ]);
+
+    return {
+      total,
+      public: publicBoards,
+      private: privateBoards,
+      archived,
+      recentlyCreated,
+      mostActive
+    };
+  }
+
+  /**
+   * Helper to group elements by type
+   */
+  getElementsByType(elements) {
+    return elements.reduce((acc, el) => {
+      const type = el.type || 'unknown';
+      acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {});
+  }
 }
 
 module.exports = new BoardService();

@@ -43,7 +43,8 @@ import {
   Eye,
   Copy,
   Link,
-  Lock
+  Lock,
+  Edit
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -96,6 +97,7 @@ export const ICONS = {
   Link: Link,
   Lock: Lock,
   PenTool: PenTool,
+  Edit: Edit,
 };
 
 export const MOCK_BOARDS: StudyBoard[] = [
