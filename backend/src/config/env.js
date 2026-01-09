@@ -20,7 +20,7 @@ const config = {
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET || 'access-secret-key',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'refresh-secret-key',
-    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h', // Changed from 15m to 24h for development
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   email: {
