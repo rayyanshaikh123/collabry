@@ -12,6 +12,8 @@ import {
   useGenerateMindMap,
   useCreateSubject,
 } from '../src/hooks/useVisualAids';
+import AlertModal from '../components/AlertModal';
+import { useAlert } from '../src/hooks/useAlert';
 
 const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -44,6 +46,7 @@ const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, a
 };
 
 const VisualAidsView: React.FC = () => {
+  const { alertState, showAlert, hideAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<'quizzes' | 'mindmap' | 'concepts'>('quizzes');
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>();
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
@@ -86,11 +89,12 @@ const VisualAidsView: React.FC = () => {
         formData.append('difficulty', quizDifficulty);
         formData.append('save', 'true');
         if (quizTitle) formData.append('title', quizTitle);
-        if (quizSubject || selectedSubject) formData.append('subjectId', quizSubject || selectedSubject);
+        const subjectIdValue = quizSubject || selectedSubject;
+        if (subjectIdValue) formData.append('subjectId', subjectIdValue);
         if (useRag) formData.append('useRag', 'true');
         if (quizTopic) formData.append('topic', quizTopic);
         
-        await generateQuiz.mutateAsync(formData);
+        await generateQuiz.mutateAsync(formData as any);
       } else {
         // Text-based generation
         await generateQuiz.mutateAsync({
@@ -182,24 +186,23 @@ const VisualAidsView: React.FC = () => {
     // Calculate score
     let correct = 0;
     currentQuiz.questions.forEach((q, idx) => {
-      if (selectedAnswers[idx] === q.correctAnswer) {
+      const userAnswer = q.options.indexOf(selectedAnswers[idx]);
+      if (userAnswer === q.correctAnswer) {
         correct++;
       }
     });
     
     const score = Math.round((correct / currentQuiz.questions.length) * 100);
-    const timeTaken = (currentQuiz.timeLimit * 60) - timeRemaining;
+    const timeTaken = ((currentQuiz.timeLimit || 10) * 60) - timeRemaining;
     
     // Show results
-    const resultMessage = `
-🎉 Quiz Complete!
-
-Score: ${score}%
-Correct: ${correct}/${currentQuiz.questions.length}
-Time Taken: ${formatTime(timeTaken)}
-    `.trim();
+    const resultMessage = `Score: ${score}%\nCorrect: ${correct}/${currentQuiz.questions.length}\nTime Taken: ${formatTime(timeTaken)}`;
     
-    alert(resultMessage);
+    showAlert({
+      type: score >= 70 ? 'success' : 'warning',
+      title: '🎉 Quiz Complete!',
+      message: resultMessage
+    });
 
     // TODO: Save attempt to backend
     // await api.post(`/api/visual-aids/quizzes/${activeQuizAttempt}/attempt`, {
@@ -441,7 +444,7 @@ Time Taken: ${formatTime(timeTaken)}
                       </div>
                       <div className="flex items-center gap-1">
                         <ICONS.Target size={14} />
-                        <span>{quiz.difficulty || 'Medium'}</span>
+                        <span>{quiz.questions?.[0]?.difficulty || 'Medium'}</span>
                       </div>
                     </div>
 
@@ -461,16 +464,20 @@ Time Taken: ${formatTime(timeTaken)}
               ))}
               
               {/* Generate More Button */}
-              <Card
-                hoverable
-                className="p-6 border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all cursor-pointer flex items-center justify-center"
+              <div
+                className="cursor-pointer"
                 onClick={() => setShowGenerateModal(true)}
               >
-                <div className="text-center">
-                  <ICONS.Plus size={32} className="mx-auto text-indigo-500 mb-2" />
-                  <p className="font-bold text-indigo-600">Generate New Quiz</p>
-                </div>
-              </Card>
+                <Card
+                  hoverable
+                  className="p-6 border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all flex items-center justify-center"
+                >
+                  <div className="text-center">
+                    <ICONS.Plus size={32} className="mx-auto text-indigo-500 mb-2" />
+                    <p className="font-bold text-indigo-600">Generate New Quiz</p>
+                  </div>
+                </Card>
+              </div>
             </div>
           ) : displayQuestions.length > 0 ? (
             <div className="space-y-4">
@@ -485,7 +492,7 @@ Time Taken: ${formatTime(timeTaken)}
                           <div 
                             key={optIdx}
                             className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                              option === question.correctAnswer 
+                              optIdx === question.correctAnswer 
                                 ? 'border-emerald-500 bg-emerald-50' 
                                 : 'border-slate-200 hover:border-indigo-300'
                             }`}
@@ -802,6 +809,15 @@ Time Taken: ${formatTime(timeTaken)}
           </div>
         </div>
       )}
+      
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={hideAlert}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        confirmText={alertState.confirmText}
+      />
     </div>
   );
 };

@@ -8,6 +8,7 @@ const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin.routes');
 const visualAidsRoutes = require('./routes/visualAids.routes');
 const boardRoutes = require('./routes/board.routes');
+const aiRoutes = require('./routes/ai.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
@@ -26,6 +27,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/visual-aids', visualAidsRoutes);
 app.use('/api/boards', boardRoutes);
+app.use('/api/ai', aiRoutes);
 
 
 // Root route

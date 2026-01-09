@@ -14,8 +14,11 @@ from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap, sessions
+from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage
 from server.deps import get_current_user
+from server.middleware import UsageTrackingMiddleware
+from server.limit_middleware import UsageLimitMiddleware
+from core.usage_tracker import usage_tracker
 from config import CONFIG
 import logging
 from datetime import datetime
@@ -85,6 +88,12 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# Add usage tracking middleware
+app.add_middleware(UsageTrackingMiddleware)
+
+# Add usage limit checking middleware
+app.add_middleware(UsageLimitMiddleware)
+
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -116,7 +125,7 @@ async def health_check():
     Health check endpoint for monitoring.
     
     Returns:
-        Service status and component health
+        Service status and component health with real-time usage stats
     """
     components = {}
     
@@ -148,10 +157,18 @@ async def health_check():
         "healthy" in status for status in components.values()
     ) else "degraded"
     
+    # Get real-time usage stats
+    usage_stats = None
+    try:
+        usage_stats = usage_tracker.get_realtime_stats()
+    except Exception as e:
+        logger.warning(f"Failed to get usage stats: {e}")
+    
     return HealthResponse(
         status=overall_status,
         version="1.0.0",
         components=components,
+        usage_stats=usage_stats,
         timestamp=datetime.utcnow()
     )
 
@@ -171,6 +188,7 @@ app.include_router(ingest.router)
 app.include_router(summarize.router)
 app.include_router(qa.router)
 app.include_router(mindmap.router)
+app.include_router(usage.router)
 
 
 # Root endpoint
@@ -201,7 +219,11 @@ async def root():
             "qa_file_stream": "POST /ai/qa/file/stream - Streaming QA with file (SSE)",
             "mindmap": "POST /ai/mindmap - Generate mind map",
             "sessions": "GET /ai/sessions - List user sessions",
-            "create_session": "POST /ai/sessions - Create new session"
+            "create_session": "POST /ai/sessions - Create new session",
+            "usage_stats": "GET /ai/usage/stats?days=7 - Public usage statistics (no auth)",
+            "my_usage": "GET /ai/usage/me - Get my usage statistics",
+            "global_usage": "GET /ai/usage/global?days=7 - Get global usage (admin, requires auth)",
+            "realtime_stats": "GET /ai/usage/realtime - Get realtime stats (admin, requires auth)"
         },
         "authentication": "JWT Bearer token required (except /health and /)",
         "timestamp": datetime.utcnow()

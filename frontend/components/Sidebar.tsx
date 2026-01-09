@@ -74,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
     { id: AppRoute.FOCUS, label: 'Deep Focus', icon: ICONS.Focus },
     { id: AppRoute.FLASHCARDS, label: 'Memory', icon: ICONS.Flashcards },
+    
   ];
 
   const adminItems = [
@@ -126,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
             </button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto no-scrollbar pb-10">
+          <nav className="flex-1 overflow-y-auto no-scrollbar pb-4">
             <p className={`text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
               {userRole === 'admin' ? 'COMMAND CENTER' : 'MAIN'}
             </p>
@@ -156,11 +157,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />
+                <NavItem 
+                  id={AppRoute.PROFILE_USAGE}
+                  label="AI Usage"
+                  icon={ICONS.Focus}
+                  currentRoute={currentRoute}
+                  isCollapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                  setMobileOpen={setMobileOpen}
+                />
               </>
             )}
           </nav>
 
-          <div className="mt-auto pt-4 border-t border-slate-100">
+          <div className="pt-4 border-t border-slate-100 flex-shrink-0">
             <button 
               onClick={onLogout}
               className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] text-rose-400 font-black hover:bg-rose-50 transition-all bouncy-hover ${isCollapsed ? 'justify-center' : ''}`}

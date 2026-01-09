@@ -8,6 +8,7 @@ export enum AppRoute {
   FOCUS = 'focus',
   FLASHCARDS = 'flashcards',
   PROFILE = 'profile',
+  PROFILE_USAGE = 'usage',
   ADMIN = 'admin',
   ADMIN_USERS = 'admin-users',
   ADMIN_MODERATION = 'admin-moderation',
@@ -45,6 +46,7 @@ export interface StudyBoard {
   lastActive: string;
   participants: number;
   color: string;
+  progress: number;
 }
 
 export interface Activity {
