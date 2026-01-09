@@ -18,6 +18,7 @@ import {
 } from '../../../../src/hooks/useNotebook';
 import { useSessionMessages, useSaveMessage } from '../../../../src/hooks/useSessions';
 import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '../../../../src/hooks/useVisualAids';
+import { extractMindMapFromMarkdown } from '../../../../lib/mindmapParser';
 import axios from 'axios';
 
 const AI_ENGINE_URL = 'http://localhost:8000';
@@ -280,17 +281,196 @@ export default function StudyNotebookPage() {
               console.log('Received chunk:', JSON.stringify(data));
               fullResponse += processedData;
               
+              // Try to extract answer from JSON if the full response looks like JSON
+              let displayContent = fullResponse;
+              
+              // Function to extract answer from JSON - more robust
+              const extractAnswerFromJson = (text: string): string | null => {
+                try {
+                  const trimmed = text.trim();
+                  
+                  // Strategy 1: Find JSON object with answer field using regex
+                  if (trimmed.includes('"answer"')) {
+                    // Try to find the JSON object - look for opening { before "answer" and closing } after
+                    const answerIndex = trimmed.indexOf('"answer"');
+                    if (answerIndex > 0) {
+                      // Find the opening brace before "answer"
+                      let startIndex = trimmed.lastIndexOf('{', answerIndex);
+                      if (startIndex >= 0) {
+                        // Find the matching closing brace
+                        let braceCount = 0;
+                        let endIndex = -1;
+                        for (let i = startIndex; i < trimmed.length; i++) {
+                          if (trimmed[i] === '{') braceCount++;
+                          if (trimmed[i] === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                              endIndex = i + 1;
+                              break;
+                            }
+                          }
+                        }
+                        
+                        if (endIndex > startIndex) {
+                          const jsonStr = trimmed.substring(startIndex, endIndex);
+                          try {
+                            const parsed = JSON.parse(jsonStr);
+                            if (parsed.tool === null && parsed.answer) {
+                              let result = parsed.answer;
+                              // Remove any duplicate follow-up questions from answer text
+                              result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+                              
+                              // Format follow-up questions if present
+                              if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+                                result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+                                parsed.follow_up_questions.forEach((q: string, i: number) => {
+                                  result += `\n${i + 1}. ${q}`;
+                                });
+                              }
+                              return result;
+                            }
+                          } catch (e) {
+                            // JSON parse failed, try next strategy
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Strategy 2: Try parsing the whole trimmed text if it's a complete JSON object
+                  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                    try {
+                      const parsed = JSON.parse(trimmed);
+                      if (parsed.tool === null && parsed.answer) {
+                        let result = parsed.answer;
+                        // Remove any duplicate follow-up questions from answer text
+                        result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+                        
+                        if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+                          result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+                          parsed.follow_up_questions.forEach((q: string, i: number) => {
+                            result += `\n${i + 1}. ${q}`;
+                          });
+                        }
+                        return result;
+                      }
+                    } catch (e) {
+                      // Parse failed
+                    }
+                  }
+                } catch (e) {
+                  // Extraction failed
+                }
+                return null;
+              };
+              
+              // Try to extract answer from JSON
+              const extracted = extractAnswerFromJson(fullResponse);
+              if (extracted) {
+                displayContent = extracted;
+              }
+              
               // Update message in real-time
               setLocalMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === loadingId
-                    ? { ...msg, content: fullResponse, isLoading: false }
+                    ? { ...msg, content: displayContent, isLoading: false }
                     : msg
                 )
               );
             } else if (line.startsWith('event: done')) {
-              // Stream completed
+              // Stream completed - final JSON extraction
               console.log('Stream done. Full response:', fullResponse);
+              
+              // Final attempt to extract answer from JSON - robust extraction
+              const extractAnswerFromJson = (text: string): string | null => {
+                try {
+                  const trimmed = text.trim();
+                  
+                  // Strategy 1: Find JSON object with answer field using brace matching
+                  if (trimmed.includes('"answer"')) {
+                    const answerIndex = trimmed.indexOf('"answer"');
+                    if (answerIndex > 0) {
+                      let startIndex = trimmed.lastIndexOf('{', answerIndex);
+                      if (startIndex >= 0) {
+                        let braceCount = 0;
+                        let endIndex = -1;
+                        for (let i = startIndex; i < trimmed.length; i++) {
+                          if (trimmed[i] === '{') braceCount++;
+                          if (trimmed[i] === '}') {
+                            braceCount--;
+                            if (braceCount === 0) {
+                              endIndex = i + 1;
+                              break;
+                            }
+                          }
+                        }
+                        
+                        if (endIndex > startIndex) {
+                          const jsonStr = trimmed.substring(startIndex, endIndex);
+                          try {
+                            const parsed = JSON.parse(jsonStr);
+                            if (parsed.tool === null && parsed.answer) {
+                              let result = parsed.answer;
+                              // Remove any duplicate follow-up questions from answer text
+                              result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+                              
+                              if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+                                result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+                                parsed.follow_up_questions.forEach((q: string, i: number) => {
+                                  result += `\n${i + 1}. ${q}`;
+                                });
+                              }
+                              return result;
+                            }
+                          } catch (e) {
+                            // JSON parse failed
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Strategy 2: Try parsing the whole trimmed text
+                  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                    try {
+                      const parsed = JSON.parse(trimmed);
+                      if (parsed.tool === null && parsed.answer) {
+                        let result = parsed.answer;
+                        // Remove any duplicate follow-up questions from answer text
+                        result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+                        
+                        if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+                          result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+                          parsed.follow_up_questions.forEach((q: string, i: number) => {
+                            result += `\n${i + 1}. ${q}`;
+                          });
+                        }
+                        return result;
+                      }
+                    } catch (e) {
+                      // Parse failed
+                    }
+                  }
+                } catch (e) {
+                  // Extraction failed
+                }
+                return null;
+              };
+              
+              const extracted = extractAnswerFromJson(fullResponse);
+              if (extracted) {
+                fullResponse = extracted;
+                // Update final message with extracted content
+                setLocalMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === loadingId
+                      ? { ...msg, content: extracted, isLoading: false }
+                      : msg
+                  )
+                );
+              }
+              
               break;
             }
           }
@@ -354,8 +534,56 @@ export default function StudyNotebookPage() {
           .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
           .join(', ');
 
-        // Send to AI to search for courses
-        const message = `Search the web for the best online courses, tutorials, and learning resources about: ${topics}. Find courses from platforms like Coursera, Udemy, edX, YouTube, etc. Include ratings and prices if available. return the results in a markdown list format with the web links of the courses.`;
+        // Build strict prompt for course finder - MUST use web_search tool and format correctly
+        const message = `[COURSE_FINDER_REQUEST]
+
+Find the best online courses about "${topics}" from the internet.
+
+**CRITICAL: YOU MUST USE WEB_SEARCH TOOL**
+1. Call the web_search tool with query: "best courses ${topics}" or "${topics} online course"
+2. Do NOT skip this step - you MUST use the tool to find courses
+3. After getting search results, extract course information and format it
+
+**EXTRACTION REQUIREMENTS:**
+From the web_search tool results, extract for EACH course:
+- Course title (exact name from the course page)
+- Course URL (direct link to the course page, not search result page)
+- Platform name (Coursera, Udemy, edX, Khan Academy, Codecademy, etc.)
+- Rating (if available in search results, format as X.X/5)
+- Price (if available, format as $XX or "Free")
+
+**OUTPUT FORMAT - CRITICAL:**
+You MUST output courses in this EXACT format. Each course on its own line:
+
+[Course Title](https://course-url.com) - Platform: PlatformName | Rating: X.X/5 | Price: $XX or Free
+
+**REQUIRED OUTPUT EXAMPLE:**
+Output ONLY the course list (no explanations, no intro text, no other content):
+
+[Data Structures and Algorithms](https://www.coursera.org/learn/data-structures) - Platform: Coursera | Rating: 4.7/5 | Price: Free
+[Arrays and Linked Lists Masterclass](https://www.udemy.com/course/arrays-course) - Platform: Udemy | Rating: 4.8/5 | Price: $49
+[Introduction to Computer Science](https://www.edx.org/course/cs50) - Platform: edX | Rating: 4.9/5 | Price: Free
+[Learn C Programming](https://www.codecademy.com/learn/c) - Platform: Codecademy | Rating: 4.6/5 | Price: Free
+[Complete Python Bootcamp](https://www.udemy.com/python-bootcamp) - Platform: Udemy | Rating: 4.8/5 | Price: $89
+
+**ABSOLUTE REQUIREMENTS:**
+1. Call web_search tool FIRST - this is MANDATORY
+2. Extract at least 5-10 courses from the search results
+3. Each course must be formatted as: [Title](URL) - Platform: X | Rating: X.X/5 | Price: $X or Free
+4. Use markdown link format: [Title](URL)
+5. One course per line - no blank lines between courses
+6. Include Platform, Rating (if available), and Price (if available) on the same line
+7. Use real course URLs from the search results (not search result pages)
+8. Output ONLY the course list - no explanations, no "Here are courses:", no introductory text, no closing remarks
+9. Do NOT output search result snippets - only formatted course links
+10. If rating or price is not available, omit that part but keep the format: [Title](URL) - Platform: X
+
+**OUTPUT FORMAT:**
+Return a JSON response: {"tool": null, "answer": "PUT_COURSE_LIST_HERE"}
+
+Where PUT_COURSE_LIST_HERE is the formatted course list (one course per line) with no additional text.
+
+Now call web_search tool and format the results exactly as specified.`;
         
         handleSendMessage(message);
         setIsGenerating(false);
@@ -382,67 +610,116 @@ export default function StudyNotebookPage() {
           : DEFAULT_QUIZ_PROMPT;
 
         // Build message using the original prompt text plus injected metadata
+        // CRITICAL: Use strict format that parser can reliably extract
         const message = `${original} ${topics}
 
-Format each question as follows:
-1. [Question text]?
-A) [Option 1]
-B) [Option 2]
-C) [Option 3]
-D) [Option 4]
-Answer: [A/B/C/D]
-Explanation: [Brief explanation of why this is correct]
+**CRITICAL FORMATTING REQUIREMENTS - YOU MUST FOLLOW THIS EXACT FORMAT:**
 
-Requested number of questions: ${numQuestions}
-Difficulty: ${difficulty}
+Generate exactly ${numQuestions} multiple-choice questions. Each question MUST follow this EXACT format:
 
-Make sure the questions test understanding of key concepts from the material.`;
+Question 1: [Your question text here ending with a question mark?]
+A) [First option]
+B) [Second option]
+C) [Third option]
+D) [Fourth option]
+Answer: [A or B or C or D - single letter only]
+Explanation: [Brief explanation of why this answer is correct]
+
+Question 2: [Your question text here ending with a question mark?]
+A) [First option]
+B) [Second option]
+C) [Third option]
+D) [Fourth option]
+Answer: [A or B or C or D - single letter only]
+Explanation: [Brief explanation of why this answer is correct]
+
+[Continue for all ${numQuestions} questions...]
+
+**RULES:**
+1. Start each question with "Question N:" where N is the question number (1, 2, 3, etc.)
+2. Each question must end with a question mark (?)
+3. Options must be labeled A), B), C), D) with closing parenthesis
+4. Answer line must be exactly "Answer: [A/B/C/D]" - single letter only, no extra text
+5. Explanation line must start with "Explanation:"
+6. Difficulty level: ${difficulty}
+7. DO NOT add any introductory text, greetings, or closing remarks
+8. DO NOT use conversational language - output ONLY the questions in the format above
+9. Test understanding of key concepts from the material
+
+Output ONLY the questions in the format specified above. Do not include any other text.`;
 
         handleSendMessage(message);
         setIsGenerating(false);
         return;
       } else if (type === 'mindmap') {
-        const content = selectedSources
-          .map(s => s.content || `[${s.name}]`)
-          .join('\n\n');
+        // Extract topics from selected sources
+        const topics = selectedSources
+          .map(s => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
 
-        // Request mind map generation. Backend expects { topic, maxNodes, save }
-        const result = await generateMindMap.mutateAsync({
-          topic: `${notebook.title} - Study Notes`,
-          maxNodes: 20,
-          // Do not request DB save here unless a subjectId is provided; backend
-          // only saves when `save` is true AND `subjectId` is present.
-          save: false,
-        });
+        // Calculate adaptive size - medium size with minimum 10 nodes
+        const sourceCount = selectedSources.length;
+        const minNodes = 10;
+        const maxNodes = Math.max(minNodes, 10 + sourceCount * 3); // Minimum 10, scales with sources
+        const maxDepth = sourceCount > 1 ? 3 : 2; // 2-3 levels deep
 
-        // The service may return either a generated map ({ nodes, edges }) or
-        // a saved mind map object (with _id). Accept multiple shapes.
-        const savedId = (result && (result.savedMapId || (result as any)._id || (result as any).data?._id)) || null;
+        // Build strict prompt for mindmap generation - extract REAL content from sources
+        // Add marker to identify this as mindmap generation request
+        const message = `[MINDMAP_GENERATION_REQUEST]
 
-        if (savedId) {
-          await linkArtifact.mutateAsync({
-            type: 'mindmap',
-            referenceId: savedId,
-            title: `Mind Map - ${notebook.title}`,
-          });
-          alert('Mind map generated and saved to Studio!');
-        } else {
-          // Not saved to DB — present a non-fatal message and continue.
-          alert('Mind map generated (not saved to Studio). You can save it from the Visual Aids page.');
-        }
+Create a mind map from the source documents about "${topics}".
 
-        // Add mindmap to chat history as an assistant message so it appears in the chat
-        try {
-          const assistantMsg = {
-            id: Date.now().toString(),
-            role: 'assistant' as const,
-            content: JSON.stringify({ mindmap: result }),
-            timestamp: new Date().toISOString(),
-          };
-          setLocalMessages((prev) => [...prev, assistantMsg]);
-        } catch (e) {
-          console.warn('Failed to append mindmap to chat history:', e);
-        }
+**STEP 1: READ THE RETRIEVED CONTEXT**
+In your prompt above, find the section "📚 RETRIEVED CONTEXT FROM USER'S DOCUMENTS". This contains the actual text from the source documents. Read this section carefully.
+
+**STEP 2: EXTRACT INFORMATION**
+From the retrieved context, extract:
+- Main topic: The primary subject (use exact name/title from context, 2-5 words)
+- 4-6 main subtopics: Major sections or categories (2-4 words each, from context)
+- 2-3 concepts per subtopic: Specific terms or details (2-4 words each, from context)
+
+**STEP 3: CREATE MIND MAP JSON**
+Create a JSON object with ${minNodes}-${maxNodes} nodes across ${maxDepth} levels.
+
+**OUTPUT FORMAT:**
+Return a JSON response with this structure:
+{"tool": null, "answer": "PUT_THE_MINDMAP_JSON_HERE"}
+
+Where PUT_THE_MINDMAP_JSON_HERE is replaced with the actual mind map JSON object:
+
+{
+  "nodes": [
+    {"id": "root", "label": "Main Topic From Context", "level": 0},
+    {"id": "node1", "label": "Subtopic From Context", "level": 1},
+    {"id": "node2", "label": "Another Subtopic", "level": 1},
+    {"id": "node3", "label": "Concept From Context", "level": 2},
+    {"id": "node4", "label": "Another Concept", "level": 2}
+  ],
+  "edges": [
+    {"from": "root", "to": "node1"},
+    {"from": "root", "to": "node2"},
+    {"from": "node1", "to": "node3"},
+    {"from": "node1", "to": "node4"}
+  ]
+}
+
+**CRITICAL REQUIREMENTS:**
+- "Main Topic From Context" must be the REAL main topic from retrieved context (2-5 words)
+- "Subtopic From Context", "Another Subtopic" must be REAL subtopics from the documents (2-4 words each)
+- "Concept From Context", "Another Concept" must be ACTUAL concepts from the documents (2-4 words each)
+- Every label MUST use exact terminology from the retrieved context
+- Create ${minNodes}-${maxNodes} nodes total, ${maxDepth} levels deep
+- Labels: 2-4 words each, using real terms from documents
+- FORBIDDEN placeholders: "MainTopic", "Subtopic1", "Concept1", "MainTopicName", "Root"
+- The mindmap JSON must be placed in the "answer" field as a JSON string (escape quotes properly)
+- Output ONLY the JSON response object - no markdown code blocks, no explanations
+
+Read the retrieved context and create the mind map JSON with real content.`;
+
+        // Send message to AI with RAG context
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
       } else {
         alert(`${type} generation coming soon!`);
       }
@@ -526,6 +803,41 @@ Make sure the questions test understanding of key concepts from the material.`;
     } catch (error) {
       console.error('Failed to save quiz:', error);
       alert('Failed to save quiz to Studio');
+    }
+  };
+
+  const handleSaveMindMapToStudio = async (mindmap: any) => {
+    if (!notebook || !('title' in notebook)) return;
+
+    try {
+      // Generate mindmap using the backend service
+      // Note: The backend will create the mindmap structure from the nodes/edges
+      const result = await generateMindMap.mutateAsync({
+        topic: `${notebook.title} - Study Notes`,
+        maxNodes: mindmap.nodes.length,
+        useRag: false, // Already generated from RAG context
+        save: true, // Save to database
+        subjectId: '', // Will be handled by backend if needed
+      } as any); // Type assertion needed due to backend API differences
+
+      // The backend should return the saved mindmap with _id
+      const savedId = (result && (result.savedMapId || (result as any)._id || (result as any).data?._id)) || null;
+
+      if (savedId) {
+        // Link to notebook artifact
+        await linkArtifact.mutateAsync({
+          type: 'mindmap',
+          referenceId: savedId,
+          title: `Mind Map - ${notebook.title}`,
+        });
+        alert('Mind map saved to Studio successfully!');
+      } else {
+        // Fallback: Try to save directly via API
+        alert('Mind map generated but could not be saved. Please try again.');
+      }
+    } catch (error) {
+      console.error('Failed to save mindmap:', error);
+      alert('Failed to save mindmap to Studio');
     }
   };
 
@@ -657,6 +969,7 @@ Make sure the questions test understanding of key concepts from the material.`;
       onRegenerateResponse={handleRegenerateResponse}
       isChatLoading={isChatLoading}
       onSaveQuizToStudio={handleSaveQuizToStudio}
+      onSaveMindMapToStudio={handleSaveMindMapToStudio}
       artifacts={notebook.artifacts.map(a => {
         const edits = artifactEdits[a._id] || {};
         return ({

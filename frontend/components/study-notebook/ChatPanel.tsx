@@ -11,6 +11,7 @@ import QuizCard from './QuizCard';
 import MindMapViewer from './MindMapViewer';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 import { extractQuizFromMarkdown } from '../../lib/quizParser';
+import { extractMindMapFromMarkdown } from '../../lib/mindmapParser';
 
 export interface ChatMessage {
   id: string;
@@ -28,6 +29,7 @@ interface ChatPanelProps {
   isLoading?: boolean;
   hasSelectedSources: boolean;
   onSaveQuizToStudio?: (questions: any[]) => void;
+  onSaveMindMapToStudio?: (mindmap: any) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -38,6 +40,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   isLoading = false,
   hasSelectedSources,
   onSaveQuizToStudio,
+  onSaveMindMapToStudio,
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -212,11 +215,144 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           // not JSON — fall through to markdown parsing
                         }
 
-                        const { cleanMarkdown: markdownAfterCourses, courses } = extractCoursesFromMarkdown(message.content);
-                        const { cleanMarkdown, quiz } = extractQuizFromMarkdown(markdownAfterCourses);
+                        // Only parse courses if the message contains properly formatted course links
+                        // Must have markdown links with Platform info (not just mentions of "course")
+                        const hasFormattedCourseLinks = message.content.includes('[') && 
+                                                       message.content.includes('](') && 
+                                                       /\[.*\]\(https?:\/\/.*\)\s*-\s*Platform:/i.test(message.content);
+                        
+                        let courses: any[] = [];
+                        let cleanMarkdownAfterCourses = message.content;
+                        
+                        // Only parse if we have properly formatted course links
+                        if (hasFormattedCourseLinks) {
+                          const result = extractCoursesFromMarkdown(message.content);
+                          courses = result.courses;
+                          cleanMarkdownAfterCourses = result.cleanMarkdown;
+                          
+                          // Debug logging
+                          if (courses.length > 0) {
+                            console.log('✅ Courses parsed successfully:', {
+                              courseCount: courses.length
+                            });
+                          }
+                        }
+                        
+                        const { cleanMarkdown: markdownAfterQuiz, quiz } = extractQuizFromMarkdown(cleanMarkdownAfterCourses);
+                        
+                        // Only parse mindmap if:
+                        // 1. The message contains mindmap JSON structure (nodes/edges)
+                        // 2. AND it was explicitly requested (contains mindmap generation marker or keywords)
+                        let hasMindmapJson = message.content.includes('"nodes"') && 
+                                            message.content.includes('"edges"');
+                        
+                        // Check if this is an explicit mindmap request
+                        // Look for the marker we add in the prompt, or check if previous user message was about mindmap
+                        const currentMessageIndex = messages.findIndex(m => m.id === message.id);
+                        const isExplicitMindmapRequest = message.content.includes('[MINDMAP_GENERATION_REQUEST]') ||
+                                                        // Check if any previous user message in the conversation was about mindmap
+                                                        (currentMessageIndex > 0 && messages.slice(0, currentMessageIndex).some((m) => 
+                                                          m.role === 'user' && 
+                                                          (m.content.toLowerCase().includes('mind map') || 
+                                                           m.content.toLowerCase().includes('mindmap') ||
+                                                           m.content.includes('[MINDMAP_GENERATION_REQUEST]'))
+                                                        ));
+                        
+                        // Also check if mindmap JSON might be wrapped in answer field of JSON response
+                        let contentToParse = markdownAfterQuiz;
+                        if (!hasMindmapJson && message.content.includes('"answer"') && message.content.includes('"nodes"')) {
+                          // Try to extract JSON from answer field - handle both escaped and unescaped JSON
+                          try {
+                            // Pattern 1: {"tool": null, "answer": "{\"nodes\": ...}"}
+                            const jsonMatch1 = message.content.match(/\{"tool":\s*null,\s*"answer":\s*"([^"]*(?:\\.[^"]*)*)"[^}]*\}/);
+                            if (jsonMatch1) {
+                              const answerContent = jsonMatch1[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+                              if (answerContent.includes('"nodes"') && answerContent.includes('"edges"')) {
+                                contentToParse = answerContent;
+                                hasMindmapJson = true; // Update flag
+                              }
+                            }
+                            
+                            // Pattern 2: Try to find JSON object directly in answer field (unescaped)
+                            if (!hasMindmapJson) {
+                              const answerMatch = message.content.match(/"answer":\s*"(\{[^"]*"nodes"[^"]*\})"/);
+                              if (answerMatch) {
+                                const extracted = answerMatch[1].replace(/\\"/g, '"');
+                                if (extracted.includes('"nodes"') && extracted.includes('"edges"')) {
+                                  contentToParse = extracted;
+                                  hasMindmapJson = true;
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            // Extraction failed, use original content
+                          }
+                        }
+                        
+                        // Also check for hierarchical structure (children format)
+                        const hasMindmapStructure = hasMindmapJson || 
+                                                  (contentToParse.includes('"children"') && 
+                                                   contentToParse.includes('"label"')) ||
+                                                  (message.content.includes('"children"') && 
+                                                   message.content.includes('"label"'));
+                        
+                        let mindmap = null;
+                        let cleanMarkdown = markdownAfterQuiz;
+                        
+                        // Only parse if we have structure AND it was explicitly requested
+                        if (hasMindmapStructure && isExplicitMindmapRequest) {
+                          const result = extractMindMapFromMarkdown(contentToParse);
+                          mindmap = result.mindmap;
+                          cleanMarkdown = result.cleanMarkdown;
+                          
+                          // Debug logging
+                          if (mindmap) {
+                            console.log('✅ Mindmap parsed successfully:', {
+                              nodeCount: mindmap.nodes?.length || 0,
+                              edgeCount: mindmap.edges?.length || 0
+                            });
+                          } else {
+                            console.log('⚠️ Mindmap JSON detected but parsing failed or rejected');
+                          }
+                        }
 
                         return (
                           <>
+                            {/* Render mindmap */}
+                            {mindmap && mindmap.nodes && mindmap.nodes.length > 0 && (
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-xl">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center shadow-md">
+                                      <span className="text-white text-lg">🧠</span>
+                                    </div>
+                                    <h4 className="text-base font-black text-slate-800">Mind Map</h4>
+                                    <span className="text-xs font-semibold text-slate-500 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200">
+                                      {mindmap.nodes.length} {mindmap.nodes.length === 1 ? 'Node' : 'Nodes'}
+                                    </span>
+                                  </div>
+                                  {onSaveMindMapToStudio && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => onSaveMindMapToStudio(mindmap)}
+                                      className="flex items-center gap-1"
+                                    >
+                                      <ICONS.Download className="w-4 h-4" />
+                                      <span className="text-xs font-bold">Save to Studio</span>
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className="w-full overflow-auto min-h-[300px] max-h-[500px]">
+                                  <MindMapViewer 
+                                    mindmapJson={mindmap} 
+                                    format="both" 
+                                    className="w-full" 
+                                  />
+                                </div>
+                              </div>
+                            )}
+
                             {/* Render markdown content */}
                             {cleanMarkdown && (
                               <div className="prose prose-sm max-w-none prose-slate prose-headings:font-black prose-headings:text-slate-800 prose-p:text-slate-700 prose-p:my-3 prose-a:text-indigo-600 prose-strong:text-slate-800 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">

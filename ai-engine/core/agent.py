@@ -399,6 +399,15 @@ class COLLABRYAgent:
         # 9. Handle direct answer (no tool)
         if parsed_json.get("tool") is None:
             answer = clean_answer(parsed_json.get("answer", ""))
+            
+            # Special handling for mindmap generation requests
+            # If the user input contains mindmap generation marker, output the answer directly (it should be JSON)
+            if "[MINDMAP_GENERATION_REQUEST]" in corrected or "[MINDMAP_GENERATION_REQUEST]" in user_input:
+                # For mindmap, the answer should be raw JSON - output it directly without formatting
+                on_token(answer)  # Output the raw JSON answer
+                self.memory.save_context({"user_input": corrected}, {"output": answer})
+                return
+            
             follow_ups = parsed_json.get("follow_up_questions", [])
             
             # If no follow-ups provided, generate them

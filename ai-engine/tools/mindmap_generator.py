@@ -21,10 +21,14 @@ def _normalize_node(n: Any) -> Dict[str, Any]:
     return {"label": str(n), "children": []}
 
 
-def _traverse_build(graph, mermaid_lines: List[str], node, parent_id: Optional[str], id_prefix: str, counter: Dict[str, int]):
+def _traverse_build(graph, mermaid_lines: List[str], node, parent_id: Optional[str], id_prefix: str, counter: Dict[str, int], node_declarations: Optional[set] = None):
+    if node_declarations is None:
+        node_declarations = set()
+    
     norm = _normalize_node(node)
     counter["i"] += 1
-    node_id = f"{id_prefix}_{counter['i']}"
+    # Ensure valid Mermaid node ID (alphanumeric only, no underscores in prefix to avoid issues)
+    node_id = f"{id_prefix}{counter['i']}"
     label = norm["label"].replace('"', "'")
 
     # Graphviz node
@@ -32,16 +36,23 @@ def _traverse_build(graph, mermaid_lines: List[str], node, parent_id: Optional[s
         graph.node(node_id, label)
 
     # Mermaid line
-    # Mermaid nodes are declared inline in edges: A[Label]
-    mermaid_label = label.replace("\n", " ")
+    # Mermaid nodes must be declared before edges
+    # Format: nodeId["Label"]
+    mermaid_label = label.replace("\n", " ").strip()
+    # Escape quotes in label
+    mermaid_label = mermaid_label.replace('"', "'")
+    
+    # Declare node first (only once)
+    if node_id not in node_declarations:
+        mermaid_lines.append(f'{node_id}["{mermaid_label}"]')
+        node_declarations.add(node_id)
+    
+    # Then add edge from parent if exists
     if parent_id:
         mermaid_lines.append(f"{parent_id} --> {node_id}")
-        mermaid_lines.append(f"{node_id}[\"{mermaid_label}\"]")
-    else:
-        mermaid_lines.append(f"{node_id}[\"{mermaid_label}\"]")
 
     for child in norm["children"]:
-        _traverse_build(graph, mermaid_lines, child, node_id, id_prefix, counter)
+        _traverse_build(graph, mermaid_lines, child, node_id, id_prefix, counter, node_declarations)
 
 
 def json_to_mermaid(mindmap: Any) -> str:
@@ -52,12 +63,13 @@ def json_to_mermaid(mindmap: Any) -> str:
     """
     mermaid_lines: List[str] = ["graph TD"]
     counter = {"i": 0}
+    node_declarations = set()
     # Allow either a dict root or a list
     if isinstance(mindmap, list):
         for root in mindmap:
-            _traverse_build(None, mermaid_lines, root, None, "n", counter)
+            _traverse_build(None, mermaid_lines, root, None, "n", counter, node_declarations)
     else:
-        _traverse_build(None, mermaid_lines, mindmap, None, "n", counter)
+        _traverse_build(None, mermaid_lines, mindmap, None, "n", counter, node_declarations)
 
     return "\n".join(mermaid_lines)
 
@@ -90,7 +102,7 @@ def generate_mindmap(mindmap_json: Any, output_path: Optional[str] = None, rende
     # Populate graph and optionally render
     counter = {"i": 0}
     try:
-        _traverse_build(graph, [], mindmap, None, "n", counter)
+        _traverse_build(graph, [], mindmap, None, "n", counter, set())
         if graph is not None and render_svg:
             # Render to bytes (SVG)
             svg_bytes = graph.pipe(format="svg")
