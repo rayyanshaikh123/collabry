@@ -163,7 +163,7 @@ export default function MainLayout({
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user?.name || 'User'}</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 capitalize">{user?.role || 'Student'}</p>
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-500 dark:from-indigo-600 dark:to-indigo-700 flex items-center justify-center text-white font-black text-xl border-2 border-white dark:border-slate-800 shadow-lg group-hover:scale-105 transition-all">
+              <div className="w-11 h-11 rounded-2xl bg-linear-to-br from-indigo-400 to-indigo-500 dark:from-indigo-600 dark:to-indigo-700 flex items-center justify-center text-white font-black text-xl border-2 border-white dark:border-slate-800 shadow-lg group-hover:scale-105 transition-all">
                 {(user?.name?.[0] || 'U').toUpperCase()}
               </div>
             </div>

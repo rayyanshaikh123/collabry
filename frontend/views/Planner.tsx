@@ -61,7 +61,11 @@ const Planner: React.FC = () => {
           <Card>
             <h3 className="font-bold text-slate-800 mb-4">Upcoming Deadlines</h3>
             <div className="space-y-4">
-              {MOCK_TASKS.filter(t => !t.completed).map(task => (
+              {MOCK_TASKS.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-slate-400 dark:text-slate-500">No tasks yet. Add your first task to get started!</p>
+                </div>
+              ) : MOCK_TASKS.filter(t => !t.completed).map(task => (
                 <div key={task.id} className="group p-3 border border-slate-100 rounded-xl hover:border-indigo-100 hover:bg-indigo-50/20 transition-all cursor-pointer">
                   <Badge variant={task.category === 'Exam' ? 'rose' : 'indigo'} className="mb-2">
                     {task.category}

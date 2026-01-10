@@ -2,9 +2,41 @@
 
 import React, { useState, useEffect } from 'react';
 import { Check, Sparkles, Zap, Crown, Star } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Card } from '../components/UIElements';
 import { useAuthStore } from '../src/stores/auth.store';
 import { useRouter } from 'next/navigation';
+
+// Type definitions
+interface BasePlan {
+  name: string;
+  icon: LucideIcon;
+  price: number;
+  currency: string;
+  period: string;
+  description: string;
+  features: string[];
+  color: string;
+  buttonText: string;
+}
+
+interface FreePlan extends BasePlan {
+  limitations: string[];
+}
+
+interface PaidPlan extends BasePlan {
+  yearlyPrice: number;
+  popular: boolean;
+  savings: string;
+}
+
+interface EnterprisePlan extends BasePlan {
+  isCustom: true;
+}
+
+type Plan = FreePlan | PaidPlan | EnterprisePlan;
+
+type PlanKey = 'free' | 'basic' | 'pro' | 'enterprise';
 
 // Razorpay script loader
 const loadRazorpayScript = () => {
@@ -17,7 +49,7 @@ const loadRazorpayScript = () => {
   });
 };
 
-const PLANS = {
+const PLANS: Record<PlanKey, Plan> = {
   free: {
     name: 'Free',
     icon: Sparkles,
@@ -28,10 +60,10 @@ const PLANS = {
     features: [
       '10 AI questions per day',
       '1 collaborative board',
-      '5 group members',
-      'Basic AI features',
-      'Community support',
-      'Focus timer',
+      '5 group members per board',
+      'Basic AI model access',
+      'Community features',
+      '100MB storage',
     ],
     limitations: [
       'Limited AI models',
@@ -51,12 +83,12 @@ const PLANS = {
     features: [
       '100 AI questions per day',
       '5 collaborative boards',
-      '20 group members',
-      'All AI features',
-      'Priority support',
-      'Export data',
+      '20 group members per board',
+      'Advanced AI model access',
+      'All collaboration features',
+      'Study planner & analytics',
       '5GB storage',
-      'Advanced AI models',
+      'Email support',
     ],
     popular: true,
     color: 'from-indigo-500 to-purple-600',
@@ -70,17 +102,18 @@ const PLANS = {
     currency: '₹',
     period: 'month',
     yearlyPrice: 319,
+    popular: false,
     description: 'For power users',
     features: [
       'Unlimited AI questions',
       'Unlimited boards',
-      '50 group members',
-      'All AI models',
-      '24/7 priority support',
-      'Custom integrations',
+      '50 group members per board',
+      'All AI models (premium)',
+      'Advanced study analytics',
+      'Groups & communities',
       '50GB storage',
-      'Advanced analytics',
-      'Team collaboration',
+      'Real-time collaboration',
+      'Priority email support',
     ],
     color: 'from-amber-500 to-orange-600',
     buttonText: 'Upgrade to Pro',
@@ -91,19 +124,18 @@ const PLANS = {
     icon: Star,
     price: 99999,
     currency: '₹',
-    period: 'lifetime',
+    period: 'custom',
     description: 'For organizations',
     features: [
       'Everything in Pro',
       'Unlimited group members',
-      'Dedicated AI instance',
-      'SLA guarantee',
-      'Custom training',
+      'Custom AI model access',
+      'Dedicated account manager',
       '500GB storage',
-      'White-label option',
-      'Dedicated support',
-      'Custom integrations',
-      'Advanced security',
+      'Advanced analytics & reporting',
+      'Custom onboarding',
+      'Phone & email support',
+      'Flexible billing',
     ],
     color: 'from-rose-500 to-pink-600',
     buttonText: 'Contact Sales',
@@ -236,11 +268,6 @@ const PricingView: React.FC = () => {
           userId: user?.id,
           planId,
         },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || '',
-        },
       };
 
       console.log('Opening Razorpay with options:', {
@@ -271,12 +298,12 @@ const PricingView: React.FC = () => {
   const currentTier = user?.subscriptionTier || 'free';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 py-20 px-6">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50 to-purple-50 py-20 px-6">
       <div className="max-w-7xl mx-auto">
         {/* Current Plan Badge */}
         {currentTier !== 'free' && (
           <div className="text-center mb-8">
-            <div className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-lg">
+            <div className="inline-flex items-center px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-lg">
               <Crown className="w-5 h-5 mr-2" />
               <span className="font-semibold">Current Plan: {currentTier.charAt(0).toUpperCase() + currentTier.slice(1)}</span>
             </div>
@@ -286,7 +313,7 @@ const PricingView: React.FC = () => {
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-black text-slate-800 mb-6 font-display">
-            Choose Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Perfect Plan</span>
+            Choose Your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">Perfect Plan</span>
           </h1>
           <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto mb-8">
             Start free and upgrade as you grow. No hidden fees, cancel anytime.
@@ -325,20 +352,20 @@ const PricingView: React.FC = () => {
           {Object.entries(PLANS).map(([key, plan]) => {
             const Icon = plan.icon;
             const isCurrentPlan = currentTier === key;
-            const displayPrice = billingCycle === 'yearly' && plan.yearlyPrice ? plan.yearlyPrice : plan.price;
+            const displayPrice = billingCycle === 'yearly' && 'yearlyPrice' in plan ? plan.yearlyPrice : plan.price;
 
             return (
               <div
                 key={key}
                 className={`relative rounded-3xl overflow-hidden transition-all duration-300 ${
-                  plan.popular
+                  'popular' in plan && plan.popular
                     ? 'scale-105 shadow-2xl border-4 border-indigo-600'
                     : 'shadow-lg hover:shadow-xl border-2 border-slate-200'
                 }`}
               >
                 {/* Popular badge */}
-                {plan.popular && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 px-4 py-1 text-xs font-black uppercase tracking-wider rounded-bl-2xl">
+                {'popular' in plan && plan.popular && (
+                  <div className="absolute top-0 right-0 bg-linear-to-r from-amber-400 to-amber-500 text-slate-900 px-4 py-1 text-xs font-black uppercase tracking-wider rounded-bl-2xl">
                     Most Popular
                   </div>
                 )}
@@ -346,7 +373,7 @@ const PricingView: React.FC = () => {
                 {/* Card content */}
                 <div className="bg-white p-8 h-full flex flex-col">
                   {/* Icon and name */}
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${plan.color} flex items-center justify-center mb-6`}>
+                  <div className={`w-16 h-16 rounded-2xl bg-linear-to-br ${plan.color} flex items-center justify-center mb-6`}>
                     <Icon className="w-8 h-8 text-white" />
                   </div>
 
@@ -355,7 +382,7 @@ const PricingView: React.FC = () => {
 
                   {/* Price */}
                   <div className="mb-6">
-                    {plan.isCustom ? (
+                    {'isCustom' in plan && plan.isCustom ? (
                       <div className="text-4xl font-black text-slate-800">Custom</div>
                     ) : (
                       <>
@@ -364,7 +391,7 @@ const PricingView: React.FC = () => {
                           <span className="text-5xl font-black text-slate-800">{displayPrice}</span>
                           <span className="text-slate-600 font-bold">/{plan.period}</span>
                         </div>
-                        {billingCycle === 'yearly' && plan.yearlyPrice && (
+                        {billingCycle === 'yearly' && 'yearlyPrice' in plan && plan.yearlyPrice && 'savings' in plan && (
                           <div className="text-sm text-green-600 font-bold mt-1">{plan.savings}</div>
                         )}
                       </>
@@ -372,10 +399,10 @@ const PricingView: React.FC = () => {
                   </div>
 
                   {/* Features */}
-                  <ul className="space-y-3 mb-8 flex-grow">
+                  <ul className="space-y-3 mb-8 grow">
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <Check className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
                         <span className="text-sm text-slate-700">{feature}</span>
                       </li>
                     ))}
@@ -388,8 +415,8 @@ const PricingView: React.FC = () => {
                     className={`w-full py-4 rounded-xl font-black text-lg transition-all ${
                       isCurrentPlan
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : plan.popular
-                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl'
+                        : 'popular' in plan && plan.popular
+                        ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl'
                         : 'bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl'
                     }`}
                   >

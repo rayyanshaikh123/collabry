@@ -127,23 +127,14 @@ export const ICONS = {
   Edit: Edit,
 };
 
-export const MOCK_BOARDS: StudyBoard[] = [
-  { id: '1', title: 'Advanced Calculus', lastActive: '2m ago', participants: 4, color: 'bg-indigo-500', progress: 58 },
-  { id: '2', title: 'Neuroscience 101', lastActive: '1h ago', participants: 12, color: 'bg-rose-500', progress: 31 },
-  { id: '3', title: 'World History Group', lastActive: '5h ago', participants: 8, color: 'bg-emerald-500', progress: 72 },
-  { id: '4', title: 'Python Algorithms', lastActive: '1d ago', participants: 3, color: 'bg-amber-500', progress: 46 },
-];
+// ⚠️ REMOVED MOCK DATA - Fetch from backend API instead
+// Use studyBoardService.getUserBoards() to get real boards
+export const MOCK_BOARDS: StudyBoard[] = [];
 
-export const MOCK_ACTIVITIES: Activity[] = [
-  { id: '1', user: 'Alex Kim', action: 'uploaded "Linear Algebra.pdf"', timestamp: '10m ago', type: 'upload' },
-  { id: '2', user: 'Sarah Chen', action: 'commented on "Cell Structure"', timestamp: '45m ago', type: 'comment' },
-  { id: '3', user: 'Jason Lee', action: 'edited the "Physics Notes" board', timestamp: '2h ago', type: 'edit' },
-  { id: '4', user: 'Emma Watson', action: 'invited you to "Quantum Theory"', timestamp: '4h ago', type: 'invite' },
-];
+// ⚠️ REMOVED MOCK DATA - Fetch from backend API instead
+// TODO: Create activity feed endpoint on backend
+export const MOCK_ACTIVITIES: Activity[] = [];
 
-export const MOCK_TASKS: Task[] = [
-  { id: '1', title: 'Read Chapter 4: Genetics', completed: false, dueDate: 'Today, 5 PM', category: 'Reading' },
-  { id: '2', title: 'Calculus Assignment 3', completed: true, dueDate: 'Yesterday', category: 'Assignment' },
-  { id: '3', title: 'History Quiz Prep', completed: false, dueDate: 'Tomorrow', category: 'Exam' },
-  { id: '4', title: 'Team Meeting: Project X', completed: false, dueDate: 'Wed, 2 PM', category: 'Other' },
-];
+// ⚠️ REMOVED MOCK DATA - Fetch from backend API instead
+// Use planner service to get real tasks
+export const MOCK_TASKS: Task[] = [];

@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
         <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border-2 border-slate-200 dark:border-slate-800">
           <div className="text-center">
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
             <div className="space-y-3">
               <button
                 onClick={() => router.push('/login')}
-                className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200"
+                className="w-full py-3 px-4 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200"
               >
                 Back to Login
               </button>
@@ -75,10 +75,10 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border-2 border-slate-200 dark:border-slate-800">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 dark:from-purple-400 to-blue-600 dark:to-blue-400 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl font-bold bg-linear-to-r from-purple-600 dark:from-purple-400 to-blue-600 dark:to-blue-400 bg-clip-text text-transparent mb-2">
             Reset Password
           </h1>
           <p className="text-gray-600 dark:text-slate-400">
@@ -111,7 +111,7 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-4 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200 disabled:opacity-50"
           >
             {loading ? (
               <span className="flex items-center justify-center">

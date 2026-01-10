@@ -58,7 +58,7 @@ function ResetPasswordForm() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
         <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border-2 border-slate-200 dark:border-slate-800">
           <div className="text-center">
             <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
@@ -82,7 +82,7 @@ function ResetPasswordForm() {
             </p>
             <button
               onClick={() => router.push('/login')}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200"
+              className="w-full py-3 px-4 bg-linear-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all duration-200"
             >
               Go to Login
             </button>
@@ -93,10 +93,10 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950 px-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border-2 border-slate-200 dark:border-slate-800">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 dark:from-purple-400 to-blue-600 dark:to-blue-400 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl font-bold bg-linear-to-r from-purple-600 dark:from-purple-400 to-blue-600 dark:to-blue-400 bg-clip-text text-transparent mb-2">
             Create New Password
           </h1>
           <p className="text-gray-600 dark:text-slate-400">
@@ -191,7 +191,7 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 dark:from-purple-950 to-blue-50 dark:to-blue-950">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 dark:border-purple-400 mx-auto" />
           <p className="mt-4 text-gray-600 dark:text-slate-400">Loading...</p>

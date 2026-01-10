@@ -53,17 +53,10 @@ interface SocketResponseData {
   position?: CursorData;
 }
 
-interface ParticipantData {
-  userId: string;
-  email: string;
-  name?: string;
-  userName?: string;
-  color: string;
-}
-
 interface ElementData {
   elementId: string;
   boardId: string;
+  changes?: Record<string, unknown>;
   changeSet?: Record<string, unknown>;
   element?: {
     id: string;

@@ -106,7 +106,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <Button variant="ghost" size="sm" onClick={() => onNavigate?.(AppRoute.STUDY_BOARD)}>Explore More</Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {MOCK_BOARDS.map(board => (
+              {MOCK_BOARDS.length === 0 ? (
+                <div className="col-span-2 text-center py-12">
+                  <p className="text-slate-400 dark:text-slate-500 mb-4">No study boards yet. Create your first one!</p>
+                  <Button onClick={() => onNavigate?.(AppRoute.STUDY_BOARD)}>Create Board</Button>
+                </div>
+              ) : MOCK_BOARDS.map(board => (
                 <div key={board.id} onClick={() => onNavigate?.(AppRoute.STUDY_BOARD)} className="cursor-pointer">
                   <Card hoverable className="group">
                   <div className="flex items-start gap-5">
@@ -141,7 +146,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <Badge variant="indigo">3/5</Badge>
             </div>
             <div className="space-y-4">
-              {MOCK_TASKS.map(task => {
+              {MOCK_TASKS.length === 0 ? (
+                <p className="text-center text-slate-400 dark:text-slate-500 py-4">No tasks yet</p>
+              ) : MOCK_TASKS.map(task => {
                 const TaskIcon = task.completed ? ICONS.Check : ICONS.Uncheck;
                 return (
                   <div key={task.id} className={`flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-slate-800 transition-all border-2 ${task.completed ? 'border-emerald-100 dark:border-emerald-800' : 'border-white dark:border-slate-800'}`}>
@@ -155,9 +162,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   </div>
                 );
               })}
+              {MOCK_TASKS.length > 0 && (
               <Button variant="outline" className="w-full mt-2 border-dashed rounded-2xl" onClick={() => onNavigate?.(AppRoute.PLANNER)}>
                 <ICONS.Plus size={18} className="mr-2"/> New Task
               </Button>
+              )}
             </div>
           </Card>
 
@@ -165,25 +174,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <Card>
             <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4">Study Squad</h3>
             <div className="space-y-4">
-               {[
-                 { name: 'Alex K.', status: 'Studying Math', color: 'bg-emerald-500' },
-                 { name: 'Sarah L.', status: 'On a break', color: 'bg-slate-300 dark:bg-slate-600' },
-                 { name: 'Tom H.', status: 'Live Session!', color: 'bg-indigo-500' }
-               ].map((friend, i) => (
-                 <div key={i} className="flex items-center gap-3">
-                   <div className="relative">
-                     <img src={`https://picsum.photos/seed/${friend.name}/50/50`} className="w-10 h-10 rounded-2xl border-2 border-slate-100 dark:border-slate-700" alt={friend.name} />
-                     <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-800 ${friend.color}`}></div>
-                   </div>
-                   <div className="flex-1 text-left">
-                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{friend.name}</p>
-                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{friend.status}</p>
-                   </div>
-                   <Button variant="ghost" size="icon" className="h-8 w-8"><ICONS.Share size={14}/></Button>
-                 </div>
-               ))}
+               {/* TODO: Connect to friends API - friendService.getFriends() */}
+               <div className="text-center py-8">
+                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">No friends yet</p>
+                 <Button variant="secondary" className="w-full">Invite Friends</Button>
+               </div>
             </div>
-            <Button variant="secondary" className="w-full mt-6">Invite Friends</Button>
           </Card>
         </div>
       </div>

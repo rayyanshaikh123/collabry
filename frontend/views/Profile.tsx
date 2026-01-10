@@ -16,7 +16,7 @@ const ProfileView: React.FC = () => {
     <div className="space-y-8 pb-12">
       {/* Profile Header */}
       <div className="flex flex-col md:flex-row items-center gap-8 bg-white dark:bg-slate-900 p-8 rounded-[3rem] border-4 border-indigo-50 dark:border-indigo-900/30 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-32 bg-indigo-500/10 dark:bg-indigo-500/20 -z-0" />
+        <div className="absolute top-0 left-0 w-full h-32 bg-indigo-500/10 dark:bg-indigo-500/20 z-0" />
         <div className="relative z-10 shrink-0">
           {user?.avatar ? (
             <img 
@@ -25,7 +25,7 @@ const ProfileView: React.FC = () => {
               alt={user.name} 
             />
           ) : (
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] border-8 border-white dark:border-slate-800 shadow-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 dark:from-indigo-500 dark:to-indigo-700 flex items-center justify-center text-white font-black text-5xl">
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] border-8 border-white dark:border-slate-800 shadow-2xl bg-linear-to-br from-indigo-400 to-indigo-600 dark:from-indigo-500 dark:to-indigo-700 flex items-center justify-center text-white font-black text-5xl">
               {userInitials}
             </div>
           )}
@@ -109,7 +109,7 @@ const ProfileView: React.FC = () => {
             </div>
           </Card>
 
-          <Card className="bg-gradient-to-br from-amber-400 dark:from-amber-500 to-amber-500 dark:to-amber-600 text-slate-900 dark:text-slate-200 border-none">
+          <Card className="bg-linear-to-br from-amber-400 dark:from-amber-500 to-amber-500 dark:to-amber-600 text-slate-900 dark:text-slate-200 border-none">
             <div className="flex items-center gap-3 mb-4">
               <ICONS.Trophy size={28} strokeWidth={3} />
               <h3 className="text-xl font-black">Membership</h3>

@@ -24,6 +24,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';
+
 export default function SettingsPage() {
   const { user } = useAuthStore();
   const { theme } = useUIStore();
@@ -97,7 +99,7 @@ export default function SettingsPage() {
           <Button
             onClick={handleSave}
             disabled={saveStatus === 'saving'}
-            className="bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700"
+            className="bg-linear-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700"
           >
             {saveStatus === 'saving' ? (
               <>
@@ -357,10 +359,10 @@ export default function SettingsPage() {
                   <div className="space-y-3">
                     <Label className="font-bold">Theme Color</Label>
                     <div className="flex gap-3">
-                      {['indigo', 'blue', 'amber', 'emerald', 'rose'].map(color => (
+                      {(['indigo', 'blue', 'amber', 'emerald', 'rose'] as const).map(color => (
                         <button
                           key={color}
-                          onClick={() => setAppearance({ ...appearance, theme: color })}
+                          onClick={() => setAppearance({ ...appearance, theme: color as ThemeType })}
                           className={`w-16 h-16 rounded-2xl bg-${color}-500 border-4 transition-all ${
                             appearance.theme === color 
                               ? 'border-slate-800 dark:border-slate-200 scale-110' 

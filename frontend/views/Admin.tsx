@@ -854,7 +854,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       <Input 
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="John Doe"
+                        placeholder="Full Name"
                       />
                     </div>
 
@@ -864,7 +864,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="john@example.com"
+                        placeholder="email@company.com"
                       />
                     </div>
 

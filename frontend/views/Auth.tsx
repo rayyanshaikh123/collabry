@@ -82,7 +82,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
           </Link>
           <h1 className="text-5xl font-black mb-6 leading-tight">Better learning, <br/>built together.</h1>
           <p className="text-xl text-indigo-100 font-medium leading-relaxed mb-10 opacity-80">
-            Join 20,000+ students leveraging AI and collaborative boards to master complex subjects faster.
+            Leverage AI and collaborative boards to master complex subjects faster.
           </p>
           
           <div className="space-y-6">
@@ -129,7 +129,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Full Name</label>
                 <Input 
-                  placeholder="John Doe" 
+                  placeholder="Your full name" 
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   disabled={loading}
@@ -140,7 +140,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Email Address</label>
               <Input 
                 type="email" 
-                placeholder="john@example.com"
+                placeholder="your.email@example.com"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 disabled={loading}

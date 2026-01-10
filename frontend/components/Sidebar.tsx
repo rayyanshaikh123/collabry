@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
               <div className="flex items-center gap-3">
                 <button 
                   onClick={handleLogoClick}
-                  className={`w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 border-b-4 border-indigo-700 transition-all active:translate-y-1 active:border-b-0 ${isAnimating ? 'animate-logo-pop' : ''}`}
+                  className={`w-12 h-12 bg-linear-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 border-b-4 border-indigo-700 transition-all active:translate-y-1 active:border-b-0 ${isAnimating ? 'animate-logo-pop' : ''}`}
                   title="Click to cycle theme!"
                 >
                   <span className="text-white font-black text-3xl font-display">C</span>
@@ -188,7 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
             )}
           </nav>
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
             <button 
               onClick={onLogout}
               className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] text-rose-400 dark:text-rose-500 font-black hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-all bouncy-hover ${isCollapsed ? 'justify-center' : ''}`}

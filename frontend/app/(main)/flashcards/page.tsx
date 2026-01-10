@@ -201,7 +201,7 @@ export default function FlashcardsPage() {
           {!selectedDeck && (
             <Button
               onClick={() => setIsCreating(true)}
-              className="bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700"
+              className="bg-linear-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700"
             >
               <Plus size={20} className="mr-2" />
               New Deck
@@ -238,7 +238,7 @@ export default function FlashcardsPage() {
                       <button
                         key={color}
                         onClick={() => setNewDeck({ ...newDeck, color })}
-                        className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses]} ${newDeck.color === color ? 'ring-4 ring-offset-2 ring-indigo-300' : ''}`}
+                        className={`w-10 h-10 rounded-xl bg-linear-to-br ${colorClasses[color as keyof typeof colorClasses]} ${newDeck.color === color ? 'ring-4 ring-offset-2 ring-indigo-300' : ''}`}
                       />
                     ))}
                   </div>
@@ -263,7 +263,7 @@ export default function FlashcardsPage() {
                   className="cursor-pointer hover:shadow-xl transition-all border-2 group"
                   onClick={() => setSelectedDeck(deck)}
                 >
-                  <CardHeader className={`bg-gradient-to-br ${colorClasses[deck.color as keyof typeof colorClasses]} text-white rounded-t-lg border-b-4`}>
+                  <CardHeader className={`bg-linear-to-br ${colorClasses[deck.color as keyof typeof colorClasses]} text-white rounded-t-lg border-b-4`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <CardTitle className="font-black text-xl">{deck.name}</CardTitle>
@@ -321,7 +321,7 @@ export default function FlashcardsPage() {
                 >
                   <div className={`relative transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
                     {/* Front */}
-                    <Card className={`min-h-[400px] flex items-center justify-center p-12 border-4 ${!isFlipped ? 'block' : 'hidden'}`}>
+                    <Card className={`min-h-100 flex items-center justify-center p-12 border-4 ${!isFlipped ? 'block' : 'hidden'}`}>
                       <CardContent>
                         <div className="text-center">
                           <p className="text-sm font-black text-slate-400 dark:text-slate-500 mb-4">QUESTION</p>
@@ -336,7 +336,7 @@ export default function FlashcardsPage() {
                     </Card>
 
                     {/* Back */}
-                    <Card className={`min-h-[400px] flex items-center justify-center p-12 border-4 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 ${isFlipped ? 'block' : 'hidden'}`}>
+                    <Card className={`min-h-100 flex items-center justify-center p-12 border-4 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 ${isFlipped ? 'block' : 'hidden'}`}>
                       <CardContent>
                         <div className="text-center">
                           <p className="text-sm font-black text-indigo-400 dark:text-indigo-500 mb-4">ANSWER</p>
