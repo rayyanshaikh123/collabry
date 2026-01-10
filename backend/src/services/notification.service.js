@@ -278,23 +278,6 @@ class NotificationService {
     });
   }
 
-  async notifyVoiceChatStarted(userId, board, startedBy) {
-    return this.createNotification({
-      userId,
-      type: 'voice_chat_started',
-      title: '🎤 Voice Chat Started',
-      message: `${startedBy.name} started a voice chat in "${board.title}"`,
-      priority: 'high',
-      relatedEntity: {
-        entityType: 'Board',
-        entityId: board._id || board.id,
-      },
-      actionUrl: `/study-board/${board._id || board.id}`,
-      actionText: 'Join Call',
-      expiresAt: new Date(Date.now() + 3600000), // Expires in 1 hour
-    });
-  }
-
   /**
    * AI/Notebook Notifications
    */

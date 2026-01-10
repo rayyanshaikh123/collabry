@@ -30,7 +30,6 @@ const notificationSchema = new mongoose.Schema(
         'board_member_joined',
         'board_updated',
         'board_comment',
-        'voice_chat_started',
         
         // Study Notebook/AI
         'document_processed',

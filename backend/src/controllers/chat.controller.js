@@ -13,7 +13,7 @@ class ChatController {
   // Get messages
   getMessages = asyncHandler(async (req, res) => {
     const userId = req.user._id;
-    const { type } = req.params; // direct, group, or community
+    const { type } = req.params; // direct or group
     const conversationType = type || req.query.conversationType;
     const params = req.query;
 

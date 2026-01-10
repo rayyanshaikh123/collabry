@@ -30,7 +30,7 @@ const initializeChatNamespace = (socketIO) => {
     // Join user's personal room
     socket.join(`user:${socket.userId}`);
 
-    // Join conversation (direct, group, or community)
+    // Join conversation (direct or group)
     socket.on('join:conversation', ({ conversationType, conversationId }) => {
       const roomName = `${conversationType}:${conversationId}`;
       socket.join(roomName);
@@ -66,8 +66,6 @@ const initializeChatNamespace = (socketIO) => {
         } else if (data.conversationType === 'group') {
           roomName = `group:${data.groupId}`;
           console.log(`📢 Broadcasting to room: ${roomName}`);
-        } else if (data.conversationType === 'community') {
-          roomName = `community:${data.communityId}`;
         }
 
         // Broadcast to room
@@ -150,8 +148,6 @@ const initializeChatNamespace = (socketIO) => {
           chatNamespace.to(`user:${recipientId}`).emit('message:edited', message);
         } else if (message.conversationType === 'group') {
           roomName = `group:${message.group}`;
-        } else if (message.conversationType === 'community') {
-          roomName = `community:${message.community}`;
         }
 
         // Broadcast to room
@@ -190,8 +186,6 @@ const initializeChatNamespace = (socketIO) => {
           chatNamespace.to(`user:${recipientId}`).emit('message:deleted', { messageId });
         } else if (message.conversationType === 'group') {
           roomName = `group:${message.group}`;
-        } else if (message.conversationType === 'community') {
-          roomName = `community:${message.community}`;
         }
 
         // Broadcast to room

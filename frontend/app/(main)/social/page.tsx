@@ -3,10 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, UsersRound, Globe, MessageCircle } from 'lucide-react';
+import { Users, UsersRound, MessageCircle } from 'lucide-react';
 import FriendsTab from '@/components/social/FriendsTab';
 import GroupsTab from '@/components/social/GroupsTab';
-import CommunitiesTab from '@/components/social/CommunitiesTab';
 import ChatTab from '@/components/social/ChatTab';
 import { useAuthStore } from '@/src/stores/auth.store';
 
@@ -40,12 +39,12 @@ export default function SocialPage() {
           Social Hub
         </h1>
         <p className="text-muted-foreground">
-          Connect with friends, join groups, explore communities, and chat in real-time
+          Connect with friends, join groups, and chat in real-time
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 mb-6">
+        <TabsList className="grid w-full grid-cols-3 mb-6">
           <TabsTrigger value="friends" className="flex items-center gap-2">
             <Users className="w-4 h-4" />
             Friends
@@ -53,10 +52,6 @@ export default function SocialPage() {
           <TabsTrigger value="groups" className="flex items-center gap-2">
             <UsersRound className="w-4 h-4" />
             Groups
-          </TabsTrigger>
-          <TabsTrigger value="communities" className="flex items-center gap-2">
-            <Globe className="w-4 h-4" />
-            Communities
           </TabsTrigger>
           <TabsTrigger value="chat" className="flex items-center gap-2">
             <MessageCircle className="w-4 h-4" />
@@ -70,10 +65,6 @@ export default function SocialPage() {
 
         <TabsContent value="groups">
           <GroupsTab />
-        </TabsContent>
-
-        <TabsContent value="communities">
-          <CommunitiesTab />
         </TabsContent>
 
         <TabsContent value="chat">

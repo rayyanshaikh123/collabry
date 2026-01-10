@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
-import { Tldraw, createTLStore, defaultShapeUtils, TLRecord, TLStoreSnapshot } from 'tldraw';
+import { Tldraw, createTLStore, defaultShapeUtils } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
@@ -9,13 +10,80 @@ import { useAuthStore } from '../src/stores/auth.store';
 import { useStudyBoardStore } from '../src/stores/studyBoard.store';
 import { socketClient } from '../src/lib/socket';
 import { useRouter, useParams } from 'next/navigation';
-import VoiceChat from '../components/VoiceChat';
 import InviteMemberModal from '../components/InviteMemberModal';
 import BoardSettingsModal from '../components/BoardSettingsModal';
 import { studyBoardService } from '../src/services/studyBoard.service';
+import { BoardParticipant } from '../src/types/studyBoard.types';
+
+// Type definitions
+interface TLEditor {
+  store: {
+    get: (id: string) => unknown;
+    put: (records: unknown[]) => void;
+    remove: (ids: string[]) => void;
+    listen: (callback: (event: TLStoreEvent) => void) => () => void;
+  };
+}
+
+interface TLStoreEvent {
+  changes: {
+    added: Record<string, unknown>;
+    updated: Record<string, [unknown, unknown]>;
+    removed: Record<string, unknown>;
+  };
+}
+
+interface CursorData {
+  x: number;
+  y: number;
+}
+
+interface ParticipantData {
+  userId: string;
+  email: string;
+  name?: string;
+  userName?: string;
+  color: string;
+}
+
+interface SocketResponseData {
+  userId: string;
+  email: string;
+  color: string;
+  position?: CursorData;
+}
+
+interface ParticipantData {
+  userId: string;
+  email: string;
+  name?: string;
+  userName?: string;
+  color: string;
+}
+
+interface ElementData {
+  elementId: string;
+  boardId: string;
+  changeSet?: Record<string, unknown>;
+  element?: {
+    id: string;
+    type: string;
+    x: number;
+    y: number;
+    props: Record<string, unknown>;
+  };
+}
+
+interface PendingElement {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  props: Record<string, unknown>;
+}
 
 // Memoized Participant Avatar Component
-const ParticipantAvatar = memo(({ participant, index }: { participant: any; index: number }) => (
+const ParticipantAvatar = memo(({ participant, index }: { participant: BoardParticipant; index: number }) => (
   <div 
     key={`${participant.userId}-${index}`}
     className="w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white font-black text-xs shadow-md"
@@ -28,7 +96,7 @@ const ParticipantAvatar = memo(({ participant, index }: { participant: any; inde
 ParticipantAvatar.displayName = 'ParticipantAvatar';
 
 // Memoized Cursor Component
-const LiveCursor = memo(({ userId, cursor, participant }: { userId: string; cursor: any; participant: any }) => {
+const LiveCursor = memo(({ cursor, participant }: { cursor: CursorData; participant: BoardParticipant | undefined }) => {
   if (!participant) return null;
   
   return (
@@ -61,7 +129,7 @@ const LiveCursor = memo(({ userId, cursor, participant }: { userId: string; curs
 LiveCursor.displayName = 'LiveCursor';
 
 // Debounce utility
-function debounce<T extends (...args: any[]) => any>(func: T, wait: number) {
+function debounce<T extends (...args: never[]) => unknown>(func: T, wait: number) {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
@@ -88,13 +156,11 @@ const CollaborativeBoard: React.FC = () => {
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }));
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showVoiceChat, setShowVoiceChat] = useState(false);
-  const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const isApplyingRemoteChange = useRef(false);
-  const [editor, setEditor] = useState<any>(null);
-  const [pendingElements, setPendingElements] = useState<any[]>([]);
+  const [editor, setEditor] = useState<TLEditor | null>(null);
+  const [pendingElements, setPendingElements] = useState<PendingElement[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const cursorPositionRef = useRef({ x: 0, y: 0 });
 
@@ -105,7 +171,7 @@ const CollaborativeBoard: React.FC = () => {
 
   // Debounced update element to batch rapid changes
   const debouncedUpdateElement = useMemo(
-    () => debounce((boardId: string, elementId: string, changeSet: any) => {
+    () => debounce((boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
       socketClient.updateElement(boardId, elementId, changeSet);
     }, 100),
     []
@@ -126,9 +192,9 @@ const CollaborativeBoard: React.FC = () => {
       
       // Check if there are any actual shape changes
       const hasShapeChanges = 
-        (added && Object.values(added).some((r: any) => r?.typeName === 'shape')) ||
-        (updated && Object.values(updated).some(([_, r]: any) => r?.typeName === 'shape')) ||
-        (removed && Object.values(removed).some((r: any) => r?.typeName === 'shape'));
+        (added && Object.values(added).some((r: unknown) => (r as { typeName?: string })?.typeName === 'shape')) ||
+        (updated && Object.values(updated).some((r: unknown) => Array.isArray(r) && (r[1] as { typeName?: string })?.typeName === 'shape')) ||
+        (removed && Object.values(removed).some((r: unknown) => (r as { typeName?: string })?.typeName === 'shape'));
       
       if (!hasShapeChanges) return;
 
@@ -185,9 +251,7 @@ const CollaborativeBoard: React.FC = () => {
       }
     };
 
-    const dispose = editor.store.listen(handleStoreChange, { 
-      scope: 'document' 
-    });
+    const dispose = editor.store.listen(handleStoreChange);
 
     return () => dispose();
   }, [editor, boardId, isConnected, debouncedUpdateElement]);
@@ -224,17 +288,17 @@ const CollaborativeBoard: React.FC = () => {
     }
   }, [editor]);
 
-  const handleElementUpdated = useCallback((data: any) => {
+  const handleElementUpdated = useCallback((data: ElementData) => {
     if (!editor) return;
     
     isApplyingRemoteChange.current = true;
     
     try {
       const existing = editor.store.get(data.elementId);
-      if (existing) {
+      if (existing && data.changeSet) {
         editor.store.put([{
           ...existing,
-          ...data.changes,
+          ...data.changeSet,
         }]);
       }
     } catch (error) {
@@ -246,7 +310,7 @@ const CollaborativeBoard: React.FC = () => {
     }
   }, [editor]);
 
-  const handleElementDeleted = useCallback((data: any) => {
+  const handleElementDeleted = useCallback((data: ElementData) => {
     if (!editor) return;
     
     isApplyingRemoteChange.current = true;
@@ -264,23 +328,29 @@ const CollaborativeBoard: React.FC = () => {
     }
   }, [editor]);
 
-  const handleUserJoined = useCallback((data: any) => {
+  const handleUserJoined = useCallback((data: SocketResponseData) => {
     if (data.userId !== user?.id) {
       addParticipant({
         userId: data.userId,
+        userName: data.email.split('@')[0],
         name: data.email,
+        email: data.email,
         color: data.color,
-        isActive: true
+        role: 'editor',
+        isActive: true,
+        joinedAt: new Date().toISOString()
       });
     }
   }, [user?.id, addParticipant]);
 
-  const handleUserLeft = useCallback((data: any) => {
+  const handleUserLeft = useCallback((data: SocketResponseData) => {
     removeParticipant(data.userId);
   }, [removeParticipant]);
 
-  const handleCursorMove = useCallback((data: any) => {
-    updateCursor(data.userId, data.position);
+  const handleCursorMove = useCallback((data: SocketResponseData) => {
+    if (data.position) {
+      updateCursor(data.userId, data.position as any);
+    }
   }, [updateCursor]);
 
   // Initialize board connection
@@ -328,9 +398,13 @@ const CollaborativeBoard: React.FC = () => {
             if (p.userId !== user.id) {
               addParticipant({
                 userId: p.userId,
-                name: p.email,
+                userName: p.userName || p.email.split('@')[0],
+                name: p.name || p.email,
+                email: p.email,
                 color: p.color,
-                isActive: true
+                role: 'editor',
+                isActive: true,
+                joinedAt: new Date().toISOString()
               });
             }
           });
@@ -406,7 +480,7 @@ const CollaborativeBoard: React.FC = () => {
       socketClient.offBoardEvent('element:updated', handleElementUpdated);
       socketClient.offBoardEvent('element:deleted', handleElementDeleted);
     };
-  }, [editor, boardId, handleElementCreated, handleElementUpdated, handleElementDeleted]);
+  }, [editor, boardId, handleElementCreated, handleElementUpdated, handleElementDeleted, pendingElements]);
 
   // Optimized cursor tracking with requestAnimationFrame
   const sendCursorUpdate = useCallback(() => {
@@ -517,16 +591,6 @@ const CollaborativeBoard: React.FC = () => {
             )}
           </div>
           <Button 
-            variant={showVoiceChat ? 'primary' : 'outline'} 
-            className="gap-2 px-6 relative"
-            onClick={() => setShowVoiceChat(!showVoiceChat)}
-          >
-            <ICONS.Phone size={18} /> Voice Chat
-            {isVoiceChatActive && !showVoiceChat && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse border-2 border-white"></span>
-            )}
-          </Button>
-          <Button 
             variant="outline" 
             className="gap-2 px-6"
             onClick={() => setShowInviteModal(true)}
@@ -548,7 +612,7 @@ const CollaborativeBoard: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
         {/* tldraw Canvas */}
-        <div className={`flex-1 relative transition-all duration-300 ${showVoiceChat ? 'mr-80' : ''}`}>
+        <div className="flex-1 relative">
           <Tldraw 
             store={store}
             autoFocus
@@ -559,19 +623,9 @@ const CollaborativeBoard: React.FC = () => {
           <div className="absolute inset-0 pointer-events-none z-10">
             {Object.entries(cursors).map(([userId, cursor]) => {
               const participant = participants.find(p => p.userId === userId);
-              return <LiveCursor key={userId} userId={userId} cursor={cursor} participant={participant} />;
+              return <LiveCursor key={userId} cursor={cursor} participant={participant} />;
             })}
           </div>
-        </div>
-
-        {/* Voice Chat Sidebar */}
-        <div className={`absolute top-0 right-0 bottom-0 w-80 bg-white dark:bg-slate-900 border-l-2 border-slate-200 dark:border-slate-800 shadow-2xl z-30 overflow-hidden flex flex-col transition-transform duration-300 ${showVoiceChat ? 'translate-x-0' : 'translate-x-full'}`}>
-          <VoiceChat 
-            boardId={boardId} 
-            onClose={() => setShowVoiceChat(false)}
-            onJoinCall={() => setIsVoiceChatActive(true)}
-            onLeaveCall={() => setIsVoiceChatActive(false)}
-          />
         </div>
       </div>
 
@@ -584,7 +638,7 @@ const CollaborativeBoard: React.FC = () => {
         onInvite={async (email, role) => {
           try {
             await studyBoardService.inviteMember(boardId, email, role);
-          } catch (error: any) {
+          } catch (error: unknown) {
             console.error('Failed to send invitation:', error);
             throw error;
           }
@@ -593,7 +647,7 @@ const CollaborativeBoard: React.FC = () => {
 
       {currentBoard && (
         <BoardSettingsModal
-          board={currentBoard}
+          board={{ ...currentBoard, _id: currentBoard.id }}
           isOpen={showSettingsModal}
           onClose={() => setShowSettingsModal(false)}
           onSave={async (updates) => {

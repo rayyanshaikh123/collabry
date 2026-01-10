@@ -3,6 +3,7 @@ const router = express.Router();
 const boardController = require('../controllers/board.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const { body, param, query, validationResult } = require('express-validator');
+const { checkBoardLimit } = require('../middleware/usageEnforcement');
 
 // Validation middleware
 const validate = (req, res, next) => {
@@ -85,7 +86,7 @@ router.get('/search', boardController.searchBoards);
 // Board CRUD
 router.route('/')
   .get(boardController.getBoards)
-  .post(validateBoardCreation, boardController.createBoard);
+  .post(validateBoardCreation, checkBoardLimit, boardController.createBoard);
 
 // Board actions (before /:id to avoid conflicts)
 router.post('/:id/invite', 
@@ -106,9 +107,6 @@ router.route('/:id/members')
 router.route('/:id/members/:userId')
   .delete(validateObjectId, boardController.removeMember)
   .patch(validateObjectId, validateMemberRoleUpdate, boardController.updateMemberRole);
-
-// Voice chat room
-router.get('/:id/voice-room', validateObjectId, boardController.getVoiceRoom);
 
 // Board CRUD by ID (must be after specific routes)
 router.route('/:id')

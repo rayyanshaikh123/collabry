@@ -7,10 +7,10 @@ const messageSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
-    // Can be direct message, group, or community
+    // Can be direct message or group
     conversationType: {
       type: String,
-      enum: ['direct', 'group', 'community'],
+      enum: ['direct', 'group'],
       required: true,
     },
     // For direct messages - stores both user IDs in sorted order
@@ -20,14 +20,10 @@ const messageSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
-    // For group/community messages
+    // For group messages
     group: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Group',
-    },
-    community: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Community',
     },
     content: {
       type: String,
@@ -82,7 +78,6 @@ const messageSchema = new mongoose.Schema(
 // Indexes for efficient queries
 messageSchema.index({ conversationType: 1, participants: 1, createdAt: -1 });
 messageSchema.index({ conversationType: 1, group: 1, createdAt: -1 });
-messageSchema.index({ conversationType: 1, community: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 
 const Message = mongoose.model('Message', messageSchema);

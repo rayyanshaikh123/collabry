@@ -27,8 +27,11 @@ const getAppRouteFromPath = (path: string): string => {
     '/study-notebook': 'study-notebook',
     '/planner': 'planner',
     '/focus': 'focus',
+    '/flashcards': 'flashcards',
     '/profile': 'profile',
     '/usage': 'usage',
+    '/subscription': 'subscription',
+    '/pricing': 'pricing',
     '/study-buddy': 'study-buddy',
     '/visual-aids': 'visual-aids',
     '/social': 'social',
@@ -53,7 +56,11 @@ export default function MainLayout({
 
   // Check authentication state and redirect if not authenticated
   useEffect(() => {
-    if (!isAuthenticated && !isLoading) {
+    // Allow pricing page to be accessible without authentication
+    const publicPaths = ['/pricing', '/subscription'];
+    const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+    
+    if (!isAuthenticated && !isLoading && !isPublicPath) {
       // Save current path for redirect after login
       const currentPath = pathname;
       router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
@@ -62,7 +69,7 @@ export default function MainLayout({
 
   const cycleTheme = () => {
     const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;
-    setTheme(THEMES[nextIndex] as any);
+    setTheme(THEMES[nextIndex] as 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose');
   };
 
   const handleLogout = async () => {
@@ -77,15 +84,18 @@ export default function MainLayout({
   };
 
   const handleNavigate = (route: string | AppRoute) => {
-    const routeStr = typeof route === 'string' ? route : route.toString();
+    const routeStr = typeof route === 'string' ? route : String(route);
     const pathMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'study-board': '/study-board',
       'study-notebook': '/study-notebook',
       'planner': '/planner',
       'focus': '/focus',
+      'flashcards': '/flashcards',
       'profile': '/profile',
       'usage': '/usage',
+      'subscription': '/subscription',
+      'pricing': '/pricing',
       'study-buddy': '/study-buddy',
       'visual-aids': '/visual-aids',
       'social': '/social',
@@ -110,8 +120,8 @@ export default function MainLayout({
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <Sidebar 
-        currentRoute={currentRoute as any} 
-        onNavigate={handleNavigate as any} 
+        currentRoute={currentRoute as AppRoute} 
+        onNavigate={handleNavigate} 
         isMobileOpen={isMobileSidebarOpen}
         setMobileOpen={toggleMobileSidebar}
         onLogout={handleLogout}

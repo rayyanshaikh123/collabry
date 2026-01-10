@@ -1,12 +1,11 @@
 const Message = require('../models/Message');
 const Friendship = require('../models/Friendship');
 const Group = require('../models/Group');
-const Community = require('../models/Community');
 
 class ChatService {
   // Send message
   async sendMessage(userId, data) {
-    const { conversationType, content, messageType, attachments, replyTo, recipientId, groupId, communityId } = data;
+    const { conversationType, content, messageType, attachments, replyTo, recipientId, groupId } = data;
 
     const messageData = {
       sender: userId,
@@ -58,23 +57,6 @@ class ChatService {
       }
 
       messageData.group = groupId;
-    } else if (conversationType === 'community') {
-      if (!communityId) {
-        throw new Error('Community ID is required for community messages');
-      }
-
-      // Check if user is a member
-      const community = await Community.findById(communityId);
-      if (!community) {
-        throw new Error('Community not found');
-      }
-
-      const isMember = community.members.some((m) => m.user.toString() === userId.toString());
-      if (!isMember) {
-        throw new Error('Not a member of this community');
-      }
-
-      messageData.community = communityId;
     }
 
     const message = await Message.create(messageData);
@@ -117,24 +99,6 @@ class ChatService {
       }
 
       query.group = groupId;
-    } else if (conversationType === 'community') {
-      const { communityId } = params;
-      if (!communityId) {
-        throw new Error('Community ID is required');
-      }
-
-      // Check membership
-      const community = await Community.findById(communityId);
-      if (!community) {
-        throw new Error('Community not found');
-      }
-
-      const isMember = community.members.some((m) => m.user.toString() === userId.toString());
-      if (!isMember) {
-        throw new Error('Not a member of this community');
-      }
-
-      query.community = communityId;
     }
 
     if (before) {

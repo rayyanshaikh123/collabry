@@ -37,7 +37,6 @@ const platformSettingsSchema = new mongoose.Schema({
   // Feature Toggles
   features: {
     studyBoards: { type: Boolean, default: true },
-    voiceChat: { type: Boolean, default: true },
     visualAids: { type: Boolean, default: true },
     studyPlanner: { type: Boolean, default: true },
     flashcards: { type: Boolean, default: true },

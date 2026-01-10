@@ -168,6 +168,24 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />
+                <NavItem 
+                  id={AppRoute.SUBSCRIPTION}
+                  label="Subscription"
+                  icon={ICONS.Settings}
+                  currentRoute={currentRoute}
+                  isCollapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                  setMobileOpen={setMobileOpen}
+                />
+                <NavItem 
+                  id={AppRoute.PRICING}
+                  label="Pricing"
+                  icon={ICONS.Download}
+                  currentRoute={currentRoute}
+                  isCollapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                  setMobileOpen={setMobileOpen}
+                />
               </>
             )}
           </nav>

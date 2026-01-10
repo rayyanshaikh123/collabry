@@ -6,31 +6,32 @@ import { ICONS } from '../constants';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { usageService, type UsageStats } from '../src/services/usage.service';
 import { useAuthStore } from '../src/stores/auth.store';
+import { useRouter } from 'next/navigation';
 
 const SUBSCRIPTION_TIERS = {
   free: {
     name: 'Free',
-    limit: 10000,
-    price: '$0/month',
+    limit: 10000, // 10K tokens/day
+    price: '₹0/month',
     features: ['10K tokens/day', 'Basic AI features', 'Community support', 'Resets every 24 hours']
   },
   basic: {
     name: 'Basic',
-    limit: 50000,
-    price: '$9/month',
-    features: ['50K tokens/day', 'All AI features', 'Priority support', 'Export data']
+    limit: 100000, // 100K tokens/day (updated from 50K)
+    price: '₹9/month',
+    features: ['100K tokens/day', 'All AI features', 'Priority support', 'Export data']
   },
   pro: {
     name: 'Pro',
-    limit: 200000,
-    price: '$29/month',
-    features: ['200K tokens/day', 'Advanced AI models', '24/7 support', 'Custom integrations']
+    limit: 1000000, // 1M tokens/day (updated from 200K)
+    price: '₹29/month',
+    features: ['Unlimited tokens', 'Advanced AI models', '24/7 support', 'Custom integrations']
   },
   enterprise: {
     name: 'Enterprise',
-    limit: 1000000,
-    price: 'Custom',
-    features: ['1M+ tokens/day', 'Dedicated AI instance', 'SLA guarantee', 'Custom training']
+    limit: 10000000, // 10M tokens/day
+    price: '₹99,999 lifetime',
+    features: ['Everything in Pro', 'Dedicated AI instance', 'SLA guarantee', 'Custom training']
   }
 };
 
@@ -38,6 +39,7 @@ const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
 
 const UsageView: React.FC = () => {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<7 | 30 | 90>(7);
@@ -217,7 +219,10 @@ const UsageView: React.FC = () => {
                     ))}
                   </div>
                   {subscriptionTier === 'free' && (
-                    <button className="w-full mt-4 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors">
+                    <button 
+                      onClick={() => router.push('/pricing')}
+                      className="w-full mt-4 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors"
+                    >
                       Upgrade Plan
                     </button>
                   )}

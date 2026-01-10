@@ -8,10 +8,9 @@ export interface Message {
     email: string;
     avatar?: string;
   };
-  conversationType: 'direct' | 'group' | 'community';
+  conversationType: 'direct' | 'group';
   participants?: string[];
   group?: string;
-  community?: string;
   content: string;
   messageType: 'text' | 'image' | 'file' | 'audio' | 'video' | 'link';
   attachments?: Array<{
@@ -34,7 +33,7 @@ export interface Message {
 }
 
 export interface Conversation {
-  type: 'direct' | 'group' | 'community';
+  type: 'direct' | 'group';
   // For direct messages
   friend?: {
     id: string;
@@ -49,13 +48,6 @@ export interface Conversation {
     description?: string;
     avatar?: string;
   };
-  // For community messages
-  community?: {
-    id: string;
-    name: string;
-    description?: string;
-    avatar?: string;
-  };
   lastMessage?: Message;
   unreadCount: number;
 }
@@ -63,12 +55,11 @@ export interface Conversation {
 class ChatService {
   // Send message
   async sendMessage(data: {
-    conversationType: 'direct' | 'group' | 'community';
+    conversationType: 'direct' | 'group';
     content: string;
     messageType?: string;
     recipientId?: string;
     groupId?: string;
-    communityId?: string;
     replyTo?: string;
     attachments?: Array<{
       url: string;
@@ -86,17 +77,15 @@ class ChatService {
 
   // Get messages
   async getMessages(params: {
-    type: 'direct' | 'group' | 'community';
+    type: 'direct' | 'group';
     recipientId?: string;
     groupId?: string;
-    communityId?: string;
     limit?: number;
     before?: string;
   }) {
     const searchParams = new URLSearchParams();
     if (params.recipientId) searchParams.append('recipientId', params.recipientId);
     if (params.groupId) searchParams.append('groupId', params.groupId);
-    if (params.communityId) searchParams.append('communityId', params.communityId);
     if (params.limit) searchParams.append('limit', String(params.limit));
     if (params.before) searchParams.append('before', params.before);
 
@@ -104,7 +93,7 @@ class ChatService {
     return (response.messages || []) as Message[];
   }
 
-  // Get conversations (direct, group, community)
+  // Get conversations (direct, group)
   async getConversations() {
     const data = await api.get('/chat/conversations');
     return (data.conversations || []) as Conversation[];
@@ -120,21 +109,6 @@ class ChatService {
         name: group.name,
         description: group.description,
         avatar: group.avatar,
-      },
-      unreadCount: 0,
-    }));
-  }
-
-  // Get community conversations
-  async getCommunityConversations() {
-    const data = await api.get('/communities/user');
-    return (data.communities || []).map((community: any) => ({
-      type: 'community' as const,
-      community: {
-        id: community._id || community.id,
-        name: community.name,
-        description: community.description,
-        avatar: community.avatar,
       },
       unreadCount: 0,
     }));

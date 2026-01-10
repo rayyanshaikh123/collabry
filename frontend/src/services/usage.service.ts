@@ -72,7 +72,8 @@ class UsageService {
    */
   async getMyUsage(days: number = 30): Promise<UsageStats> {
     const response = await apiClient.get(`/ai/usage/me?days=${days}`);
-    return response.data as UsageStats;
+    // Response is wrapped in { success: true, data: {...} } format
+    return (response.data?.data || response.data) as UsageStats;
   }
 
   /**
@@ -80,7 +81,7 @@ class UsageService {
    */
   async getUserUsage(userId: string, days: number = 30): Promise<UsageStats> {
     const response = await apiClient.get(`/ai/usage/user/${userId}?days=${days}`);
-    return response.data as UsageStats;
+    return (response.data?.data || response.data) as UsageStats;
   }
 
   /**
@@ -88,7 +89,7 @@ class UsageService {
    */
   async getGlobalUsage(days: number = 30): Promise<GlobalUsage> {
     const response = await apiClient.get(`/ai/usage/global?days=${days}`);
-    return response.data as GlobalUsage;
+    return (response.data?.data || response.data) as GlobalUsage;
   }
 
   /**
@@ -96,7 +97,7 @@ class UsageService {
    */
   async getPublicStats(days: number = 7): Promise<GlobalUsage> {
     const response = await apiClient.get(`/ai/usage/stats?days=${days}`);
-    return response.data as GlobalUsage;
+    return (response.data?.data || response.data) as GlobalUsage;
   }
 
   /**
@@ -104,7 +105,7 @@ class UsageService {
    */
   async getRealtimeStats(): Promise<RealtimeStats> {
     const response = await apiClient.get(`/ai/usage/realtime`);
-    return response.data as RealtimeStats;
+    return (response.data?.data || response.data) as RealtimeStats;
   }
 
   /**
@@ -112,7 +113,7 @@ class UsageService {
    */
   async getHealth(): Promise<HealthCheck> {
     const response = await apiClient.get(`/ai/health`);
-    return response.data as HealthCheck;
+    return (response.data?.data || response.data) as HealthCheck;
   }
 
   /**
