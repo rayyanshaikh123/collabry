@@ -74,8 +74,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     { id: AppRoute.SOCIAL, label: 'Social Hub', icon: ICONS.Profile },
     { id: AppRoute.STUDY_NOTEBOOK, label: 'Study Notebook', icon: ICONS.Book },
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
-    { id: AppRoute.FOCUS, label: 'Deep Focus', icon: ICONS.Focus },
-    { id: AppRoute.FLASHCARDS, label: 'Memory', icon: ICONS.Flashcards },
     
   ];
 
