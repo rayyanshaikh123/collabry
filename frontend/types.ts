@@ -21,7 +21,8 @@ export enum AppRoute {
   FORGOT_PASSWORD = 'forgot-password',
   LEARNING_JOURNAL = 'learning-journal',
   VISUAL_AIDS = 'visual-aids',
-  STUDY_BUDDY = 'study-buddy'
+  STUDY_BUDDY = 'study-buddy',
+  SOCIAL = 'social'
 }
 
 export interface User {

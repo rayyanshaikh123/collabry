@@ -34,6 +34,9 @@ export default function StudyBoardListPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [deletingBoardId, setDeletingBoardId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [boardToDelete, setBoardToDelete] = useState<Board | null>(null);
 
   useEffect(() => {
     fetchBoards();
@@ -86,6 +89,34 @@ export default function StudyBoardListPage() {
 
   const openBoard = (boardId: string) => {
     router.push(`/study-board/${boardId}`);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, board: Board) => {
+    e.stopPropagation();
+    setBoardToDelete(board);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!boardToDelete) return;
+    
+    try {
+      setDeletingBoardId(boardToDelete._id);
+      await studyBoardService.deleteBoard(boardToDelete._id);
+      setBoards(boards.filter(b => b._id !== boardToDelete._id));
+      setShowDeleteConfirm(false);
+      setBoardToDelete(null);
+    } catch (err: any) {
+      alert('Failed to delete board: ' + err.message);
+      console.error('Error deleting board:', err);
+    } finally {
+      setDeletingBoardId(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setBoardToDelete(null);
   };
 
   if (isLoading) {
@@ -188,16 +219,33 @@ export default function StudyBoardListPage() {
                   <div className="text-xs text-slate-400">
                     Updated {new Date(board.lastActivity || board.createdAt).toLocaleDateString()}
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openBoard(board._id);
-                    }}
-                  >
-                    Open →
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {board.owner._id === user?.id && (
+                      <Button 
+                        variant="ghost" 
+                        size="small"
+                        onClick={(e) => handleDeleteClick(e, board)}
+                        disabled={deletingBoardId === board._id}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        {deletingBoardId === board._id ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500" />
+                        ) : (
+                          <ICONS.Trash size={16} />
+                        )}
+                      </Button>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openBoard(board._id);
+                      }}
+                    >
+                      Open →
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -211,6 +259,51 @@ export default function StudyBoardListPage() {
         onClose={() => setShowTemplateModal(false)}
         onSelectTemplate={handleTemplateSelect}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && boardToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <ICONS.Trash size={24} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Delete Board?</h3>
+                <p className="text-sm text-slate-500">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="bg-slate-50 rounded-lg p-4">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to delete <strong>"{boardToDelete.title}"</strong>?
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                All board data, elements, and member access will be permanently removed.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                variant="secondary" 
+                className="flex-1"
+                onClick={cancelDelete}
+                disabled={!!deletingBoardId}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="primary" 
+                className="flex-1 bg-red-500 hover:bg-red-600"
+                onClick={confirmDelete}
+                disabled={!!deletingBoardId}
+              >
+                {deletingBoardId ? 'Deleting...' : 'Delete Board'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

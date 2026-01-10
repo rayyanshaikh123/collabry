@@ -148,7 +148,10 @@ module.exports = (io) => {
         const board = await Board.findById(boardId);
         if (!board) {
           console.error(`[Board ${boardId}] Board not found`);
-          return callback({ error: 'Board not found' });
+          if (callback && typeof callback === 'function') {
+            return callback({ error: 'Board not found' });
+          }
+          return;
         }
 
         // Add element with metadata
@@ -191,10 +194,14 @@ module.exports = (io) => {
 
         console.log(`[Board ${boardId}] Broadcasted element:created to room`);
 
-        callback({ success: true, element: cleanElement });
+        if (callback && typeof callback === 'function') {
+          callback({ success: true, element: cleanElement });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error creating element:`, error);
-        callback({ error: error.message });
+        if (callback && typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 
@@ -272,7 +279,10 @@ module.exports = (io) => {
 
             if (!retryBoard) {
               console.error(`[Board ${boardId}] Board not found even on retry`);
-              return callback({ error: 'Board not found' });
+              if (callback && typeof callback === 'function') {
+                return callback({ error: 'Board not found' });
+              }
+              return;
             }
 
             element = retryBoard.elements.find(el => el.id === elementId);
@@ -327,10 +337,14 @@ module.exports = (io) => {
           console.log(`[Board ${boardId}] Broadcasted element:updated to room`);
         }
 
-        callback({ success: true });
+        if (callback && typeof callback === 'function') {
+          callback({ success: true });
+        }
       } catch (error) {
         console.error(`[Board ${boardId}] Error updating element:`, error);
-        callback({ error: error.message });
+        if (callback && typeof callback === 'function') {
+          callback({ error: error.message });
+        }
       }
     });
 

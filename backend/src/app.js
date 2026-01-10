@@ -10,6 +10,10 @@ const visualAidsRoutes = require('./routes/visualAids.routes');
 const boardRoutes = require('./routes/board.routes');
 const aiRoutes = require('./routes/ai.routes');
 const studyPlannerRoutes = require('./routes/studyPlanner.routes');
+const friendRoutes = require('./routes/friend.routes');
+const groupRoutes = require('./routes/group.routes');
+const communityRoutes = require('./routes/community.routes');
+const chatRoutes = require('./routes/chat.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
@@ -30,6 +34,10 @@ app.use('/api/visual-aids', visualAidsRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/study-planner', studyPlannerRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/groups', groupRoutes);
+app.use('/api/communities', communityRoutes);
+app.use('/api/chat', chatRoutes);
 
 
 // Root route

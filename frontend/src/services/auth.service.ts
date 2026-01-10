@@ -31,9 +31,10 @@ export const authService = {
         }
       };
       
-      // Store tokens
+      // Store tokens and user
       localStorage.setItem('accessToken', authResponse.tokens.accessToken);
       localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
+      localStorage.setItem('user', JSON.stringify(authResponse.user));
       return authResponse;
     }
     
@@ -58,9 +59,10 @@ export const authService = {
         }
       };
       
-      // Store tokens
+      // Store tokens and user
       localStorage.setItem('accessToken', authResponse.tokens.accessToken);
       localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
+      localStorage.setItem('user', JSON.stringify(authResponse.user));
       return authResponse;
     }
     
@@ -81,6 +83,7 @@ export const authService = {
       // Clear local storage regardless of backend response
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
     }
   },
 

@@ -28,6 +28,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/usage': 'usage',
     '/study-buddy': 'study-buddy',
     '/visual-aids': 'visual-aids',
+    '/social': 'social',
   };
   return routeMap[path] || 'dashboard';
 };
@@ -81,6 +82,7 @@ export default function MainLayout({
       'usage': '/usage',
       'study-buddy': '/study-buddy',
       'visual-aids': '/visual-aids',
+      'social': '/social',
     };
     router.push(pathMap[routeStr] || '/dashboard');
   };

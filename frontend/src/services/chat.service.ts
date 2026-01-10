@@ -1,0 +1,165 @@
+import api from '@/src/lib/api';
+
+export interface Message {
+  _id: string;
+  sender: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  conversationType: 'direct' | 'group' | 'community';
+  participants?: string[];
+  group?: string;
+  community?: string;
+  content: string;
+  messageType: 'text' | 'image' | 'file' | 'audio' | 'video' | 'link';
+  attachments?: Array<{
+    url: string;
+    type: string;
+    name: string;
+    size: number;
+  }>;
+  replyTo?: Message;
+  isEdited: boolean;
+  editedAt?: string;
+  isDeleted: boolean;
+  deletedAt?: string;
+  readBy: Array<{
+    user: string;
+    readAt: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Conversation {
+  type: 'direct' | 'group' | 'community';
+  // For direct messages
+  friend?: {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
+  // For group messages
+  group?: {
+    id: string;
+    name: string;
+    description?: string;
+    avatar?: string;
+  };
+  // For community messages
+  community?: {
+    id: string;
+    name: string;
+    description?: string;
+    avatar?: string;
+  };
+  lastMessage?: Message;
+  unreadCount: number;
+}
+
+class ChatService {
+  // Send message
+  async sendMessage(data: {
+    conversationType: 'direct' | 'group' | 'community';
+    content: string;
+    messageType?: string;
+    recipientId?: string;
+    groupId?: string;
+    communityId?: string;
+    replyTo?: string;
+    attachments?: Array<{
+      url: string;
+      type: string;
+      name: string;
+      size: number;
+    }>;
+  }) {
+    const result = await api.post('/chat/messages', data);
+    if (!result.message) {
+      throw new Error('Failed to send message');
+    }
+    return result.message as Message;
+  }
+
+  // Get messages
+  async getMessages(params: {
+    type: 'direct' | 'group' | 'community';
+    recipientId?: string;
+    groupId?: string;
+    communityId?: string;
+    limit?: number;
+    before?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params.recipientId) searchParams.append('recipientId', params.recipientId);
+    if (params.groupId) searchParams.append('groupId', params.groupId);
+    if (params.communityId) searchParams.append('communityId', params.communityId);
+    if (params.limit) searchParams.append('limit', String(params.limit));
+    if (params.before) searchParams.append('before', params.before);
+
+    const response = await api.get(`/chat/messages/${params.type}?${searchParams.toString()}`);
+    return (response.messages || []) as Message[];
+  }
+
+  // Get conversations (direct, group, community)
+  async getConversations() {
+    const data = await api.get('/chat/conversations');
+    return (data.conversations || []) as Conversation[];
+  }
+
+  // Get group conversations
+  async getGroupConversations() {
+    const data = await api.get('/groups');
+    return (data.groups || []).map((group: any) => ({
+      type: 'group' as const,
+      group: {
+        id: group._id || group.id,
+        name: group.name,
+        description: group.description,
+        avatar: group.avatar,
+      },
+      unreadCount: 0,
+    }));
+  }
+
+  // Get community conversations
+  async getCommunityConversations() {
+    const data = await api.get('/communities/user');
+    return (data.communities || []).map((community: any) => ({
+      type: 'community' as const,
+      community: {
+        id: community._id || community.id,
+        name: community.name,
+        description: community.description,
+        avatar: community.avatar,
+      },
+      unreadCount: 0,
+    }));
+  }
+
+  // Mark messages as read
+  async markAsRead(messageIds: string[]) {
+    const data = await api.post('/chat/messages/read', { messageIds });
+    return data;
+  }
+
+  // Edit message
+  async editMessage(messageId: string, content: string) {
+    const result = await api.put(`/chat/messages/${messageId}`, { content });
+    if (!result.message) {
+      throw new Error('Failed to edit message');
+    }
+    return result.message as Message;
+  }
+
+  // Delete message
+  async deleteMessage(messageId: string) {
+    const data = await api.delete(`/chat/messages/${messageId}`);
+    return data;
+  }
+}
+
+export default new ChatService();

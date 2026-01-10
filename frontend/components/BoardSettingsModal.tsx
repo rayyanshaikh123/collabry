@@ -250,7 +250,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
                 </p>
                 <div className="flex gap-2">
                   <Button
-                    variant="destructive"
+                    variant="danger"
                     onClick={handleDelete}
                     disabled={isLoading}
                     className="flex-1"
@@ -269,7 +269,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({
               </div>
             ) : (
               <Button
-                variant="destructive"
+                variant="danger"
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={isLoading}
                 className="w-full"

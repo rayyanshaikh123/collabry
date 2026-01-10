@@ -55,6 +55,10 @@ const initializeSocket = (httpServer) => {
 
   // Initialize board namespace
   require('./boardNamespace')(io);
+  
+  // Initialize chat namespace
+  const { initializeChatNamespace } = require('./chatNamespace');
+  initializeChatNamespace(io);
 
   console.log('🔌 Socket.IO initialized');
   return io;

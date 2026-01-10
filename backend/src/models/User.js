@@ -83,9 +83,11 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.toJSON = function () {
   const userObject = this.toObject();
   
-  // Transform _id to id for frontend compatibility
+  // Keep both _id and id for compatibility
+  // Frontend socket needs _id (ObjectId string) for group membership checks
+  // Frontend UI uses id for display
   userObject.id = userObject._id.toString();
-  delete userObject._id;
+  // Don't delete _id - keep it for socket authentication
   delete userObject.password;
   delete userObject.__v;
   
