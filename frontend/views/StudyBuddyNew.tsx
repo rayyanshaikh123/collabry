@@ -603,7 +603,15 @@ const StudyBuddyNew: React.FC = () => {
 
   const handleSendMessage = async () => {
     console.log('📤 [handleSendMessage] Starting', { inputText, user: !!user, activeSessionId });
-    
+
+    // Prevent re-entrant sends: if we're already streaming or an AI request
+    // is pending, ignore additional send attempts. This avoids rapid state
+    // updates that can trigger an infinite update loop in dev mode.
+    if (isStreaming || isAnyPending) {
+      console.warn('⚠️ [handleSendMessage] Send suppressed - streaming or request pending');
+      return;
+    }
+
     if (!inputText.trim() || !user || !activeSessionId) {
       console.warn('⚠️ [handleSendMessage] Validation failed', { 
         hasInput: !!inputText.trim(), 

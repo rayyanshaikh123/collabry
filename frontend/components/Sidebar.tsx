@@ -69,13 +69,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
   const studentItems = [
     { id: AppRoute.DASHBOARD, label: 'Learning Path', icon: ICONS.Dashboard },
     { id: AppRoute.STUDY_BOARD, label: 'Study Boards', icon: ICONS.StudyBoard },
-    { id: AppRoute.VISUAL_AIDS, label: 'Visual Aids', icon: ICONS.Image },
-    { id: AppRoute.STUDY_BUDDY, label: 'Study Buddy', icon: ICONS.Chat },
+   
+    
     { id: AppRoute.SOCIAL, label: 'Social Hub', icon: ICONS.Profile },
     { id: AppRoute.STUDY_NOTEBOOK, label: 'Study Notebook', icon: ICONS.Book },
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
-    { id: AppRoute.FOCUS, label: 'Deep Focus', icon: ICONS.Focus },
-    { id: AppRoute.FLASHCARDS, label: 'Memory', icon: ICONS.Flashcards },
     
   ];
 

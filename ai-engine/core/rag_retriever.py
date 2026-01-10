@@ -21,6 +21,10 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+import shutil
+import tarfile
+import io
+from core.mongo_store import MongoMemoryStore
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -71,7 +75,11 @@ class RAGRetriever:
 
     def _load_or_create_vector_store(self):
         """Load FAISS index from disk if it exists, otherwise create it."""
-        if os.path.exists(self.faiss_index_path):
+        # Ensure directory for index path parent exists
+        faiss_dir = str(self.faiss_index_path)
+
+        # Try to restore FAISS index from local disk first
+        if os.path.exists(faiss_dir):
             try:
                 self.vector_store = FAISS.load_local(
                     self.faiss_index_path,
@@ -82,6 +90,33 @@ class RAGRetriever:
                 return
             except Exception as e:
                 logger.error(f"Failed to load FAISS index: {e}. Rebuilding...")
+
+        # If local index missing, attempt to fetch from MongoDB GridFS
+        try:
+            mongo = MongoMemoryStore(self.config.get('mongo_uri'), self.config.get('mongo_db'), collection_name=self.config.get('memory_collection', 'conversations'))
+            archive_name = Path(self.faiss_index_path).name + ".tar.gz"
+            data = mongo.load_faiss_index_archive(archive_name)
+            if data:
+                logger.info(f"Found FAISS archive in GridFS: {archive_name}, restoring to {faiss_dir}")
+                # ensure parent removed then extracted
+                if os.path.exists(faiss_dir):
+                    shutil.rmtree(faiss_dir)
+                os.makedirs(faiss_dir, exist_ok=True)
+                with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as tf:
+                    tf.extractall(path=str(Path(faiss_dir).parent))
+                try:
+                    self.vector_store = FAISS.load_local(
+                        self.faiss_index_path,
+                        self.embeddings,
+                        allow_dangerous_deserialization=True
+                    )
+                    logger.info(f"Restored FAISS index from GridFS to {self.faiss_index_path}")
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to load restored FAISS index: {e}. Rebuilding...")
+        except Exception:
+            # Any failure to use Mongo should not block index creation
+            logger.debug("GridFS restore attempt failed or not available")
 
         logger.info("Creating new FAISS index...")
         # Load documents
@@ -95,7 +130,24 @@ class RAGRetriever:
         documents = loader.load()
 
         if not documents:
-            logger.warning("No documents found to create a vector store.")
+            # No documents on disk — create an empty placeholder FAISS index so
+            # the vector store is initialized and subsequent background
+            # ingestion can add documents without causing errors.
+            logger.info("No documents found on disk — creating empty FAISS index placeholder.")
+            try:
+                # Create a placeholder index with a single system document
+                placeholder_text = ["placeholder"]
+                placeholder_meta = [{"user_id": "system", "placeholder": True}]
+                self.vector_store = FAISS.from_texts(
+                    texts=placeholder_text,
+                    embedding=self.embeddings,
+                    metadatas=placeholder_meta,
+                )
+                # Persist locally so subsequent restarts have an index directory
+                self.vector_store.save_local(self.faiss_index_path)
+                logger.info(f"Created placeholder FAISS index at {self.faiss_index_path}")
+            except Exception as e:
+                logger.error(f"Failed to create placeholder FAISS index: {e}")
             return
 
         # Add default metadata (public documents accessible to all)
@@ -109,8 +161,31 @@ class RAGRetriever:
 
         # Create FAISS vector store
         self.vector_store = FAISS.from_documents(texts, self.embeddings)
+        # Persist locally
         self.vector_store.save_local(self.faiss_index_path)
         logger.info(f"FAISS index created and saved to {self.faiss_index_path}")
+
+        # Archive and store in Mongo GridFS (best-effort)
+        try:
+            archive_base = str(Path(self.faiss_index_path).name)
+            tmp_archive = str(Path(self.faiss_index_path).with_suffix('.tar.gz'))
+            # Create tar.gz of the index directory
+            shutil.make_archive(base_name=str(Path(self.faiss_index_path)), format='gztar', root_dir=str(Path(self.faiss_index_path).parent), base_dir=str(Path(self.faiss_index_path).name))
+            # Read bytes
+            with open(tmp_archive, 'rb') as f:
+                data = f.read()
+            mongo = MongoMemoryStore(self.config.get('mongo_uri'), self.config.get('mongo_db'), collection_name=self.config.get('memory_collection', 'conversations'))
+            archive_name = Path(self.faiss_index_path).name + ".tar.gz"
+            saved = mongo.save_faiss_index_archive(archive_name, data)
+            if saved:
+                logger.info(f"FAISS index archived to GridFS as {archive_name}")
+            # cleanup temporary archive file
+            try:
+                os.remove(tmp_archive)
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning(f"Could not save FAISS archive to MongoDB GridFS: {e}")
 
     def as_retriever(self):
         """Return the vector store as a LangChain retriever with user filtering."""
@@ -159,6 +234,12 @@ class RAGRetriever:
             doc_user = doc.metadata.get("user_id", "public")
             doc_session = doc.metadata.get("session_id", None)
             doc_source = doc.metadata.get("source_id", None)
+            is_placeholder = doc.metadata.get("placeholder", False)
+            
+            # Skip placeholder documents
+            if is_placeholder:
+                logger.info(f"  Doc {i+1}: PLACEHOLDER - skipping")
+                continue
             
             # Verbose logging for debugging
             logger.info(f"  Doc {i+1}: user={doc_user}, session={doc_session}, source={doc_source}")
@@ -212,31 +293,42 @@ class RAGRetriever:
             logger.warning("Vector store not initialized")
             return
         
+        logger.info(f"📥 Adding {len(documents)} documents for user: {user_id}")
+        
         # Tag all documents with user_id (preserve existing metadata)
         for doc in documents:
             if "user_id" not in doc.metadata:
                 doc.metadata["user_id"] = user_id
+            logger.info(f"  Document: {doc.metadata.get('source', 'unknown')} ({len(doc.page_content)} chars)")
         
         # Split and add to vector store (preserves metadata in chunks)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         texts = text_splitter.split_documents(documents)
         
+        logger.info(f"  Split into {len(texts)} chunks")
+        
         # Log metadata for debugging
         if texts:
-            logger.info(f"Sample chunk metadata: {texts[0].metadata}")
+            logger.info(f"  Sample chunk metadata: {texts[0].metadata}")
+        
+        # Get current index size before adding
+        current_size = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else 0
+        logger.info(f"  FAISS index size BEFORE: {current_size} documents")
         
         self.vector_store.add_documents(texts)
+        
+        # Get new index size after adding
+        new_size = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else 0
+        logger.info(f"  FAISS index size AFTER: {new_size} documents (+{new_size - current_size})")
         
         # Update global shared reference
         _shared_vector_store = self.vector_store
         
         if save_index:
             self.vector_store.save_local(self.faiss_index_path)
+            logger.info(f"  ✅ Saved FAISS index to disk: {self.faiss_index_path}")
         
-        # Log total documents in index for debugging
-        total_docs = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else "unknown"
-        logger.info(f"✓ Added {len(texts)} document chunks for user: {user_id}")
-        logger.info(f"  Total documents in FAISS index: {total_docs}")
+        logger.info(f"✅ Successfully added {len(texts)} document chunks for user: {user_id}")
     
     def delete_documents_by_metadata(
         self,

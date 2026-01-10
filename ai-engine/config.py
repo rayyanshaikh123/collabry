@@ -28,8 +28,8 @@ CONFIG = {
     # Ollama base URL (standardized ENV variable)
     "ollama_host": os.environ.get("OLLAMA_BASE_URL", os.environ.get("OLLAMA_HOST", "http://localhost:11434")),
     
-    # Ollama request timeout in seconds (default: 60s)
-    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "60")),
+    # Ollama request timeout in seconds (default: 180s for artifact generation)
+    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),
     
     # Ollama retry configuration
     "ollama_max_retries": int(os.environ.get("OLLAMA_MAX_RETRIES", "3")),

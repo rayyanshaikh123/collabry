@@ -134,8 +134,20 @@ async function ingestSourceToRAG(notebook, source, authToken) {
         );
         status = statusResponse.data.status;
         console.log(`  Polling (${attempts}s): ${status}`);
+        
+        // If task is unknown (server restarted), assume it completed
+        if (status === 'unknown') {
+          console.log(`  ℹ Task status unknown (server may have restarted), assuming completed`);
+          status = 'completed';
+          break;
+        }
       } catch (pollErr) {
         console.warn(`  Warning: Failed to poll task status:`, pollErr.message);
+        // If it's a 403 or 404, assume the task completed
+        if (pollErr.response && (pollErr.response.status === 403 || pollErr.response.status === 404)) {
+          console.log(`  ℹ Task not found (${pollErr.response.status}), assuming completed`);
+          status = 'completed';
+        }
         break; // Continue anyway if polling fails
       }
     }

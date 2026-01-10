@@ -157,15 +157,24 @@ async def get_upload_status(
         Task status (processing, completed, failed)
     """
     if task_id not in ingestion_tasks:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Task {task_id} not found"
-        )
+        # Task not found - likely server was restarted or task expired
+        # Return a default "completed" status to avoid blocking the frontend
+        logger.warning(f"Task {task_id} not found in memory (server may have restarted)")
+        return {
+            "task_id": task_id,
+            "status": "unknown",
+            "message": "Task not found - server may have restarted. Please check if document was ingested.",
+            "filename": None,
+            "started_at": None,
+            "completed_at": None,
+            "error": None
+        }
     
     task = ingestion_tasks[task_id]
     
     # Verify task belongs to current user
     if task.get("user_id") != user_id:
+        logger.warning(f"User {user_id} tried to access task {task_id} belonging to {task.get('user_id')}")
         raise HTTPException(
             status_code=403,
             detail="Access denied: task belongs to different user"

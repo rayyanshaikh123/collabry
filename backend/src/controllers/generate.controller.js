@@ -157,20 +157,30 @@ class GenerateController {
         token
       );
 
-      // If save is true and subjectId provided, create mind map in database
-      if (save && subjectId) {
-        const mindMap = await mindMapService.createMindMap(userId, {
-          title: `AI-Generated Mind Map: ${mapTopic}`,
-          topic: mapTopic,
-          subject: subjectId,
-          nodes: generatedMap.nodes,
-          edges: generatedMap.edges
-        });
+      // If save is true, create mind map in database. Subject is optional
+      if (save) {
+        try {
+          const mindMap = await mindMapService.createMindMap(userId, {
+            title: `AI-Generated Mind Map: ${mapTopic}`,
+            topic: mapTopic,
+            subject: subjectId || null,
+            nodes: generatedMap.nodes,
+            edges: generatedMap.edges
+          });
 
-        return res.status(201).json({
-          success: true,
-          data: mindMap
-        });
+          return res.status(201).json({
+            success: true,
+            data: mindMap
+          });
+        } catch (saveErr) {
+          console.error('Failed to save mind map to DB:', saveErr);
+          // Return generated map even if save fails
+          return res.json({
+            success: true,
+            data: generatedMap,
+            warning: 'Mind map generated but failed to save to database'
+          });
+        }
       }
 
       // Return generated mind map without saving
