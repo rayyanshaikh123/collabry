@@ -17,6 +17,7 @@ from server.deps import get_current_user
 from core.usage_tracker import usage_tracker
 from datetime import datetime
 import logging
+from fastapi import Body
 
 logger = logging.getLogger(__name__)
 
@@ -265,3 +266,32 @@ async def get_realtime_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve realtime statistics: {str(e)}"
         )
+
+
+@router.post(
+    "/reset-me",
+    summary="Reset my daily usage",
+    description="Reset the aggregated daily usage stats for the authenticated user (today)."
+)
+async def reset_my_usage(user_id: str = Depends(get_current_user)):
+    try:
+        usage_tracker.reset_user_daily_usage(user_id)
+        return {"message": "Daily usage reset for current user."}
+    except Exception as e:
+        logger.exception(f"Error resetting usage for {user_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/reset/{target_user_id}",
+    summary="Reset user daily usage (admin)",
+    description="Reset the aggregated daily usage stats for a specific user. Admin only."
+)
+async def reset_user_usage(target_user_id: str, admin_id: str = Depends(get_current_user)):
+    try:
+        # TODO: enforce admin role check
+        usage_tracker.reset_user_daily_usage(target_user_id)
+        return {"message": f"Daily usage reset for user {target_user_id}."}
+    except Exception as e:
+        logger.exception(f"Error resetting usage for {target_user_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -32,11 +32,11 @@ const NavItem: React.FC<NavItemProps> = ({
       }}
       className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-[1.5rem] transition-all mb-2 bouncy-hover press-effect border-b-2 ${
         isActive 
-          ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-100 border-indigo-700' 
-          : 'text-slate-500 hover:bg-white hover:text-indigo-500 border-transparent'
+          ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50 border-indigo-700 dark:border-indigo-800' 
+          : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-500 dark:hover:text-indigo-400 border-transparent'
       }`}
     >
-      <span className={`${isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-400'}`}>
+      <span className={`${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-400 dark:group-hover:text-indigo-400'}`}>
         <Icon size={22} strokeWidth={isActive ? 3 : 2} />
       </span>
       {!isCollapsed && <span className="font-black text-sm text-left truncate">{label}</span>}
@@ -69,8 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
   const studentItems = [
     { id: AppRoute.DASHBOARD, label: 'Learning Path', icon: ICONS.Dashboard },
     { id: AppRoute.STUDY_BOARD, label: 'Study Boards', icon: ICONS.StudyBoard },
-    { id: AppRoute.VISUAL_AIDS, label: 'Visual Aids', icon: ICONS.Image },
-    { id: AppRoute.STUDY_BUDDY, label: 'Study Buddy', icon: ICONS.Chat },
+    { id: AppRoute.STUDY_NOTEBOOK, label: 'Study Notebook', icon: ICONS.Book },
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
     { id: AppRoute.FOCUS, label: 'Deep Focus', icon: ICONS.Focus },
     { id: AppRoute.FLASHCARDS, label: 'Memory', icon: ICONS.Flashcards },
@@ -87,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     { id: AppRoute.ADMIN_SETTINGS, label: 'Platform Settings', icon: ICONS.Settings },
   ];
 
-  const sidebarClasses = `fixed inset-y-0 left-0 z-50 bg-slate-50/50 border-r-2 border-slate-100 transition-all duration-300 lg:static 
+  const sidebarClasses = `fixed inset-y-0 left-0 z-50 bg-slate-50/50 dark:bg-slate-900/50 border-r-2 border-slate-100 dark:border-slate-800 transition-all duration-300 lg:static 
     ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} 
     ${isCollapsed ? 'w-24' : 'w-72'}`;
 
@@ -97,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     <>
       {isMobileOpen && (
         <div 
-          className="fixed inset-0 bg-indigo-900/10 backdrop-blur-md z-40 lg:hidden"
+          className="fixed inset-0 bg-indigo-900/10 dark:bg-indigo-950/30 backdrop-blur-md z-40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -114,12 +113,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                 >
                   <span className="text-white font-black text-3xl font-display">C</span>
                 </button>
-                <h1 className="text-2xl font-black text-slate-800 font-display tracking-tight">Collabry</h1>
+                <h1 className="text-2xl font-black text-slate-800 dark:text-slate-200 font-display tracking-tight">Collabry</h1>
               </div>
             )}
             <button 
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-2 text-slate-400 hover:bg-white rounded-xl hidden lg:block border-2 border-transparent hover:border-slate-100"
+              className="p-2 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-800 rounded-xl hidden lg:block border-2 border-transparent hover:border-slate-100 dark:hover:border-slate-700"
             >
               <svg className={`w-6 h-6 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 19l-7-7 7-7" />
@@ -128,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
           </div>
 
           <nav className="flex-1 overflow-y-auto no-scrollbar pb-4">
-            <p className={`text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
+            <p className={`text-[11px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
               {userRole === 'admin' ? 'COMMAND CENTER' : 'MAIN'}
             </p>
             {currentMenuItems.map(item => (
@@ -144,8 +143,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
 
             {userRole === 'student' && (
               <>
-                <div className="mt-10 mb-4 px-4 border-t border-slate-100 pt-6" />
-                <p className={`text-[11px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
+                <div className="mt-10 mb-4 px-4 border-t border-slate-100 dark:border-slate-800 pt-6" />
+                <p className={`text-[11px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
                   PERSONAL
                 </p>
                 <NavItem 
@@ -170,10 +169,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
             )}
           </nav>
 
-          <div className="pt-4 border-t border-slate-100 flex-shrink-0">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
             <button 
               onClick={onLogout}
-              className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] text-rose-400 font-black hover:bg-rose-50 transition-all bouncy-hover ${isCollapsed ? 'justify-center' : ''}`}
+              className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] text-rose-400 dark:text-rose-500 font-black hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-all bouncy-hover ${isCollapsed ? 'justify-center' : ''}`}
             >
               <span><ICONS.Logout size={24} strokeWidth={3} /></span>
               {!isCollapsed && <span className="text-sm">Leave Studio</span>}

@@ -139,7 +139,7 @@ const validateQuiz = [
     .trim()
     .isLength({ max: 1000 }).withMessage('Description cannot exceed 1000 characters'),
   body('subject')
-    .notEmpty().withMessage('Subject ID is required')
+    .optional()
     .isMongoId().withMessage('Invalid subject ID'),
   body('linkedSetId')
     .optional()

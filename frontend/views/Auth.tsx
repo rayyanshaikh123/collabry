@@ -70,8 +70,8 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-white font-sans">
-      <div className="flex-1 hidden lg:flex flex-col justify-center items-center bg-indigo-600 p-20 text-white relative overflow-hidden">
+    <div className="min-h-screen w-full flex bg-white dark:bg-slate-950 font-sans">
+      <div className="flex-1 hidden lg:flex flex-col justify-center items-center bg-indigo-600 dark:bg-indigo-700 p-20 text-white relative overflow-hidden">
         {/* Abstract background shapes */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/30 rounded-full -ml-48 -mb-48 blur-3xl" />
@@ -108,26 +108,26 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
         </div>
       </div>
 
-      <div className="flex-[0.8] flex flex-col justify-center items-center p-8 bg-slate-50">
+      <div className="flex-[0.8] flex flex-col justify-center items-center p-8 bg-slate-50 dark:bg-slate-950">
         <div className="max-w-md w-full">
           <div className="text-center mb-10">
-            <Link href="/" className="lg:hidden w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all cursor-pointer">
+            <Link href="/" className="lg:hidden w-12 h-12 bg-indigo-600 dark:bg-indigo-700 rounded-xl flex items-center justify-center mb-6 mx-auto shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50 hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all cursor-pointer">
               <span className="text-white font-bold text-2xl">C</span>
             </Link>
-            <h2 className="text-3xl font-black text-slate-800">{isRegister ? 'Create Account' : 'Welcome Back'}</h2>
-            <p className="text-slate-500 mt-2">{isRegister ? 'Start your collaborative journey today.' : 'Please enter your details to sign in.'}</p>
+            <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200">{isRegister ? 'Create Account' : 'Welcome Back'}</h2>
+            <p className="text-slate-500 dark:text-slate-400 mt-2">{isRegister ? 'Start your collaborative journey today.' : 'Please enter your details to sign in.'}</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+              <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
                 {error}
               </div>
             )}
             
             {isRegister && (
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Full Name</label>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Full Name</label>
                 <Input 
                   placeholder="John Doe" 
                   value={formData.name}
@@ -137,7 +137,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
               </div>
             )}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Email Address</label>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Email Address</label>
               <Input 
                 type="email" 
                 placeholder="john@example.com"
@@ -148,7 +148,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
             </div>
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Password</label>
                 {!isRegister && (
                   <Link href="/forgot-password" className="text-[10px] font-bold text-indigo-600 hover:underline uppercase">
                     Forgot Password?
@@ -173,29 +173,29 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
             </Button>
           </form>
 
-          <div className="mt-8 flex items-center gap-4 text-slate-300">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="text-xs font-bold text-slate-400 uppercase">Or continue with</span>
-            <div className="flex-1 h-px bg-slate-200" />
+          <div className="mt-8 flex items-center gap-4 text-slate-300 dark:text-slate-600">
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Or continue with</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
           </div>
 
           <div className="grid grid-cols-2 gap-4 mt-8">
-            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors">
+            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="G" />
-              <span className="text-sm font-bold text-slate-700">Google</span>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Google</span>
             </button>
-            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 rounded-2xl bg-white hover:bg-slate-50 transition-colors">
+            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z"/></svg>
-              <span className="text-sm font-bold text-slate-700">Facebook</span>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Facebook</span>
             </button>
           </div>
 
-          <p className="text-center text-sm text-slate-500 mt-10">
+          <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-10">
             {isRegister ? 'Already have an account?' : 'Don\'t have an account?'} 
             <button 
               type="button"
               onClick={() => setIsRegister(!isRegister)}
-              className="ml-1 font-bold text-indigo-600 hover:underline"
+              className="ml-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               {isRegister ? 'Sign In' : 'Create one now'}
             </button>

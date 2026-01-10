@@ -10,6 +10,7 @@ const reportRoutes = require('./routes/report.routes');
 const visualAidsRoutes = require('./routes/visualAids.routes');
 const boardRoutes = require('./routes/board.routes');
 const aiRoutes = require('./routes/ai.routes');
+const notebookRoutes = require('./routes/notebook.routes');
 const studyPlannerRoutes = require('./routes/studyPlanner.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
@@ -31,6 +32,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/visual-aids', visualAidsRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/notebook', notebookRoutes);
 app.use('/api/study-planner', studyPlannerRoutes);
 
 

@@ -565,7 +565,7 @@ const CollaborativeBoard: React.FC = () => {
         </div>
 
         {/* Voice Chat Sidebar */}
-        <div className={`absolute top-0 right-0 bottom-0 w-80 bg-white border-l-2 border-slate-200 shadow-2xl z-30 overflow-hidden flex flex-col transition-transform duration-300 ${showVoiceChat ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className={`absolute top-0 right-0 bottom-0 w-80 bg-white dark:bg-slate-900 border-l-2 border-slate-200 dark:border-slate-800 shadow-2xl z-30 overflow-hidden flex flex-col transition-transform duration-300 ${showVoiceChat ? 'translate-x-0' : 'translate-x-full'}`}>
           <VoiceChat 
             boardId={boardId} 
             onClose={() => setShowVoiceChat(false)}

@@ -4,6 +4,7 @@ export enum AppRoute {
   ROLE_SELECTION = 'role-selection',
   DASHBOARD = 'dashboard',
   STUDY_BOARD = 'study-board',
+  STUDY_NOTEBOOK = 'study-notebook',
   PLANNER = 'planner',
   FOCUS = 'focus',
   FLASHCARDS = 'flashcards',
@@ -19,9 +20,7 @@ export enum AppRoute {
   LOGIN = 'login',
   REGISTER = 'register',
   FORGOT_PASSWORD = 'forgot-password',
-  LEARNING_JOURNAL = 'learning-journal',
-  VISUAL_AIDS = 'visual-aids',
-  STUDY_BUDDY = 'study-buddy'
+  LEARNING_JOURNAL = 'learning-journal'
 }
 
 export interface User {

@@ -67,13 +67,12 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         # If we have a user_id, check their usage
         if user_id:
             try:
-                # Get user's usage for current day (24-hour period)
-                usage_data = usage_tracker.get_user_usage(user_id, days=1)
-                current_tokens = usage_data.get("total_tokens", 0)
-                
-                # Get tier limit
+                # Get user's usage for today (aggregated daily_stats is efficient)
+                current_tokens = usage_tracker.get_today_tokens(user_id)
+
+                # Get tier limit for this user (default to free)
                 tier_limit = self.TIER_LIMITS.get(subscription_tier, self.TIER_LIMITS["free"])
-                
+
                 # Check if user has exceeded daily limit
                 if current_tokens >= tier_limit:
                     logger.warning(f"User {user_id} exceeded usage limit: {current_tokens}/{tier_limit}")
@@ -87,13 +86,12 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
                             "suggestion": "Upgrade your plan for higher daily limits or wait for daily reset"
                         }
                     )
-                
+
                 # Warn if approaching limit (>90%)
-                usage_percentage = (current_tokens / tier_limit) * 100
+                usage_percentage = (current_tokens / tier_limit) * 100 if tier_limit > 0 else 0
                 if usage_percentage > 90:
                     logger.info(f"User {user_id} approaching limit: {usage_percentage:.1f}%")
-                    # Could add warning header to response
-                    
+
             except HTTPException:
                 raise
             except Exception as e:

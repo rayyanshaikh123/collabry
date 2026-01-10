@@ -140,17 +140,19 @@ class GenerateController {
     try {
       const userId = req.user.id;
       const token = req.headers.authorization?.split(' ')[1];
-      const { text, topic, subjectId, maxNodes, save } = req.body;
+      const { text, topic, subjectId, maxNodes, save, useRag } = req.body;
 
       // Use defaults if topic not provided
       const mapTopic = topic || 'Concept Map';
 
       // Generate mind map using AI engine
+      console.log('GenerateMindMap request useRag:', !!useRag);
       const generatedMap = await aiService.generateMindMap(
         mapTopic,
         {
           text: text || '',
-          maxNodes: maxNodes || 20
+          maxNodes: maxNodes || 20,
+          useRag: useRag === true
         },
         token
       );

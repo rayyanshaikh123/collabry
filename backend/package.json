@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/server.js",
+    "prestart": "sh ./scripts/kill-port.sh 5000",
+    "start": "npm run prestart && node src/server.js",
     "dev": "node --watch src/server.js",
     "create-admin": "node scripts/createAdmin.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -29,6 +30,7 @@
     "mongoose": "^9.1.1",
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
+    "pdf-parse": "^1.1.1",
     "nodemailer": "^7.0.12",
     "socket.io": "^4.8.3",
     "tldraw": "^4.2.3"

@@ -8,6 +8,7 @@ import { useAuthStore } from '../../../src/stores/auth.store';
 import { studyBoardService } from '../../../src/services/studyBoard.service';
 import TemplateSelectorModal from '../../../components/TemplateSelectorModal';
 import { BoardTemplate, getTemplateShapes } from '../../../lib/boardTemplates';
+import { showError } from '../../../src/lib/alert';
 
 interface Board {
   _id: string;
@@ -72,7 +73,7 @@ export default function StudyBoardListPage() {
       // Navigate to the new board
       router.push(`/study-board/${(newBoard as any)._id}`);
     } catch (err: any) {
-      alert('Failed to create board: ' + err.message);
+      showError('Failed to create board: ' + err.message);
       console.error('Error creating board:', err);
     } finally {
       setIsCreating(false);
@@ -90,10 +91,10 @@ export default function StudyBoardListPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-[60vh] bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading boards...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading boards...</p>
         </div>
       </div>
     );
@@ -104,8 +105,8 @@ export default function StudyBoardListPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Study Boards</h2>
-          <p className="text-slate-500 text-sm">Collaborate with others in real-time</p>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Study Boards</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Collaborate with others in real-time</p>
         </div>
         <Button 
           variant="primary" 
@@ -120,8 +121,8 @@ export default function StudyBoardListPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600 text-sm">{error}</p>
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
           <Button variant="secondary" size="small" onClick={fetchBoards} className="mt-2">
             Retry
           </Button>
@@ -135,8 +136,8 @@ export default function StudyBoardListPage() {
             <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <ICONS.Plus size={32} className="text-indigo-600" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">No boards yet</h3>
-            <p className="text-slate-500 mb-6">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">No boards yet</h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-6">
               Create your first collaborative study board to start working with others
             </p>
             <Button variant="primary" onClick={() => setShowTemplateModal(true)} disabled={isCreating}>
@@ -157,11 +158,11 @@ export default function StudyBoardListPage() {
                 {/* Board Header */}
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-bold text-slate-800 text-lg mb-1">
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-1">
                       {board.title}
                     </h3>
                     {board.description && (
-                      <p className="text-sm text-slate-500 line-clamp-2">
+                      <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
                         {board.description}
                       </p>
                     )}
@@ -172,7 +173,7 @@ export default function StudyBoardListPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="flex items-center gap-4 text-sm text-slate-500">
+                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
                   <div className="flex items-center gap-1">
                     <ICONS.Users size={16} />
                     <span>{board.memberCount || 1} member{(board.memberCount || 1) > 1 ? 's' : ''}</span>
@@ -184,8 +185,8 @@ export default function StudyBoardListPage() {
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="text-xs text-slate-400">
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="text-xs text-slate-400 dark:text-slate-500">
                     Updated {new Date(board.lastActivity || board.createdAt).toLocaleDateString()}
                   </div>
                   <Button 
