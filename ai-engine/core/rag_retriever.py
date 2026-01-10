@@ -234,6 +234,12 @@ class RAGRetriever:
             doc_user = doc.metadata.get("user_id", "public")
             doc_session = doc.metadata.get("session_id", None)
             doc_source = doc.metadata.get("source_id", None)
+            is_placeholder = doc.metadata.get("placeholder", False)
+            
+            # Skip placeholder documents
+            if is_placeholder:
+                logger.info(f"  Doc {i+1}: PLACEHOLDER - skipping")
+                continue
             
             # Verbose logging for debugging
             logger.info(f"  Doc {i+1}: user={doc_user}, session={doc_session}, source={doc_source}")
@@ -287,31 +293,42 @@ class RAGRetriever:
             logger.warning("Vector store not initialized")
             return
         
+        logger.info(f"📥 Adding {len(documents)} documents for user: {user_id}")
+        
         # Tag all documents with user_id (preserve existing metadata)
         for doc in documents:
             if "user_id" not in doc.metadata:
                 doc.metadata["user_id"] = user_id
+            logger.info(f"  Document: {doc.metadata.get('source', 'unknown')} ({len(doc.page_content)} chars)")
         
         # Split and add to vector store (preserves metadata in chunks)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         texts = text_splitter.split_documents(documents)
         
+        logger.info(f"  Split into {len(texts)} chunks")
+        
         # Log metadata for debugging
         if texts:
-            logger.info(f"Sample chunk metadata: {texts[0].metadata}")
+            logger.info(f"  Sample chunk metadata: {texts[0].metadata}")
+        
+        # Get current index size before adding
+        current_size = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else 0
+        logger.info(f"  FAISS index size BEFORE: {current_size} documents")
         
         self.vector_store.add_documents(texts)
+        
+        # Get new index size after adding
+        new_size = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else 0
+        logger.info(f"  FAISS index size AFTER: {new_size} documents (+{new_size - current_size})")
         
         # Update global shared reference
         _shared_vector_store = self.vector_store
         
         if save_index:
             self.vector_store.save_local(self.faiss_index_path)
+            logger.info(f"  ✅ Saved FAISS index to disk: {self.faiss_index_path}")
         
-        # Log total documents in index for debugging
-        total_docs = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else "unknown"
-        logger.info(f"✓ Added {len(texts)} document chunks for user: {user_id}")
-        logger.info(f"  Total documents in FAISS index: {total_docs}")
+        logger.info(f"✅ Successfully added {len(texts)} document chunks for user: {user_id}")
     
     def delete_documents_by_metadata(
         self,
