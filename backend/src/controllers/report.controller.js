@@ -1,6 +1,9 @@
 const reportService = require('../services/report.service');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 /**
  * @desc    Create a new report
@@ -9,6 +12,24 @@ const AppError = require('../utils/AppError');
  */
 exports.createReport = asyncHandler(async (req, res) => {
   const report = await reportService.createReport(req.user.id, req.body);
+
+  // Send notification to all admins
+  try {
+    const User = require('../models/User');
+    const admins = await User.find({ role: 'admin' }).select('_id');
+
+    for (const admin of admins) {
+      const notification = await notificationService.notifyNewReport(
+        admin._id,
+        report
+      );
+
+      const io = getIO();
+      emitNotificationToUser(io, admin._id, notification);
+    }
+  } catch (err) {
+    console.error('Failed to send report notifications to admins:', err);
+  }
 
   res.status(201).json({
     success: true,
@@ -86,6 +107,21 @@ exports.resolveReport = asyncHandler(async (req, res) => {
     req.user.id,
     req.body
   );
+
+  // Notify the reporter about resolution
+  try {
+    const action = req.body.action || 'reviewed';
+    const notification = await notificationService.notifyContentFlagged(
+      report.reportedBy,
+      report.contentType,
+      action
+    );
+
+    const io = getIO();
+    emitNotificationToUser(io, report.reportedBy, notification);
+  } catch (err) {
+    console.error('Failed to send resolution notification:', err);
+  }
 
   res.json({
     success: true,

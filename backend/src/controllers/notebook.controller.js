@@ -7,6 +7,9 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
@@ -392,6 +395,20 @@ exports.addSource = asyncHandler(async (req, res) => {
     try {
       await ingestSourceToRAG(notebook, addedSource, authToken);
       console.log('✅ RAG ingestion completed before response');
+
+      // Send notification about document processing completion
+      try {
+        const notification = await notificationService.notifyDocumentProcessed(
+          notebook.userId,
+          notebook,
+          addedSource
+        );
+
+        const io = getIO();
+        emitNotificationToUser(io, notebook.userId, notification);
+      } catch (err) {
+        console.error('Failed to send document notification:', err);
+      }
     } catch (err) {
       console.error('❌ RAG ingestion failed:', err.message);
       // Continue anyway, return the source even if ingestion fails

@@ -108,6 +108,7 @@ export interface AIGeneratedPlan {
   estimatedCompletionDays: number;
   totalTasks: number;
   recommendations: string[];
+  warnings?: string[];  // Complexity/timeline warnings from AI
 }
 
 export interface PlanAnalytics {

@@ -15,6 +15,7 @@ import { useUIStore } from '../../src/stores/ui.store';
 import { useSocket } from '../../src/hooks/useCollaboration';
 import { AppRoute } from '../../types';
 import { DarkModeToggle } from '../../src/components/DarkModeToggle';
+import NotificationDropdown from '../../components/NotificationDropdown';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -136,10 +137,7 @@ export default function MainLayout({
 
           <div className="flex items-center gap-2 md:gap-4">
             <DarkModeToggle />
-            <button className="p-2.5 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-500 dark:hover:text-rose-400 rounded-2xl relative transition-all bouncy-hover">
-              <ICONS.Notification size={22} strokeWidth={2.5} />
-              <span className="absolute top-2 right-2 w-3 h-3 bg-rose-500 dark:bg-rose-400 border-2 border-white dark:border-slate-900 rounded-full animate-bounce"></span>
-            </button>
+            <NotificationDropdown />
             <div className="h-8 w-1 bg-slate-100 dark:bg-slate-700 mx-1 hidden md:block rounded-full"></div>
             <div 
               className="flex items-center gap-3 pl-1 md:pl-2 cursor-pointer group"

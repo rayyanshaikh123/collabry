@@ -876,6 +876,30 @@ const Planner: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Complexity Warnings - Show prominently if exist */}
+                {aiGenerated?.warnings && aiGenerated.warnings.length > 0 && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-amber-500 dark:bg-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                        <ICONS.Focus size={20} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-black text-amber-900 dark:text-amber-200 text-base mb-2">⚠️ Important Warnings</p>
+                        <ul className="space-y-2">
+                          {aiGenerated.warnings.map((warning, i) => (
+                            <li key={i} className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 font-semibold">
+                          💡 This plan provides a structured overview. Adjust dates or reduce topics if you need deeper mastery.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Editable Plan Info */}
                 <div className="space-y-3">
                   <div>

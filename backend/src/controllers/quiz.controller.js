@@ -1,4 +1,7 @@
 const quizService = require('../services/quiz.service');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 class QuizController {
   /**
@@ -9,6 +12,20 @@ class QuizController {
     try {
       const userId = req.user._id; // Use ObjectId for consistency
       const quiz = await quizService.createQuiz(userId, req.body);
+
+      // Send notification about quiz generation
+      try {
+        const notification = await notificationService.notifyQuizGenerated(
+          userId,
+          quiz
+        );
+
+        const io = getIO();
+        emitNotificationToUser(io, userId, notification);
+      } catch (err) {
+        console.error('Failed to send quiz notification:', err);
+      }
+
       res.status(201).json({
         success: true,
         data: quiz

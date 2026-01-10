@@ -1,4 +1,7 @@
 const mindMapService = require('../services/mindmap.service');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 class MindMapController {
   /**
@@ -9,6 +12,19 @@ class MindMapController {
     try {
       const userId = req.user.id;
       const mindMap = await mindMapService.createMindMap(userId, req.body);
+
+      // Send notification about mindmap generation
+      try {
+        const notification = await notificationService.notifyMindmapGenerated(
+          userId,
+          mindMap
+        );
+
+        const io = getIO();
+        emitNotificationToUser(io, userId, notification);
+      } catch (err) {
+        console.error('Failed to send mindmap notification:', err);
+      }
       
       res.status(201).json({
         success: true,

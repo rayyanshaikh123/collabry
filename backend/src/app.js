@@ -12,6 +12,7 @@ const boardRoutes = require('./routes/board.routes');
 const aiRoutes = require('./routes/ai.routes');
 const notebookRoutes = require('./routes/notebook.routes');
 const studyPlannerRoutes = require('./routes/studyPlanner.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
@@ -34,6 +35,7 @@ app.use('/api/boards', boardRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/notebook', notebookRoutes);
 app.use('/api/study-planner', studyPlannerRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 
 // Root route
