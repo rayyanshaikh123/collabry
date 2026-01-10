@@ -412,8 +412,7 @@ exports.addSource = asyncHandler(async (req, res) => {
       try {
         const notification = await notificationService.notifyDocumentProcessed(
           notebook.userId,
-          notebook,
-          addedSource
+          addedSource.name
         );
 
         const io = getIO();
