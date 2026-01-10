@@ -1,5 +1,6 @@
 const studyTaskService = require('../services/studyTask.service');
 const notificationService = require('../services/notification.service');
+const { GamificationService } = require('../services/gamification.service');
 const { getIO } = require('../socket');
 const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
@@ -237,34 +238,67 @@ class StudyTaskController {
         completionData
       );
 
-      // Create completion notification (optional - commented out to avoid spam)
-      // Uncomment if you want notifications for every completed task
-      // const notification = await notificationService.createNotification({
-      //   userId,
-      //   type: 'task_completed',
-      //   title: '✅ Task Completed!',
-      //   message: `Great job! You completed "${task.title}"`,
-      //   priority: 'low',
-      //   relatedEntity: {
-      //     entityType: 'Task',
-      //     entityId: task._id || task.id,
-      //   },
-      //   actionUrl: '/planner',
-      //   actionText: 'View Progress',
-      // });
+      // Award XP for task completion
+      let gamificationResult = null;
+      try {
+        gamificationResult = await GamificationService.awardTaskCompletionXP(userId, {
+          priority: task.priority,
+        });
+        
+        // If leveled up, create a notification
+        if (gamificationResult.leveledUp) {
+          const notification = await notificationService.createNotification({
+            userId,
+            type: 'achievement_unlocked',
+            title: '🎉 Level Up!',
+            message: `Congratulations! You reached Level ${gamificationResult.newLevel}!`,
+            priority: 'high',
+            actionUrl: '/profile',
+            actionText: 'View Profile',
+          });
 
-      // if (notification) {
-      //   try {
-      //     const io = getIO();
-      //     emitNotificationToUser(io, userId, notification);
-      //   } catch (err) {
-      //     console.error('Failed to emit notification:', err);
-      //   }
-      // }
+          if (notification) {
+            try {
+              const io = getIO();
+              emitNotificationToUser(io, userId, notification);
+            } catch (err) {
+              console.error('Failed to emit level up notification:', err);
+            }
+          }
+        }
+
+        // If new badges unlocked
+        if (gamificationResult.newBadges && gamificationResult.newBadges.length > 0) {
+          for (const badge of gamificationResult.newBadges) {
+            const notification = await notificationService.createNotification({
+              userId,
+              type: 'achievement_unlocked',
+              title: `🏆 Badge Unlocked: ${badge.name}!`,
+              message: badge.description,
+              priority: 'medium',
+              actionUrl: '/profile',
+              actionText: 'View Badges',
+            });
+
+            if (notification) {
+              try {
+                const io = getIO();
+                emitNotificationToUser(io, userId, notification);
+              } catch (err) {
+                console.error('Failed to emit badge notification:', err);
+              }
+            }
+          }
+        }
+      } catch (gamError) {
+        console.error('Error awarding gamification rewards:', gamError);
+        // Don't fail the task completion if gamification fails
+      }
 
       res.json({
         success: true,
         data: task,
+        gamification: gamificationResult,
       });
     } catch (error) {
       next(error);

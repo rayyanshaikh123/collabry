@@ -9,11 +9,14 @@ export default function DashboardPage() {
 
   const handleNavigate = (route: string) => {
     const pathMap: Record<string, string> = {
-      'STUDY_BOARD': '/study-board',
-      'PLANNER': '/planner',
-      'FOCUS': '/focus',
-      'STUDY_BUDDY': '/study-buddy',
-      'VISUAL_AIDS': '/visual-aids',
+      'study-board': '/study-board',
+      'planner': '/planner',
+      'focus': '/focus',
+      'study-buddy': '/study-buddy',
+      'visual-aids': '/visual-aids',
+      'profile': '/profile',
+      'flashcards': '/flashcards',
+      'study-notebook': '/study-notebook',
     };
     router.push(pathMap[route] || '/dashboard');
   };

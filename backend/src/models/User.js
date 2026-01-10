@@ -53,6 +53,98 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Gamification fields
+    gamification: {
+      xp: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      level: {
+        type: Number,
+        default: 1,
+        min: 1,
+      },
+      streak: {
+        current: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        longest: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        lastStudyDate: {
+          type: Date,
+          default: null,
+        },
+      },
+      badges: [{
+        id: String,
+        name: String,
+        description: String,
+        icon: String,
+        unlockedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      }],
+      achievements: [{
+        id: String,
+        name: String,
+        description: String,
+        progress: {
+          type: Number,
+          default: 0,
+        },
+        target: Number,
+        completed: {
+          type: Boolean,
+          default: false,
+        },
+        completedAt: Date,
+      }],
+      stats: {
+        totalStudyTime: {
+          type: Number,
+          default: 0, // in minutes
+        },
+        tasksCompleted: {
+          type: Number,
+          default: 0,
+        },
+        plansCreated: {
+          type: Number,
+          default: 0,
+        },
+        notesCreated: {
+          type: Number,
+          default: 0,
+        },
+        quizzesCompleted: {
+          type: Number,
+          default: 0,
+        },
+      },
+      // Weekly history for You vs You comparison
+      weeklyHistory: [{
+        weekStart: Date,
+        weekEnd: Date,
+        xp: { type: Number, default: 0 },
+        streak: { type: Number, default: 0 },
+        tasksCompleted: { type: Number, default: 0 },
+        studyHours: { type: Number, default: 0 },
+      }],
+      lastWeekSnapshot: {
+        xp: { type: Number, default: 0 },
+        streak: { type: Number, default: 0 },
+        tasksCompleted: { type: Number, default: 0 },
+        studyHours: { type: Number, default: 0 },
+        recordedAt: Date,
+      },
+    },
   },
   {
     timestamps: true,
@@ -92,6 +184,111 @@ userSchema.methods.toJSON = function () {
   delete userObject.__v;
   
   return userObject;
+};
+
+// Gamification methods
+userSchema.methods.addXP = function (amount) {
+  this.gamification.xp += amount;
+  
+  // Level up logic: level = floor(sqrt(xp / 100)) + 1
+  const newLevel = Math.floor(Math.sqrt(this.gamification.xp / 100)) + 1;
+  if (newLevel > this.gamification.level) {
+    this.gamification.level = newLevel;
+    return { leveledUp: true, newLevel };
+  }
+  return { leveledUp: false };
+};
+
+userSchema.methods.updateStreak = function () {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lastStudy = this.gamification.streak.lastStudyDate 
+    ? new Date(this.gamification.streak.lastStudyDate) 
+    : null;
+  
+  if (lastStudy) {
+    lastStudy.setHours(0, 0, 0, 0);
+    const daysDiff = Math.floor((today - lastStudy) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff === 0) {
+      // Already studied today
+      return this.gamification.streak.current;
+    } else if (daysDiff === 1) {
+      // Consecutive day
+      this.gamification.streak.current += 1;
+    } else {
+      // Streak broken
+      this.gamification.streak.current = 1;
+    }
+  } else {
+    // First study session
+    this.gamification.streak.current = 1;
+  }
+  
+  this.gamification.streak.lastStudyDate = new Date();
+  
+  // Update longest streak
+  if (this.gamification.streak.current > this.gamification.streak.longest) {
+    this.gamification.streak.longest = this.gamification.streak.current;
+  }
+  
+  return this.gamification.streak.current;
+};
+
+userSchema.methods.unlockBadge = function (badge) {
+  const exists = this.gamification.badges.find(b => b.id === badge.id);
+  if (!exists) {
+    this.gamification.badges.push({
+      ...badge,
+      unlockedAt: new Date(),
+    });
+    return true;
+  }
+  return false;
+};
+
+userSchema.methods.updateAchievementProgress = function (achievementId, progress) {
+  const achievement = this.gamification.achievements.find(a => a.id === achievementId);
+  if (achievement) {
+    achievement.progress = Math.min(progress, achievement.target);
+    if (achievement.progress >= achievement.target && !achievement.completed) {
+      achievement.completed = true;
+      achievement.completedAt = new Date();
+      return { completed: true, achievement };
+    }
+  }
+  return { completed: false };
+};
+
+// Save weekly snapshot for You vs You comparison
+userSchema.methods.saveWeeklySnapshot = function() {
+  const now = new Date();
+  const lastSnapshot = this.gamification.lastWeekSnapshot?.recordedAt;
+  
+  // Only save once per week
+  if (lastSnapshot) {
+    const daysSinceLastSnapshot = (now - lastSnapshot) / (1000 * 60 * 60 * 24);
+    if (daysSinceLastSnapshot < 7) {
+      return this;
+    }
+  }
+
+  this.gamification.lastWeekSnapshot = {
+    xp: this.gamification.xp,
+    streak: this.gamification.streak.current,
+    tasksCompleted: this.gamification.stats.tasksCompleted,
+    studyHours: Math.round((this.gamification.stats.totalStudyTime / 60) * 10) / 10,
+    recordedAt: now,
+  };
+
+  return this;
+};
+
+userSchema.methods.getXPToNextLevel = function () {
+  const nextLevel = this.gamification.level + 1;
+  const xpForNextLevel = Math.pow(nextLevel - 1, 2) * 100;
+  return xpForNextLevel - this.gamification.xp;
 };
 
 const User = mongoose.model('User', userSchema);

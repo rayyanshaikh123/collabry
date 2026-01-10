@@ -28,7 +28,7 @@ const NotificationDropdown: React.FC = () => {
   // Real-time notifications
   const { latestNotification, clearLatestNotification } = useRealtimeNotifications();
 
-  const notifications = notificationsData?.data || [];
+  const notifications = notificationsData?.notifications || [];
 
   // Close dropdown when clicking outside
   useEffect(() => {

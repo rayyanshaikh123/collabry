@@ -26,12 +26,9 @@ export interface Notification {
 }
 
 export interface NotificationResponse {
-  success: boolean;
-  data: Notification[];
-  meta: {
-    total: number;
-    unreadCount: number;
-  };
+  notifications: Notification[];
+  total: number;
+  unreadCount: number;
 }
 
 class NotificationService {

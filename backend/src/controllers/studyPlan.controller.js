@@ -1,4 +1,5 @@
 const studyPlanService = require('../services/studyPlan.service');
+const { GamificationService } = require('../services/gamification.service');
 
 class StudyPlanController {
   /**
@@ -18,9 +19,18 @@ class StudyPlanController {
         userId: plan.userId
       });
 
+      // Award XP for plan creation
+      let gamificationResult = null;
+      try {
+        gamificationResult = await GamificationService.awardPlanCreationXP(userId);
+      } catch (gamError) {
+        console.error('Error awarding plan creation XP:', gamError);
+      }
+
       res.status(201).json({
         success: true,
         data: plan,
+        gamification: gamificationResult,
       });
     } catch (error) {
       console.error('[StudyPlan] Error creating plan:', error.message);

@@ -34,8 +34,6 @@ import {
   ChevronRight,
   RefreshCw,
   Send,
- 
- 
   Lightbulb,
   Zap,
   Upload,
@@ -54,7 +52,9 @@ import {
   Copy,
   Link,
   Lock,
-  Edit
+  Edit,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -105,6 +105,7 @@ export const ICONS = {
   fileText: FileText,
   lightbulb: Lightbulb,
   zap: Zap,
+  Zap: Zap,
   Upload: Upload,
   X: X,
   globe: Globe,
@@ -117,7 +118,6 @@ export const ICONS = {
   MicOff: MicOff,
   Video: Video,
   VideoOff: VideoOff,
- 
   AlertCircle: AlertCircle,
   Eye: Eye,
   Copy: Copy,
@@ -125,6 +125,8 @@ export const ICONS = {
   Lock: Lock,
   PenTool: PenTool,
   Edit: Edit,
+  TrendingUp: TrendingUp,
+  TrendingDown: TrendingDown,
 };
 
 // ⚠️ REMOVED MOCK DATA - Fetch from backend API instead
