@@ -633,6 +633,47 @@ Find 5-8 courses. Output ONLY the course list, nothing else.
         handleSendMessage(message);
         setIsGenerating(false);
         return;
+      } else if (type === 'flashcards') {
+        // Generate flashcards from selected sources
+        const topics = selectedSources
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
+
+        const message = `Create flashcards for studying: ${topics}
+
+Use the content from the selected sources to create study flashcards.
+
+Output ONLY a JSON object with this exact structure (no markdown, no code blocks):
+{
+  "title": "Flashcards: ${topics}",
+  "cards": [
+    {
+      "id": "card-1",
+      "front": "What is...?",
+      "back": "The answer is...",
+      "category": "Basics"
+    },
+    {
+      "id": "card-2",
+      "front": "Explain...",
+      "back": "Detailed explanation...",
+      "category": "Advanced"
+    }
+  ]
+}
+
+Requirements:
+- Generate 15-20 flashcards based on source content
+- Front: Clear question or concept to test
+- Back: Concise answer or explanation (2-3 sentences max)
+- Category: Group related cards (Basics, Definitions, Applications, etc.)
+- Cover key concepts, definitions, processes, and applications
+- Make questions specific and answers clear
+- Output ONLY the JSON object, nothing else`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
       } else if (type === 'quiz') {
         // Extract topics from selected sources
         const topics = selectedSources
@@ -696,35 +737,111 @@ Rules:
           .join(', ');
 
         // Simplified prompt with clear JSON output
-        const message = `###MINDMAP_GENERATOR###
-
-Create a mind map about: ${topics}
+        const message = `Create a mind map about: ${topics}
 
 Use the content from the selected sources to build the mind map structure.
 
-Output a JSON object with this structure:
+Output ONLY a JSON object with this exact structure (no markdown, no code blocks, no extra text):
 {
   "nodes": [
-    {"id": "root", "label": "Main Topic", "level": 0},
-    {"id": "1", "label": "Subtopic 1", "level": 1},
-    {"id": "2", "label": "Subtopic 2", "level": 1},
-    {"id": "1a", "label": "Detail", "level": 2}
+    {"id": "root", "label": "${topics}", "level": 0},
+    {"id": "node-1", "label": "Subtopic 1", "level": 1},
+    {"id": "node-2", "label": "Subtopic 2", "level": 1},
+    {"id": "node-1a", "label": "Detail 1.1", "level": 2}
   ],
   "edges": [
-    {"from": "root", "to": "1"},
-    {"from": "root", "to": "2"},
-    {"from": "1", "to": "1a"}
+    {"from": "root", "to": "node-1"},
+    {"from": "root", "to": "node-2"},
+    {"from": "node-1", "to": "node-1a"}
   ]
 }
 
 Requirements:
-- 10-20 nodes total
-- 2-3 levels deep
-- Labels should be 2-5 words from the source material
-- Connect related concepts with edges
-- Output ONLY valid JSON, no markdown code blocks
+- 10-20 nodes total based on the source content
+- 2-3 levels deep showing concept hierarchy
+- Labels should be 2-5 words extracted from source material
+- Connect related concepts with edges (parent-child relationships)
+- Each node id must be unique (use "node-" prefix with numbers)
+- Output ONLY the JSON object, nothing else`;
 
-###END_INSTRUCTION###`;
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      } else if (type === 'reports') {
+        // Generate comprehensive study report
+        const topics = selectedSources
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
+
+        const message = `Generate a comprehensive study report for: ${topics}
+
+Analyze the selected source materials and create a structured report with the following sections:
+
+1. **Executive Summary** (2-3 paragraphs)
+2. **Key Concepts** (5-10 main concepts with explanations)
+3. **Learning Objectives** (What should be mastered)
+4. **Detailed Analysis** (Deep dive into important topics)
+5. **Practical Applications** (Real-world use cases)
+6. **Study Recommendations** (How to learn this effectively)
+7. **Assessment Criteria** (What to focus on for testing)
+8. **Additional Resources** (Recommended readings/videos)
+
+Format the report in clear markdown with headers, bullet points, and emphasis.
+Base all content on the actual source material provided.
+Make it comprehensive but readable (aim for 800-1200 words).`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      } else if (type === 'infographic') {
+        // Generate infographic data structure
+        const topics = selectedSources
+          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+          .join(', ');
+
+        const message = `Create an infographic data structure for: ${topics}
+
+Analyze the selected sources and extract key visual elements.
+
+Output ONLY a JSON object with this structure (no markdown, no code blocks):
+{
+  "title": "Main topic title",
+  "subtitle": "Brief description",
+  "sections": [
+    {
+      "id": "section-1",
+      "title": "Section Title",
+      "icon": "📚",
+      "stats": [
+        {"label": "Key Stat 1", "value": "70%", "color": "blue"},
+        {"label": "Key Stat 2", "value": "30%", "color": "green"}
+      ],
+      "keyPoints": [
+        "Important point 1",
+        "Important point 2",
+        "Important point 3"
+      ]
+    }
+  ],
+  "timeline": [
+    {"year": "2020", "event": "Key milestone", "description": "Brief desc"},
+    {"year": "2021", "event": "Another event", "description": "Brief desc"}
+  ],
+  "comparisons": [
+    {"category": "Aspect 1", "optionA": "Value A", "optionB": "Value B"},
+    {"category": "Aspect 2", "optionA": "Value A", "optionB": "Value B"}
+  ],
+  "conclusion": "Final takeaway message"
+}
+
+Requirements:
+- Extract 3-5 sections from source content
+- Include real data/statistics when available
+- Use relevant emojis for icons
+- Timeline events should be chronological if source has historical context
+- Comparisons should highlight key differences
+- Base everything on actual source material
+- Output ONLY the JSON object`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -850,6 +967,44 @@ Requirements:
     } catch (error) {
       console.error('Failed to save mindmap:', error);
       showError('Failed to save mindmap to Studio');
+    }
+  };
+
+  const handleSaveInfographicToStudio = async (infographic: any) => {
+    if (!notebook || !('title' in notebook)) return;
+
+    try {
+      // Save infographic data directly to notebook artifacts
+      await linkArtifact.mutateAsync({
+        type: 'infographic',
+        referenceId: `infographic-${Date.now()}`, // Generate unique ID
+        title: infographic.title || `Infographic - ${notebook.title}`,
+        data: infographic, // Store the full infographic data
+      });
+
+      showSuccess('Infographic saved to Studio successfully!');
+    } catch (error) {
+      console.error('Failed to save infographic:', error);
+      showError('Failed to save infographic to Studio');
+    }
+  };
+
+  const handleSaveFlashcardsToStudio = async (flashcardSet: any) => {
+    if (!notebook || !('title' in notebook)) return;
+
+    try {
+      // Save flashcard set data directly to notebook artifacts
+      await linkArtifact.mutateAsync({
+        type: 'flashcards',
+        referenceId: `flashcards-${Date.now()}`, // Generate unique ID
+        title: flashcardSet.title || `Flashcards - ${notebook.title}`,
+        data: flashcardSet, // Store the full flashcard set
+      });
+
+      showSuccess('Flashcards saved to Studio successfully!');
+    } catch (error) {
+      console.error('Failed to save flashcards:', error);
+      showError('Failed to save flashcards to Studio');
     }
   };
 
@@ -986,6 +1141,8 @@ Requirements:
       isChatLoading={isChatLoading}
       onSaveQuizToStudio={handleSaveQuizToStudio}
       onSaveMindMapToStudio={handleSaveMindMapToStudio}
+      onSaveInfographicToStudio={handleSaveInfographicToStudio}
+      onSaveFlashcardsToStudio={handleSaveFlashcardsToStudio}
       artifacts={notebook.artifacts.map((a) => {
         const edits = artifactEdits[a._id] || {};
         return ({

@@ -12,6 +12,9 @@ import MindMapViewer from './MindMapViewer';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 import { extractQuizFromMarkdown } from '../../lib/quizParser';
 import { extractMindMapFromMarkdown } from '../../lib/mindmapParser';
+import { extractInfographicFromMarkdown, containsInfographicData } from '../../lib/infographicParser';
+import { extractFlashcardsFromMarkdown, containsFlashcardData } from '../../lib/flashcardParser';
+import FlashcardViewer from './FlashcardViewer';
 
 export interface ChatMessage {
   id: string;
@@ -30,6 +33,8 @@ interface ChatPanelProps {
   hasSelectedSources: boolean;
   onSaveQuizToStudio?: (questions: any[]) => void;
   onSaveMindMapToStudio?: (mindmap: any) => void;
+  onSaveInfographicToStudio?: (infographic: any) => void;
+  onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -41,6 +46,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   hasSelectedSources,
   onSaveQuizToStudio,
   onSaveMindMapToStudio,
+  onSaveInfographicToStudio,
+  onSaveFlashcardsToStudio,
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -316,6 +323,38 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           }
                         }
 
+                        // Check for infographic JSON
+                        const isExplicitInfographicRequest = message.content.toLowerCase().includes('infographic');
+                        const hasInfographicData = containsInfographicData(message.content);
+                        
+                        let infographic = null;
+                        if (hasInfographicData && isExplicitInfographicRequest) {
+                          const result = extractInfographicFromMarkdown(message.content);
+                          if (result.success && result.data) {
+                            infographic = result.data;
+                            console.log('✅ Infographic parsed successfully');
+                            
+                            // Remove JSON from markdown display
+                            cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/g, '').trim();
+                          }
+                        }
+
+                        // Check for flashcard data
+                        const isExplicitFlashcardRequest = message.content.toLowerCase().includes('flashcard');
+                        const hasFlashcardData = containsFlashcardData(message.content);
+                        
+                        let flashcardSet = null;
+                        if (hasFlashcardData && isExplicitFlashcardRequest) {
+                          const result = extractFlashcardsFromMarkdown(message.content);
+                          if (result.success && result.data) {
+                            flashcardSet = result.data;
+                            console.log('✅ Flashcards parsed successfully:', flashcardSet.cards.length, 'cards');
+                            
+                            // Remove JSON from markdown display
+                            cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"cards"[\s\S]*"front"[\s\S]*\}/g, '').trim();
+                          }
+                        }
+
                         return (
                           <>
                             {/* Render mindmap */}
@@ -371,6 +410,88 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 >
                                   {cleanMarkdown}
                                 </ReactMarkdown>
+                              </div>
+                            )}
+                                                        {/* Render infographic */}
+                            {infographic && (
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-cyan-50 dark:from-cyan-900/30 via-blue-50 dark:via-blue-900/30 to-indigo-50 dark:to-indigo-900/30 rounded-xl">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 dark:from-cyan-600 dark:to-blue-700 rounded-lg flex items-center justify-center shadow-md">
+                                      <span className="text-white text-lg">📈</span>
+                                    </div>
+                                    <h4 className="text-base font-black text-slate-800 dark:text-slate-200">Infographic</h4>
+                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                                      Visual Summary
+                                    </span>
+                                  </div>
+                                  {onSaveInfographicToStudio && (
+                                    <button
+                                      onClick={() => onSaveInfographicToStudio(infographic)}
+                                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
+                                    >
+                                      <ICONS.download className="w-4 h-4" />
+                                      Save to Studio
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border-2 border-cyan-200 dark:border-cyan-800 shadow-sm">
+                                  <div className="text-center mb-4">
+                                    <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-2">{infographic.title}</h3>
+                                    {infographic.subtitle && (
+                                      <p className="text-sm text-slate-600 dark:text-slate-400">{infographic.subtitle}</p>
+                                    )}
+                                  </div>
+                                  <div className="space-y-4">
+                                    {infographic.sections?.slice(0, 2).map((section: any, idx: number) => (
+                                      <div key={idx} className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <span className="text-2xl">{section.icon}</span>
+                                          <h4 className="font-bold text-slate-800 dark:text-slate-200">{section.title}</h4>
+                                        </div>
+                                        {section.keyPoints?.slice(0, 3).map((point: string, pidx: number) => (
+                                          <p key={pidx} className="text-sm text-slate-600 dark:text-slate-400 ml-8">• {point}</p>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4 italic">
+                                    Click "Save to Studio" to view full interactive infographic
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Render flashcards */}
+                            {flashcardSet && flashcardSet.cards && flashcardSet.cards.length > 0 && (
+                              <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-blue-50 dark:from-blue-900/30 via-indigo-50 dark:via-indigo-900/30 to-purple-50 dark:to-purple-900/30 rounded-xl">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-lg flex items-center justify-center shadow-md">
+                                      <span className="text-white text-lg">🎴</span>
+                                    </div>
+                                    <h4 className="text-base font-black text-slate-800 dark:text-slate-200">Flashcards</h4>
+                                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                                      {flashcardSet.cards.length} {flashcardSet.cards.length === 1 ? 'Card' : 'Cards'}
+                                    </span>
+                                  </div>
+                                  {onSaveFlashcardsToStudio && (
+                                    <button
+                                      onClick={() => onSaveFlashcardsToStudio(flashcardSet)}
+                                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
+                                    >
+                                      <ICONS.download className="w-4 h-4" />
+                                      Save to Studio
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border-2 border-blue-200 dark:border-blue-800 shadow-sm">
+                                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-4 text-center">{flashcardSet.title}</h3>
+                                  <FlashcardViewer cards={flashcardSet.cards.slice(0, 3)} />
+                                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4 italic">
+                                    Preview showing first 3 cards. Click "Save to Studio" to study all {flashcardSet.cards.length} cards.
+                                  </p>
+                                </div>
                               </div>
                             )}
                             

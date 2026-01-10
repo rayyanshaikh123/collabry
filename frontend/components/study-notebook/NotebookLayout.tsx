@@ -23,6 +23,8 @@ interface NotebookLayoutProps {
   isChatLoading?: boolean;
   onSaveQuizToStudio?: (questions: any[]) => void;
   onSaveMindMapToStudio?: (mindmap: any) => void;
+  onSaveInfographicToStudio?: (infographic: any) => void;
+  onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
 
   // Studio
   artifacts: Artifact[];
@@ -46,6 +48,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   isChatLoading = false,
   onSaveQuizToStudio,
   onSaveMindMapToStudio,
+  onSaveInfographicToStudio,
+  onSaveFlashcardsToStudio,
   artifacts,
   onGenerateArtifact,
   onDeleteArtifact,
@@ -99,6 +103,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             hasSelectedSources={hasSelectedSources}
             onSaveQuizToStudio={onSaveQuizToStudio}
             onSaveMindMapToStudio={onSaveMindMapToStudio}
+            onSaveInfographicToStudio={onSaveInfographicToStudio}
+            onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
           />
         </div>
 

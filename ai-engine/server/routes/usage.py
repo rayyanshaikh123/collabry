@@ -6,7 +6,7 @@ Provides:
 - Admin-level global analytics
 - Real-time monitoring
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from server.schemas import (
     UsageStatsResponse,
     GlobalUsageResponse,
@@ -97,9 +97,8 @@ async def get_my_usage(
                 detail=f"Failed to retrieve usage data: {usage_data['error']}"
             )
         
-        # TODO: Get user subscription tier from database
-        # For now, assume 'free' tier
-        subscription_tier = "free"
+        # Get user subscription tier from JWT token
+        subscription_tier = request.state.subscription_tier if hasattr(request.state, 'subscription_tier') else "free"
         limit = SUBSCRIPTION_LIMITS.get(subscription_tier, 10000)
         
         # Calculate usage percentage
@@ -130,6 +129,7 @@ async def get_my_usage(
 )
 async def get_user_usage(
     user_id: str,
+    request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
     admin_id: str = Depends(get_current_user)
 ):
@@ -144,13 +144,19 @@ async def get_user_usage(
         User-specific usage statistics
         
     Note:
-        This endpoint requires admin role. Role checking should be implemented
-        in get_current_user dependency or add a separate admin check.
+        This endpoint requires admin role.
     """
     try:
-        # TODO: Add admin role check
-        # For now, we'll allow any authenticated user to access this
-        # In production, add: if not is_admin(admin_id): raise HTTPException(403)
+        # Admin role check
+        from server.deps import is_admin
+        auth_header = request.headers.get("authorization", "")
+        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        
+        if not is_admin(admin_id, token):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
         
         usage_data = usage_tracker.get_user_usage(user_id, days=days)
         
@@ -189,6 +195,7 @@ async def get_user_usage(
     description="Get aggregated usage statistics across all users. Admin access required."
 )
 async def get_global_usage(
+    request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
     admin_id: str = Depends(get_current_user)
 ):
@@ -205,7 +212,16 @@ async def get_global_usage(
         This endpoint requires admin role.
     """
     try:
-        # TODO: Add admin role check
+        # Admin role check
+        from server.deps import is_admin
+        auth_header = request.headers.get("authorization", "")
+        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        
+        if not is_admin(admin_id, token):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
         
         usage_data = usage_tracker.get_global_usage(days=days)
         
@@ -234,6 +250,7 @@ async def get_global_usage(
     description="Get real-time usage statistics for the last hour. Admin access required."
 )
 async def get_realtime_stats(
+    request: Request,
     admin_id: str = Depends(get_current_user)
 ):
     """
@@ -246,7 +263,16 @@ async def get_realtime_stats(
         This endpoint requires admin role.
     """
     try:
-        # TODO: Add admin role check
+        # Admin role check
+        from server.deps import is_admin
+        auth_header = request.headers.get("authorization", "")
+        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        
+        if not is_admin(admin_id, token):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
         
         stats = usage_tracker.get_realtime_stats()
         
@@ -287,9 +313,23 @@ async def reset_my_usage(user_id: str = Depends(get_current_user)):
     summary="Reset user daily usage (admin)",
     description="Reset the aggregated daily usage stats for a specific user. Admin only."
 )
-async def reset_user_usage(target_user_id: str, admin_id: str = Depends(get_current_user)):
+async def reset_user_usage(
+    request: Request,
+    target_user_id: str,
+    admin_id: str = Depends(get_current_user)
+):
     try:
-        # TODO: enforce admin role check
+        # Admin role check
+        from server.deps import is_admin
+        auth_header = request.headers.get("authorization", "")
+        token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+        
+        if not is_admin(admin_id, token):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
+        
         usage_tracker.reset_user_daily_usage(target_user_id)
         return {"message": f"Daily usage reset for user {target_user_id}."}
     except Exception as e:

@@ -96,3 +96,26 @@ def get_optional_user(
     except HTTPException:
         return None
 
+
+def is_admin(user_id: str, token: str) -> bool:
+    """
+    Check if the user has admin role.
+    
+    Args:
+        user_id: The user ID from token
+        token: The JWT token
+        
+    Returns:
+        True if user is admin, False otherwise
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            CONFIG["jwt_secret_key"],
+            algorithms=[CONFIG["jwt_algorithm"]]
+        )
+        role = payload.get("role", "user")
+        return role == "admin"
+    except Exception as e:
+        logger.debug(f"Error checking admin role: {e}")
+        return False

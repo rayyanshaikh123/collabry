@@ -43,7 +43,13 @@ CONFIG = {
     # Security settings (JWT authentication for production)
     "jwt_secret_key": os.environ.get("JWT_SECRET_KEY", "dev-secret-key-change-in-production"),
     "jwt_algorithm": os.environ.get("JWT_ALGORITHM", "HS256"),
-    "jwt_expiration": int(os.environ.get("JWT_EXPIRATION", "86400")),  # 24 hours
+    # jwt_expiration": int(os.environ.get("JWT_EXPIRATION", "86400")),  # 24 hours
+    
+    # CORS configuration (comma-separated origins)
+    "cors_origins": os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000"
+    ).split(","),
 
     # External API keys (optional, loaded from ENV only for security)
     "serper_api_key": os.environ.get("SERPER_API_KEY"),

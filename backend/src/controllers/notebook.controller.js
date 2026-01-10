@@ -209,6 +209,23 @@ exports.getNotebook = asyncHandler(async (req, res) => {
     throw new AppError('Notebook not found', 404);
   }
 
+  // Create AI session if missing (for notebooks created before AI engine was running)
+  if (!notebook.aiSessionId) {
+    const token = req.headers.authorization;
+    try {
+      const aiResponse = await axios.post(
+        `${AI_ENGINE_URL}/ai/sessions`,
+        { title: notebook.title || 'Notebook Session' },
+        { headers: { Authorization: token } }
+      );
+      notebook.aiSessionId = aiResponse.data.id;
+      console.log(`✓ Created AI session for notebook: ${notebook._id}`);
+    } catch (error) {
+      console.error('Failed to create AI session:', error.message);
+      // Continue without AI session
+    }
+  }
+
   // Update last accessed
   notebook.lastAccessed = new Date();
   await notebook.save();

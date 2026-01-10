@@ -7,12 +7,9 @@ import { ICONS } from '../../constants';
 export type ArtifactType = 
   | 'flashcards' 
   | 'quiz' 
-  | 'mindmap' 
-  | 'audio-overview'
-  | 'video-overview'
+  | 'mindmap'
   | 'reports'
   | 'infographic'
-  | 'slide-deck'
   | 'course-finder';
 
 export interface Artifact {
@@ -48,20 +45,6 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
 
   const studioActions = [
     {
-      type: 'audio-overview' as ArtifactType,
-      icon: '🎧',
-      label: 'Audio Overview',
-      color: 'purple',
-      available: true,
-    },
-    {
-      type: 'video-overview' as ArtifactType,
-      icon: '🎥',
-      label: 'Video Overview',
-      color: 'pink',
-      available: false, // Future
-    },
-    {
       type: 'course-finder' as ArtifactType,
       icon: '🎓',
       label: 'Course Finder',
@@ -94,21 +77,14 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
       icon: '📊',
       label: 'Reports',
       color: 'orange',
-      available: false, // Future
+      available: true,
     },
     {
       type: 'infographic' as ArtifactType,
       icon: '📈',
       label: 'Infographic',
       color: 'cyan',
-      available: false, // Future
-    },
-    {
-      type: 'slide-deck' as ArtifactType,
-      icon: '🎞️',
-      label: 'Slide Deck',
-      color: 'teal',
-      available: false, // Future
+      available: true,
     },
   ];
 

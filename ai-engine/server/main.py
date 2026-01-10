@@ -72,17 +72,13 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend integration
-# Allow frontend at localhost:3000 (Next.js default) and backend at localhost:5000
-allowed_origins = [
-    "http://localhost:3000",  # Next.js dev server
-    "http://localhost:5000",  # Backend server
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5000",
-]
+# Origins configured via CORS_ORIGINS environment variable
+allowed_origins = CONFIG["cors_origins"]
+logger.info(f"CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  # Specific origins for security
+    allow_origins=allowed_origins,  # Environment-configurable origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,8 +89,7 @@ app.add_middleware(
 app.add_middleware(UsageTrackingMiddleware)
 
 # Add usage limit checking middleware
-# Temporarily disabled usage limit middleware per request
-# app.add_middleware(UsageLimitMiddleware)
+app.add_middleware(UsageLimitMiddleware)
 
 
 # Global exception handler
