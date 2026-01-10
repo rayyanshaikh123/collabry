@@ -93,6 +93,17 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     Hybrid search: try Serper (if key), fallback to DuckDuckGo HTML.
     Returns structured results and a 'short_answer' when available.
     """
+    # Defensive: accept numeric strings from tool invocation and coerce to int
+    try:
+        max_results = int(max_results)
+    except Exception:
+        max_results = 5
+
+    # Sanitize bounds
+    if max_results <= 0:
+        max_results = 1
+    if max_results > 50:
+        max_results = 50
     # 1) Try Serper first
     results = None
     provider = None
@@ -107,7 +118,9 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
 
     # 2) Fallback to DDG HTML
     if results is None:
-        results = _duckduckgo_html(query)[:max_results]
+        # _duckduckgo_html already limits to 10 internally; still slice defensively
+        ddg = _duckduckgo_html(query)
+        results = ddg[:max_results]
         provider = "duckduckgo_html"
 
     short = _make_short_answer(query, results)

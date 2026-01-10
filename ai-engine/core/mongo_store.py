@@ -15,6 +15,9 @@ import logging
 from typing import Dict, List, Any, Optional
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from pymongo.errors import ConnectionFailure, OperationFailure
+from gridfs import GridFS
+import io
+import tarfile
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,12 @@ class MongoMemoryStore:
             
             self._db = self._client[self.db_name]
             self._collection = self._db[self.collection_name]
+
+            # GridFS for storing binary artifacts (FAISS index archives, etc.)
+            try:
+                self._fs = GridFS(self._db)
+            except Exception:
+                self._fs = None
 
             # Create indexes for efficient queries
             self._collection.create_index(
@@ -224,3 +233,48 @@ class MongoMemoryStore:
             self._client.close()
             self._connected = False
             logger.info("MongoDB connection closed")
+
+    # -----------------------------
+    # GridFS helpers for FAISS index
+    # -----------------------------
+    def save_faiss_index_archive(self, name: str, archive_bytes: bytes) -> bool:
+        """
+        Save a FAISS index archive (tar.gz bytes) into GridFS under filename `name`.
+        Overwrites existing files with the same filename.
+        """
+        if not self.is_connected() or not getattr(self, '_fs', None):
+            logger.debug("GridFS not available, cannot save FAISS archive")
+            return False
+
+        try:
+            # Remove existing files with same filename
+            for f in self._db.fs.files.find({'filename': name}):
+                self._fs.delete(f['_id'])
+
+            self._fs.put(archive_bytes, filename=name)
+            logger.info(f"✓ Saved FAISS archive to GridFS: {name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save FAISS archive to GridFS: {e}")
+            return False
+
+    def load_faiss_index_archive(self, name: str) -> Optional[bytes]:
+        """
+        Load a FAISS archive by filename from GridFS. Returns bytes or None.
+        """
+        if not self.is_connected() or not getattr(self, '_fs', None):
+            logger.debug("GridFS not available, cannot load FAISS archive")
+            return None
+
+        try:
+            # Find latest file with this filename
+            files = list(self._db.fs.files.find({'filename': name}).sort('uploadDate', -1).limit(1))
+            if not files:
+                return None
+            grid_id = files[0]['_id']
+            data = self._fs.get(grid_id).read()
+            logger.info(f"✓ Loaded FAISS archive from GridFS: {name}")
+            return data
+        except Exception as e:
+            logger.error(f"Failed to load FAISS archive from GridFS: {e}")
+            return None

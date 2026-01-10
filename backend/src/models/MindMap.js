@@ -66,7 +66,7 @@ const mindMapSchema = new mongoose.Schema({
   subject: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subject',
-    required: [true, 'Subject is required']
+    required: false
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
