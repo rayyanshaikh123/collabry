@@ -1,4 +1,7 @@
 const studyTaskService = require('../services/studyTask.service');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 class StudyTaskController {
   /**
@@ -233,6 +236,31 @@ class StudyTaskController {
         userId,
         completionData
       );
+
+      // Create completion notification (optional - commented out to avoid spam)
+      // Uncomment if you want notifications for every completed task
+      // const notification = await notificationService.createNotification({
+      //   userId,
+      //   type: 'task_completed',
+      //   title: '✅ Task Completed!',
+      //   message: `Great job! You completed "${task.title}"`,
+      //   priority: 'low',
+      //   relatedEntity: {
+      //     entityType: 'Task',
+      //     entityId: task._id || task.id,
+      //   },
+      //   actionUrl: '/planner',
+      //   actionText: 'View Progress',
+      // });
+
+      // if (notification) {
+      //   try {
+      //     const io = getIO();
+      //     emitNotificationToUser(io, userId, notification);
+      //   } catch (err) {
+      //     console.error('Failed to emit notification:', err);
+      //   }
+      // }
 
       res.json({
         success: true,

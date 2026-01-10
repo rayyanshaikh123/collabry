@@ -23,6 +23,8 @@ from typing import Optional, List
 import PyPDF2
 import io
 import json
+import ast
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["qa"])
@@ -556,7 +558,8 @@ INSTRUCTIONS:
 
 {difficulty_instruction}
 
-Return ONLY a JSON array with this exact format:
+CRITICAL: Return ONLY a valid JSON array. Use DOUBLE QUOTES for all strings, not single quotes.
+Return this exact format:
 [
   {{
     "question": "What specific detail from the content?",
@@ -567,7 +570,7 @@ Return ONLY a JSON array with this exact format:
   }}
 ]
 
-Generate exactly {request.num_questions} questions. Return ONLY valid JSON, no extra text."""
+Generate exactly {request.num_questions} questions. Return ONLY valid JSON with double quotes, no extra text, no markdown code blocks."""
 
         # Generate response using streaming collection
         response_text = ""
@@ -589,7 +592,20 @@ Generate exactly {request.num_questions} questions. Return ONLY valid JSON, no e
             if json_start != -1 and json_end > json_start:
                 json_str = response_text[json_start:json_end]
                 logger.info(f"Attempting to parse JSON array of {len(json_str)} chars")
-                questions_data = json.loads(json_str)
+                
+                try:
+                    # First try: parse as valid JSON
+                    questions_data = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Second try: handle Python dict syntax (single quotes)
+                    logger.info("JSON parsing failed, trying Python literal_eval")
+                    try:
+                        questions_data = ast.literal_eval(json_str)
+                    except (ValueError, SyntaxError):
+                        # Third try: simple quote replacement (risky but last resort)
+                        logger.info("literal_eval failed, trying quote replacement")
+                        json_str = json_str.replace("'", '"')
+                        questions_data = json.loads(json_str)
                 
                 for q_data in questions_data:
                     questions.append(QuizQuestion(

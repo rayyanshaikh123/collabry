@@ -179,3 +179,83 @@ async def get_upload_status(
         "completed_at": task.get("completed_at"),
         "error": task.get("error")
     }
+
+
+@router.delete(
+    "/documents/source/{source_id}",
+    summary="Delete source documents",
+    description="Delete all documents associated with a source from FAISS index"
+)
+async def delete_source_documents(
+    source_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Delete all documents for a specific source.
+    
+    - Used when a source is removed from a notebook
+    - Removes all chunks associated with source_id
+    """
+    try:
+        logger.info(f"Delete request for source={source_id}, user={user_id}")
+        
+        rag = RAGRetriever(CONFIG, user_id=user_id)
+        deleted_count = rag.delete_documents_by_metadata(
+            user_id=user_id,
+            source_id=source_id,
+            save_index=True
+        )
+        
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "source_id": source_id,
+            "message": f"Deleted {deleted_count} document chunks"
+        }
+        
+    except Exception as e:
+        logger.exception(f"Failed to delete source documents: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete source documents: {str(e)}"
+        )
+
+
+@router.delete(
+    "/documents/session/{session_id}",
+    summary="Delete session documents",
+    description="Delete all documents associated with a session/notebook from FAISS index"
+)
+async def delete_session_documents(
+    session_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Delete all documents for a specific session (notebook).
+    
+    - Used when a notebook is deleted
+    - Removes all chunks associated with session_id
+    """
+    try:
+        logger.info(f"Delete request for session={session_id}, user={user_id}")
+        
+        rag = RAGRetriever(CONFIG, user_id=user_id)
+        deleted_count = rag.delete_documents_by_metadata(
+            user_id=user_id,
+            session_id=session_id,
+            save_index=True
+        )
+        
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "session_id": session_id,
+            "message": f"Deleted {deleted_count} document chunks"
+        }
+        
+    except Exception as e:
+        logger.exception(f"Failed to delete session documents: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete session documents: {str(e)}"
+        )

@@ -24,7 +24,36 @@ const proxyToAI = async (req, res) => {
     // Get auth token from request
     const token = req.headers.authorization;
     
-    // Forward request to AI engine
+    // Check if this is a streaming endpoint
+    const isStreaming = req.path.includes('/stream');
+    
+    if (isStreaming) {
+      // Stream response directly without wrapping
+      const config = {
+        method: req.method,
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: token }),
+        },
+        ...(req.method !== 'GET' && req.method !== 'HEAD' && { data: req.body }),
+        responseType: 'stream'
+      };
+      
+      const response = await axios(config);
+      
+      // Set SSE headers
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      // Pipe the stream directly
+      response.data.pipe(res);
+      
+      return;
+    }
+    
+    // Non-streaming: Forward request normally
     const config = {
       method: req.method,
       url,

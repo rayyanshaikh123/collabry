@@ -35,10 +35,10 @@ const formatTime = (timeStr?: string) => {
 
 // Priority colors
 const priorityColors = {
-  low: 'text-slate-500 bg-slate-100',
-  medium: 'text-blue-600 bg-blue-100',
-  high: 'text-amber-600 bg-amber-100',
-  urgent: 'text-rose-600 bg-rose-100',
+  low: 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
+  medium: 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30',
+  high: 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30',
+  urgent: 'text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30',
 };
 
 const Planner: React.FC = () => {
@@ -352,8 +352,8 @@ const Planner: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black text-slate-800">Study Planner 📚</h2>
-          <p className="text-slate-500 text-sm mt-1">Organize your learning journey with AI-powered planning</p>
+          <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200">Study Planner 📚</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Organize your learning journey with AI-powered planning</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -375,49 +375,49 @@ const Planner: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+        <Card className="bg-gradient-to-br from-indigo-50 dark:from-indigo-900/30 to-white dark:to-slate-800 border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Active Plans</p>
-              <p className="text-3xl font-black text-slate-800 mt-1">{plans.length}</p>
+              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Active Plans</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-slate-200 mt-1">{plans.length}</p>
             </div>
-            <div className="w-12 h-12 bg-indigo-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-indigo-500 dark:bg-indigo-600 rounded-2xl flex items-center justify-center">
               <ICONS.Planner size={24} className="text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+        <Card className="bg-gradient-to-br from-emerald-50 dark:from-emerald-900/30 to-white dark:to-slate-800 border-emerald-100 dark:border-emerald-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Today's Tasks</p>
-              <p className="text-3xl font-black text-slate-800 mt-1">{todayTasks.length}</p>
+              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Today's Tasks</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-slate-200 mt-1">{todayTasks.length}</p>
             </div>
-            <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-emerald-500 dark:bg-emerald-600 rounded-2xl flex items-center justify-center">
               <ICONS.Focus size={24} className="text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
+        <Card className="bg-gradient-to-br from-amber-50 dark:from-amber-900/30 to-white dark:to-slate-800 border-amber-100 dark:border-amber-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-amber-600 uppercase tracking-wider">Upcoming</p>
-              <p className="text-3xl font-black text-slate-800 mt-1">{upcomingTasks.length}</p>
+              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Upcoming</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-slate-200 mt-1">{upcomingTasks.length}</p>
             </div>
-            <div className="w-12 h-12 bg-amber-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-amber-500 dark:bg-amber-600 rounded-2xl flex items-center justify-center">
               <ICONS.Dashboard size={24} className="text-white" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-gradient-to-br from-rose-50 to-white border-rose-100">
+        <Card className="bg-gradient-to-br from-rose-50 dark:from-rose-900/30 to-white dark:to-slate-800 border-rose-100 dark:border-rose-800">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-rose-600 uppercase tracking-wider">Overdue</p>
-              <p className="text-3xl font-black text-slate-800 mt-1">{overdueTasks.length}</p>
+              <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Overdue</p>
+              <p className="text-3xl font-black text-slate-800 dark:text-slate-200 mt-1">{overdueTasks.length}</p>
             </div>
-            <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-rose-500 dark:bg-rose-600 rounded-2xl flex items-center justify-center">
               <ICONS.Focus size={24} className="text-white" />
             </div>
           </div>
@@ -429,11 +429,11 @@ const Planner: React.FC = () => {
         {/* Left Sidebar: Plans */}
         <div className="lg:col-span-3 space-y-4">
           <Card>
-            <h3 className="font-black text-slate-800 text-lg mb-4">My Plans</h3>
+            <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg mb-4">My Plans</h3>
             <div className="space-y-2">
-              {loadingPlans && <p className="text-sm text-slate-400">Loading plans...</p>}
+              {loadingPlans && <p className="text-sm text-slate-400 dark:text-slate-500">Loading plans...</p>}
               {plans.length === 0 && !loadingPlans && (
-                <p className="text-sm text-slate-400 text-center py-8">
+                <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-8">
                   No plans yet.
                   <br />
                   Create your first AI plan! 🚀
@@ -444,8 +444,8 @@ const Planner: React.FC = () => {
                   key={plan.id}
                   className={`relative group w-full text-left p-3 rounded-xl border-2 transition-all ${
                     selectedPlan.includes(plan.id)
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-slate-100 hover:border-indigo-200 hover:bg-slate-50'
+                      ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30'
+                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <button
@@ -459,8 +459,8 @@ const Planner: React.FC = () => {
                     }}
                     className="w-full text-left"
                   >
-                    <p className="font-bold text-sm text-slate-800">{plan.title}</p>
-                    <p className="text-xs text-slate-500 mt-1">{plan.subject}</p>
+                    <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{plan.title}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{plan.subject}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant="indigo" className="text-[10px]">
                         {plan.completionPercentage}%
@@ -567,16 +567,16 @@ const Planner: React.FC = () => {
             />
           ) : (
             <Card>
-              <h3 className="font-black text-slate-800 text-lg mb-4">
+              <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg mb-4">
                 {selectedView === 'today' && '📅 Today\'s Tasks'}
                 {selectedView === 'upcoming' && '🔮 Upcoming Tasks (7 days)'}
                 {selectedView === 'plans' && '📚 All Plans'}
               </h3>
 
             {loadingToday || loadingUpcoming ? (
-              <p className="text-center py-8 text-slate-400">Loading tasks...</p>
+              <p className="text-center py-8 text-slate-400 dark:text-slate-500">Loading tasks...</p>
             ) : tasksToShow.length === 0 ? (
-              <p className="text-center py-12 text-slate-400">
+              <p className="text-center py-12 text-slate-400 dark:text-slate-500">
                 No tasks for this view.
                 <br />
                 {selectedView === 'today' && '✨ Enjoy your free day!'}
@@ -587,7 +587,7 @@ const Planner: React.FC = () => {
                   <React.Fragment key={task.id}>
                     {editingTask === task.id ? (
                       // Edit Mode
-                      <div className="p-4 rounded-2xl border-2 border-indigo-300 bg-indigo-50">
+                      <div className="p-4 rounded-2xl border-2 border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/30">
                       <div className="space-y-3">
                         <Input
                           value={editForm.title || ''}
@@ -609,7 +609,7 @@ const Planner: React.FC = () => {
                           <select
                             value={editForm.priority || 'medium'}
                             onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as any })}
-                            className="px-3 py-2 rounded-xl border-2 border-slate-200"
+                            className="px-3 py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200"
                           >
                             <option value="low">Low</option>
                             <option value="medium">Medium</option>
@@ -650,10 +650,10 @@ const Planner: React.FC = () => {
                     <div
                       className={`p-4 rounded-2xl border-2 transition-all ${
                       task.status === 'completed'
-                        ? 'bg-emerald-50 border-emerald-200 opacity-60'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 opacity-60'
                         : task.isOverdue
-                        ? 'bg-rose-50 border-rose-200'
-                        : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md'
+                        ? 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800'
+                        : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 hover:shadow-md'
                     }`}
                   >
                     <div className="flex items-start gap-3">
@@ -666,8 +666,8 @@ const Planner: React.FC = () => {
                         disabled={task.status === 'completed'}
                         className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
                           task.status === 'completed'
-                            ? 'bg-emerald-500 border-emerald-500'
-                            : 'border-slate-300 hover:border-indigo-500'
+                            ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-500 dark:border-emerald-600'
+                            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-indigo-600'
                         }`}
                       >
                         {task.status === 'completed' && (
@@ -678,9 +678,9 @@ const Planner: React.FC = () => {
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <h4 className="font-bold text-slate-800">{task.title}</h4>
+                            <h4 className="font-bold text-slate-800 dark:text-slate-200">{task.title}</h4>
                             {task.description && (
-                              <p className="text-sm text-slate-600 mt-1">{task.description}</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{task.description}</p>
                             )}
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
                               <Badge variant="secondary" className="text-[10px]">
@@ -742,17 +742,17 @@ const Planner: React.FC = () => {
 
       {/* AI Generation Modal */}
       {showAIModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-800">🤖 Generate AI Study Plan</h3>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200">🤖 Generate AI Study Plan</h3>
               <button
                 onClick={() => {
                   setShowAIModal(false);
                   setAiGenerated(null);
                   setEditableAIPlan(null);
                 }}
-                className="p-2 hover:bg-slate-100 rounded-lg"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
               >
                 <ICONS.Plus size={20} className="rotate-45" />
               </button>
@@ -761,7 +761,7 @@ const Planner: React.FC = () => {
             {!aiGenerated ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Subject/Course *</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Subject/Course *</label>
                   <Input
                     value={aiForm.subject}
                     onChange={(e) => setAiForm({ ...aiForm, subject: e.target.value })}
@@ -770,7 +770,7 @@ const Planner: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Topics to Cover *</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Topics to Cover *</label>
                   <div className="space-y-2">
                     <div className="flex gap-2">
                       <Input
@@ -815,7 +815,7 @@ const Planner: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Start Date</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
                     <Input
                       type="date"
                       value={aiForm.startDate}
@@ -823,7 +823,7 @@ const Planner: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">End Date</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">End Date</label>
                     <Input
                       type="date"
                       value={aiForm.endDate}
@@ -834,7 +834,7 @@ const Planner: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Daily Study Hours</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Daily Study Hours</label>
                     <Input
                       type="number"
                       min="0.5"
@@ -845,11 +845,11 @@ const Planner: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Difficulty</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Difficulty</label>
                     <select
                       value={aiForm.difficulty}
                       onChange={(e) => setAiForm({ ...aiForm, difficulty: e.target.value as any })}
-                      className="w-full px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 focus:border-indigo-500 dark:focus:border-indigo-600 outline-none"
                     >
                       <option value="beginner">Beginner</option>
                       <option value="intermediate">Intermediate</option>
@@ -876,10 +876,34 @@ const Planner: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Complexity Warnings - Show prominently if exist */}
+                {aiGenerated?.warnings && aiGenerated.warnings.length > 0 && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-amber-500 dark:bg-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                        <ICONS.Focus size={20} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-black text-amber-900 dark:text-amber-200 text-base mb-2">⚠️ Important Warnings</p>
+                        <ul className="space-y-2">
+                          {aiGenerated.warnings.map((warning, i) => (
+                            <li key={i} className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 font-semibold">
+                          💡 This plan provides a structured overview. Adjust dates or reduce topics if you need deeper mastery.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Editable Plan Info */}
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Plan Title</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Plan Title</label>
                     <Input
                       value={editableAIPlan?.title || ''}
                       onChange={(e) => setEditableAIPlan(prev => prev ? { ...prev, title: e.target.value } : null)}
@@ -910,12 +934,12 @@ const Planner: React.FC = () => {
                 )}
 
                 {/* Editable Tasks List */}
-                <div className="max-h-80 overflow-y-auto space-y-2 border-2 border-slate-100 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2 sticky top-0 bg-white pb-2">
-                    <p className="text-sm font-bold text-slate-700">Edit Tasks</p>
+                <div className="max-h-80 overflow-y-auto space-y-2 border-2 border-slate-100 dark:border-slate-800 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2 sticky top-0 bg-white dark:bg-slate-900 pb-2">
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Edit Tasks</p>
                   </div>
                   {editableAIPlan?.tasks.map((task, i) => (
-                    <div key={i} className="text-sm p-3 bg-white border-2 border-slate-100 rounded-lg space-y-2">
+                    <div key={i} className="text-sm p-3 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-lg space-y-2">
                       <div className="flex justify-between items-start gap-2">
                         <Input
                           value={task.title}
@@ -932,10 +956,10 @@ const Planner: React.FC = () => {
                             const newTasks = editableAIPlan?.tasks.filter((_, idx) => idx !== i) || [];
                             setEditableAIPlan(prev => prev ? { ...prev, tasks: newTasks, totalTasks: newTasks.length } : null);
                           }}
-                          className="p-1 hover:bg-rose-100 rounded"
+                          className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded"
                           title="Remove task"
                         >
-                          <ICONS.Plus size={16} className="text-rose-500 rotate-45" />
+                          <ICONS.Plus size={16} className="text-rose-500 dark:text-rose-400 rotate-45" />
                         </button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -997,17 +1021,17 @@ const Planner: React.FC = () => {
 
       {/* Complete Task Modal */}
       {taskToComplete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <Card className="max-w-md w-full">
-            <h3 className="text-xl font-black text-slate-800 mb-4">Complete Task 🎉</h3>
+            <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-4">Complete Task 🎉</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">How did it go? (optional)</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">How did it go? (optional)</label>
                 <textarea
                   value={completionNotes}
                   onChange={(e) => setCompletionNotes(e.target.value)}
                   placeholder="Add notes about what you learned..."
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none resize-none"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-indigo-500 dark:focus:border-indigo-600 outline-none resize-none"
                   rows={3}
                 />
               </div>
@@ -1026,13 +1050,13 @@ const Planner: React.FC = () => {
 
       {/* Manual Plan Creation Modal */}
       {showManualModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
           <Card className="max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-800">📝 Create Manual Plan</h3>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200">📝 Create Manual Plan</h3>
               <button
                 onClick={() => setShowManualModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg"
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
               >
                 <ICONS.Plus size={20} className="rotate-45" />
               </button>
@@ -1042,7 +1066,7 @@ const Planner: React.FC = () => {
               {/* Plan Details */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Plan Title *</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Plan Title *</label>
                   <Input
                     value={manualForm.title}
                     onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
@@ -1050,7 +1074,7 @@ const Planner: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Subject *</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Subject *</label>
                   <Input
                     value={manualForm.subject}
                     onChange={(e) => setManualForm({ ...manualForm, subject: e.target.value })}
@@ -1058,18 +1082,18 @@ const Planner: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Description</label>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Description</label>
                   <textarea
                     value={manualForm.description}
                     onChange={(e) => setManualForm({ ...manualForm, description: e.target.value })}
                     placeholder="Brief description of your study plan"
-                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none resize-none"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-indigo-500 dark:focus:border-indigo-600 outline-none resize-none"
                     rows={2}
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Start Date</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
                     <Input
                       type="date"
                       value={manualForm.startDate}
@@ -1077,7 +1101,7 @@ const Planner: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">End Date</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">End Date</label>
                     <Input
                       type="date"
                       value={manualForm.endDate}
@@ -1085,11 +1109,11 @@ const Planner: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Difficulty</label>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Difficulty</label>
                     <select
                       value={manualForm.difficulty}
                       onChange={(e) => setManualForm({ ...manualForm, difficulty: e.target.value as any })}
-                      className="w-full px-4 py-2 rounded-xl border-2 border-slate-200 focus:border-indigo-500 outline-none"
+                      className="w-full px-4 py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 focus:border-indigo-500 dark:focus:border-indigo-600 outline-none"
                     >
                       <option value="beginner">Beginner</option>
                       <option value="intermediate">Intermediate</option>
@@ -1100,8 +1124,8 @@ const Planner: React.FC = () => {
               </div>
 
               {/* Task Input */}
-              <div className="border-t-2 border-slate-100 pt-4">
-                <h4 className="font-bold text-slate-800 mb-3">Add Tasks</h4>
+              <div className="border-t-2 border-slate-100 dark:border-slate-800 pt-4">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-3">Add Tasks</h4>
                 <div className="space-y-2 mb-3">
                   <Input
                     value={taskInput.title}
@@ -1128,7 +1152,7 @@ const Planner: React.FC = () => {
                     <select
                       value={taskInput.priority}
                       onChange={(e) => setTaskInput({ ...taskInput, priority: e.target.value as any })}
-                      className="px-3 py-2 rounded-xl border-2 border-slate-200 text-sm"
+                      className="px-3 py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200 text-sm"
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>

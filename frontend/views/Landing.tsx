@@ -467,7 +467,7 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
             </button>
             <span className="text-xl font-black text-slate-800 tracking-tight">Collabry</span>
           </div>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">© 2024 Collabry Labs. All rights reserved.</p>
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">©️ 2024 Collabry Labs. All rights reserved.</p>
           <div className="flex gap-6">
             <button className="text-slate-400 hover:text-indigo-500"><ICONS.Share size={20}/></button>
             <button className="text-slate-400 hover:text-indigo-500"><ICONS.Search size={20}/></button>
@@ -479,4 +479,3 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
 };
 
 export default LandingPage;
-

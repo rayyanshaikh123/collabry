@@ -2,6 +2,9 @@ const boardService = require('../services/board.service');
 const dailyService = require('../services/daily.service');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
+const notificationService = require('../services/notification.service');
+const { getIO } = require('../socket');
+const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
 /**
  * @desc    Create a new board
@@ -138,6 +141,26 @@ exports.addMember = asyncHandler(async (req, res) => {
     role: role || 'editor'
   });
 
+  // Send notification to the added member
+  try {
+    const User = require('../models/User');
+    const addedUser = await User.findById(userId);
+    const invitedBy = await User.findById(req.user.id);
+
+    if (addedUser && invitedBy) {
+      const notification = await notificationService.notifyBoardMemberJoined(
+        userId,
+        board,
+        invitedBy
+      );
+
+      const io = getIO();
+      emitNotificationToUser(io, userId, notification);
+    }
+  } catch (err) {
+    console.error('Failed to send notification:', err);
+  }
+
   res.json({
     success: true,
     data: board
@@ -202,6 +225,29 @@ exports.inviteMember = asyncHandler(async (req, res) => {
     role
   );
 
+  // Send notification to the invited user
+  try {
+    const User = require('../models/User');
+    const invitedUser = await User.findOne({ email });
+    const invitedBy = await User.findById(req.user.id);
+
+    if (invitedUser && invitedBy) {
+      const Board = require('../models/Board');
+      const board = await Board.findById(req.params.id);
+
+      const notification = await notificationService.notifyBoardInvitation(
+        invitedUser._id,
+        board,
+        invitedBy
+      );
+
+      const io = getIO();
+      emitNotificationToUser(io, invitedUser._id, notification);
+    }
+  } catch (err) {
+    console.error('Failed to send notification:', err);
+  }
+
   res.json({
     success: true,
     message: 'Invitation sent successfully',
@@ -247,7 +293,7 @@ exports.getVoiceRoom = asyncHandler(async (req, res) => {
 
   // Simple board existence check (less strict for voice chat)
   const Board = require('../models/Board');
-  const board = await Board.findById(boardId);
+  const board = await Board.findById(boardId).populate('members.user', 'name');
   
   if (!board) {
     throw new AppError('Board not found', 404);
@@ -259,6 +305,30 @@ exports.getVoiceRoom = asyncHandler(async (req, res) => {
   // Get Jitsi room (instant, no API calls!)
   const room = await dailyService.getOrCreateRoom(boardId);
   const displayName = dailyService.getUserDisplayName(userName, userId);
+
+  // Send notification to all board members about voice chat starting
+  try {
+    const User = require('../models/User');
+    const currentUser = await User.findById(userId);
+
+    if (currentUser) {
+      // Notify all members except the one who started the call
+      for (const member of board.members) {
+        if (member.user._id.toString() !== userId) {
+          const notification = await notificationService.notifyVoiceChatStarted(
+            member.user._id,
+            board,
+            currentUser
+          );
+
+          const io = getIO();
+          emitNotificationToUser(io, member.user._id, notification);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to send voice chat notifications:', err);
+  }
 
   res.json({
     success: true,

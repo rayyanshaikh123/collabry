@@ -13,6 +13,7 @@ Features:
 from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from server.schemas import HealthResponse, ErrorResponse
 from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan
 from server.deps import get_current_user
@@ -92,7 +93,8 @@ app.add_middleware(
 app.add_middleware(UsageTrackingMiddleware)
 
 # Add usage limit checking middleware
-app.add_middleware(UsageLimitMiddleware)
+# Temporarily disabled usage limit middleware per request
+# app.add_middleware(UsageLimitMiddleware)
 
 
 # Global exception handler
@@ -102,13 +104,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     Catch-all exception handler for unhandled errors.
     """
     logger.exception(f"Unhandled exception: {exc}")
+    error_obj = ErrorResponse(
+        error="Internal server error",
+        detail=str(exc),
+        timestamp=datetime.utcnow()
+    ).dict()
+
+    # Ensure all values are JSON serializable (datetime -> ISO string)
+    safe_content = jsonable_encoder(error_obj)
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=ErrorResponse(
-            error="Internal server error",
-            detail=str(exc),
-            timestamp=datetime.utcnow()
-        ).dict()
+        content=safe_content
     )
 
 

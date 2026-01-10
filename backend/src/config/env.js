@@ -6,9 +6,9 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 3000,
+  port: parseInt(process.env.PORT, 10) || 5000,
   mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/collabry',
+    uri: process.env.MONGODB_URI ,
     options: {},
   },
   cors: {

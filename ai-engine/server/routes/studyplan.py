@@ -54,12 +54,80 @@ class StudyPlanResponse(BaseModel):
     estimatedCompletionDays: int
     totalTasks: int
     recommendations: List[str]
+    warnings: List[str] = []  # Complexity/timeline warnings
 
 
 def calculate_study_days(start_date: datetime, end_date: datetime) -> int:
     """Calculate number of available study days"""
     delta = end_date - start_date
     return max(1, delta.days + 1)
+
+
+def assess_plan_complexity(topics: List[str], num_days: int, daily_hours: float, difficulty: str) -> List[str]:
+    """Assess if plan is realistic and return warnings if needed"""
+    warnings = []
+    
+    # Calculate total available study hours
+    total_hours = num_days * daily_hours
+    
+    # Estimate minimum hours needed per topic based on difficulty
+    hours_per_topic = {
+        'beginner': 8,     # 8 hours minimum per topic for beginners
+        'intermediate': 15, # 15 hours for intermediate
+        'advanced': 25      # 25+ hours for advanced topics
+    }
+    
+    min_hours_needed = len(topics) * hours_per_topic.get(difficulty, 15)
+    
+    # Check if timeline is unrealistic
+    if total_hours < min_hours_needed:
+        shortage = min_hours_needed - total_hours
+        warnings.append(
+            f"⚠️ TIMELINE WARNING: You're trying to cover {len(topics)} {difficulty}-level topics in {num_days} days "
+            f"({total_hours:.1f} total hours). This would require approximately {min_hours_needed:.0f} hours minimum. "
+            f"You're {shortage:.0f} hours short. This plan provides an overview but may not allow for deep mastery."
+        )
+    
+    # Check if too many topics for short duration
+    if len(topics) > 10 and num_days < 14:
+        warnings.append(
+            f"⚠️ SCOPE WARNING: {len(topics)} topics in {num_days} days is very ambitious! "
+            "Consider focusing on fewer topics for better retention, or extend your timeline."
+        )
+    
+    # Check if daily hours are too high
+    if daily_hours > 6:
+        warnings.append(
+            f"⚠️ SUSTAINABILITY WARNING: {daily_hours} hours daily is intense! "
+            "Risk of burnout is high. Consider spreading learning over more days with 3-4 hours daily."
+        )
+    
+    # Check for very short study periods
+    if num_days < 3:
+        warnings.append(
+            "⚠️ DURATION WARNING: Learning in less than 3 days limits long-term retention. "
+            "This will be a quick overview. For lasting understanding, extend to at least 7 days."
+        )
+    
+    # Advanced topics in short time
+    if difficulty == 'advanced' and total_hours < len(topics) * 20:
+        warnings.append(
+            "⚠️ DEPTH WARNING: Advanced topics require significant time for mastery. "
+            "This plan covers fundamentals and key concepts. Expect to need additional practice time."
+        )
+    
+    # Multiple complex topics
+    complex_keywords = ['algorithm', 'system', 'architecture', 'design', 'theory', 'advanced', 'deep', 'machine learning', 'ai', 'calculus', 'physics']
+    complex_topics = [t for t in topics if any(kw in t.lower() for kw in complex_keywords)]
+    
+    if len(complex_topics) >= 3 and num_days < 21:
+        warnings.append(
+            f"⚠️ COMPLEXITY WARNING: Detected {len(complex_topics)} complex topics ({', '.join(complex_topics[:3])}...). "
+            "These require substantial practice and application. This plan covers theoretical foundation - "
+            "practical mastery will need additional hands-on work."
+        )
+    
+    return warnings
 
 
 def normalize_difficulty(difficulty: str) -> str:
@@ -185,6 +253,15 @@ async def generate_study_plan(
         
         num_days = calculate_study_days(start_date, end_date)
         logger.info(f"Plan duration: {num_days} days")
+        
+        # Assess plan complexity and generate warnings
+        complexity_warnings = assess_plan_complexity(
+            request.topics,
+            num_days,
+            request.dailyStudyHours,
+            request.difficulty
+        )
+        logger.info(f"Generated {len(complexity_warnings)} warnings for plan complexity")
         
         # Calculate minimum tasks needed (at least 2 per topic)
         min_tasks = max(len(request.topics) * 2, num_days)
@@ -365,14 +442,15 @@ Generate the JSON now:"""
         ])
         normalized_recommendations = normalize_recommendations(raw_recommendations)
         
-        # Build response
+        # Build response with warnings
         response = StudyPlanResponse(
             title=ai_plan.get("title", f"{request.subject} Study Plan"),
             description=ai_plan.get("description", f"Comprehensive study plan for {request.subject}"),
             tasks=tasks_with_dates,
             estimatedCompletionDays=num_days,
             totalTasks=len(tasks_with_dates),
-            recommendations=normalized_recommendations
+            recommendations=normalized_recommendations,
+            warnings=complexity_warnings
         )
         
         logger.info(f"Generated plan with {len(tasks_with_dates)} tasks over {num_days} days")

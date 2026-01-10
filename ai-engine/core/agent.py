@@ -179,7 +179,9 @@ class COLLABRYAgent:
         llm: LocalLLM,
         tools: Dict[str, Any],
         memory: MemoryManager,
-        rag_retriever: RAGRetriever
+        rag_retriever: RAGRetriever,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         """
         Initialize Study Copilot Agent.
@@ -189,6 +191,8 @@ class COLLABRYAgent:
             tools: Available tools for actions
             memory: Conversation memory manager
             rag_retriever: RAG retriever for user documents
+            user_id: User identifier for isolation
+            session_id: Session/notebook identifier for isolation
         """
         self.llm = llm
         self.tools = tools or {}
@@ -196,6 +200,8 @@ class COLLABRYAgent:
         self.rag_retriever = rag_retriever
         self.study_copilot = StudyCopilot(llm)
         self.last_tool_called: Optional[str] = None
+        self.user_id = user_id
+        self.session_id = session_id
 
     def _build_instruction(
         self,
@@ -279,7 +285,21 @@ class COLLABRYAgent:
             prompt_parts.append(f"\n🎓 Study Intent Detected: {intent}")
         
         if retrieved_context:
-            prompt_parts.append(f"\n📚 Retrieved Context (cite these sources):\n{retrieved_context}")
+            prompt_parts.append(
+                f"\n{'='*70}\n"
+                f"📚 RETRIEVED CONTEXT FROM USER'S DOCUMENTS\n"
+                f"{'='*70}\n"
+                f"{retrieved_context}\n"
+                f"{'='*70}\n\n"
+                f"🚨 CRITICAL INSTRUCTIONS - READ CAREFULLY:\n"
+                f"1. The context above is from the user's actual documents\n"
+                f"2. You MUST answer using ONLY the information from this context\n"
+                f"3. DO NOT use ANY information from your training data or general knowledge\n"
+                f"4. If the question cannot be answered from the context above, say: 'This information is not found in your documents.'\n"
+                f"5. Always cite which source you're using: 'According to Source 1...' or 'Based on Source 2...'\n"
+                f"6. If you find yourself about to mention COLLABRY, Rayyan, or general AI concepts NOT in the context above, STOP and say the info is not available\n"
+                f"{'='*70}\n"
+            )
         
         if chat_history:
             prompt_parts.append(f"\n💬 Chat History:\n{chat_history}")
@@ -289,13 +309,14 @@ class COLLABRYAgent:
         
         return "\n".join(prompt_parts)
 
-    def handle_user_input_stream(self, user_input: str, on_token):
+    def handle_user_input_stream(self, user_input: str, on_token, source_ids: Optional[List[str]] = None):
         """
         Main entry point for handling user input with Study Copilot enhancements.
         
         Args:
             user_input: Student's question or input
             on_token: Callback for streaming tokens
+            source_ids: Optional list of source IDs to filter RAG retrieval
         """
         # 1. NLP analysis (spell correction, intent, entities)
         # Skip NLP for very long texts (quiz generation with large documents)
@@ -322,7 +343,27 @@ class COLLABRYAgent:
             return
 
         # 3. Retrieve relevant documents (RAG) - cite sources in answer
-        retrieved_docs = self.rag_retriever.get_relevant_documents(corrected)
+        # Pass session_id and source_ids to filter documents by notebook and selected sources
+        retrieved_docs = self.rag_retriever.get_relevant_documents(
+            corrected, 
+            user_id=self.user_id,
+            session_id=self.session_id,
+            source_ids=source_ids
+        )
+        
+        # 3.5. Safety check: If source_ids were requested but no docs found, warn user
+        if source_ids and len(source_ids) > 0 and len(retrieved_docs) == 0:
+            error_msg = (
+                "⚠️ **No documents found for your selected sources.**\n\n"
+                "This might happen if:\n"
+                "- The sources were uploaded before the latest update\n"
+                "- The documents haven't been processed yet\n\n"
+                "**Solution:** Please delete and re-upload your sources to fix this issue.\n\n"
+                "Once re-uploaded, I'll be able to answer questions about your documents!"
+            )
+            on_token(error_msg)
+            self.memory.save_context({"user_input": corrected}, {"output": error_msg})
+            return
 
         # 4. Load conversational memory
         memory_vars = self.memory.load_memory_variables({"user_input": corrected})
@@ -358,6 +399,15 @@ class COLLABRYAgent:
         # 9. Handle direct answer (no tool)
         if parsed_json.get("tool") is None:
             answer = clean_answer(parsed_json.get("answer", ""))
+            
+            # Special handling for mindmap generation requests
+            # If the user input contains mindmap generation marker, output the answer directly (it should be JSON)
+            if "[MINDMAP_GENERATION_REQUEST]" in corrected or "[MINDMAP_GENERATION_REQUEST]" in user_input:
+                # For mindmap, the answer should be raw JSON - output it directly without formatting
+                on_token(answer)  # Output the raw JSON answer
+                self.memory.save_context({"user_input": corrected}, {"output": answer})
+                return
+            
             follow_ups = parsed_json.get("follow_up_questions", [])
             
             # If no follow-ups provided, generate them
@@ -554,8 +604,15 @@ def create_agent(
     # User-isolated RAG retriever (filters documents by user_id)
     rag_retriever = RAGRetriever(cfg, user_id=user_id)
     
-    # Create Study Copilot agent
-    agent = COLLABRYAgent(llm, tools, memory, rag_retriever)
+    # Create Study Copilot agent with user and session context
+    agent = COLLABRYAgent(
+        llm, 
+        tools, 
+        memory, 
+        rag_retriever,
+        user_id=user_id,
+        session_id=session_id
+    )
     
     logger.info(
         f"✓ Study Copilot agent created for user_id={user_id}, session_id={session_id}"

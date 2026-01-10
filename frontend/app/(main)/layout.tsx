@@ -14,6 +14,8 @@ import { useAuthStore } from '../../src/stores/auth.store';
 import { useUIStore } from '../../src/stores/ui.store';
 import { useSocket } from '../../src/hooks/useCollaboration';
 import { AppRoute } from '../../types';
+import { DarkModeToggle } from '../../src/components/DarkModeToggle';
+import NotificationDropdown from '../../components/NotificationDropdown';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -22,6 +24,7 @@ const getAppRouteFromPath = (path: string): string => {
   const routeMap: Record<string, string> = {
     '/dashboard': 'dashboard',
     '/study-board': 'study-board',
+    '/study-notebook': 'study-notebook',
     '/planner': 'planner',
     '/focus': 'focus',
     '/profile': 'profile',
@@ -30,6 +33,8 @@ const getAppRouteFromPath = (path: string): string => {
     '/visual-aids': 'visual-aids',
     '/social': 'social',
   };
+  // Handle dynamic routes like /study-notebook/[id]
+  if (path.startsWith('/study-notebook')) return 'study-notebook';
   return routeMap[path] || 'dashboard';
 };
 
@@ -76,6 +81,7 @@ export default function MainLayout({
     const pathMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'study-board': '/study-board',
+      'study-notebook': '/study-notebook',
       'planner': '/planner',
       'focus': '/focus',
       'profile': '/profile',
@@ -92,17 +98,17 @@ export default function MainLayout({
   // Show loading state during logout
   if (!isAuthenticated && isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600 font-semibold">Logging out...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 dark:border-indigo-500 mx-auto"></div>
+          <p className="mt-4 text-slate-600 dark:text-slate-400 font-semibold">Logging out...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <Sidebar 
         currentRoute={currentRoute as any} 
         onNavigate={handleNavigate as any} 
@@ -115,41 +121,39 @@ export default function MainLayout({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navbar */}
-        <header className="h-16 bg-white border-b-2 border-slate-100 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
+        <header className="h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
           <div className="flex items-center gap-4">
             <button 
               onClick={toggleMobileSidebar}
-              className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-2xl transition-all"
+              className="lg:hidden p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-all"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
             </button>
-            <div className="hidden md:flex items-center bg-slate-50 rounded-2xl px-4 py-2 w-72 border-2 border-transparent focus-within:border-indigo-200 focus-within:bg-white transition-all shadow-inner">
-              <span className="text-slate-300"><ICONS.Search size={18} strokeWidth={3} /></span>
+            <div className="hidden md:flex items-center bg-slate-50 dark:bg-slate-800 rounded-2xl px-4 py-2 w-72 border-2 border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-700 focus-within:bg-white dark:focus-within:bg-slate-700 transition-all shadow-inner">
+              <span className="text-slate-300 dark:text-slate-500"><ICONS.Search size={18} strokeWidth={3} /></span>
               <input 
                 type="text" 
                 placeholder="Search your knowledge..." 
-                className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-600 placeholder:text-slate-300 font-bold"
+                className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-500 font-bold"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            <button className="p-2.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500 rounded-2xl relative transition-all bouncy-hover">
-              <ICONS.Notification size={22} strokeWidth={2.5} />
-              <span className="absolute top-2 right-2 w-3 h-3 bg-rose-500 border-2 border-white rounded-full animate-bounce"></span>
-            </button>
-            <div className="h-8 w-1 bg-slate-100 mx-1 hidden md:block rounded-full"></div>
+            <DarkModeToggle />
+            <NotificationDropdown />
+            <div className="h-8 w-1 bg-slate-100 dark:bg-slate-700 mx-1 hidden md:block rounded-full"></div>
             <div 
               className="flex items-center gap-3 pl-1 md:pl-2 cursor-pointer group"
               onClick={() => router.push('/profile')}
             >
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-700">{user?.name || 'User'}</p>
-                <p className="text-xs text-slate-400 capitalize">{user?.role || 'Student'}</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{user?.name || 'User'}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 capitalize">{user?.role || 'Student'}</p>
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-500 flex items-center justify-center text-white font-black text-xl border-2 border-white shadow-lg group-hover:scale-105 transition-all">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-500 dark:from-indigo-600 dark:to-indigo-700 flex items-center justify-center text-white font-black text-xl border-2 border-white dark:border-slate-800 shadow-lg group-hover:scale-105 transition-all">
                 {(user?.name?.[0] || 'U').toUpperCase()}
               </div>
             </div>
@@ -157,7 +161,7 @@ export default function MainLayout({
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 dark:bg-slate-950">
           {children}
         </main>
       </div>

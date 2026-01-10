@@ -34,6 +34,7 @@ const initializeSocket = (httpServer) => {
       socket.userId = decoded.id;
       socket.userEmail = decoded.email;
       socket.userRole = decoded.role;
+      socket.user = { id: decoded.id, email: decoded.email, role: decoded.role };
       next();
     } catch (error) {
       next(new Error('Invalid token'));
@@ -59,6 +60,9 @@ const initializeSocket = (httpServer) => {
   // Initialize chat namespace
   const { initializeChatNamespace } = require('./chatNamespace');
   initializeChatNamespace(io);
+
+  // Initialize notification namespace
+  require('./notificationNamespace')(io);
 
   console.log('🔌 Socket.IO initialized');
   return io;

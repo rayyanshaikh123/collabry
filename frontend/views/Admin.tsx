@@ -8,6 +8,9 @@ import { AppRoute } from '../types';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, AreaChart, Area } from 'recharts';
 import { adminService, type UserFormData } from '../src/services/admin.service';
 import { usageService, type GlobalUsage, type RealtimeStats } from '../src/services/usage.service';
+import { reportService, type Report, type ReportStats } from '../src/services/report.service';
+import { adminBoardService, type AdminBoard, type BoardStats } from '../src/services/adminBoard.service';
+import { settingsService, type PlatformSettings } from '../src/services/settings.service';
 import type { User } from '../src/types/user.types';
 import AlertModal from '../components/AlertModal';
 import { useAlert } from '../src/hooks/useAlert';
@@ -43,12 +46,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [userNames, setUserNames] = useState<Record<string, string>>({});
 
+  // Moderation state
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportStats, setReportStats] = useState<ReportStats | null>(null);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [actionNotes, setActionNotes] = useState('');
+  const [selectedAction, setSelectedAction] = useState('none');
+
+  // Board governance state
+  const [boards, setBoards] = useState<AdminBoard[]>([]);
+  const [boardStats, setBoardStats] = useState<BoardStats | null>(null);
+  const [boardsLoading, setBoardsLoading] = useState(false);
+  const [boardSearchTerm, setBoardSearchTerm] = useState('');
+  const [boardPage, setBoardPage] = useState(1);
+  const [boardTotalPages, setBoardTotalPages] = useState(1);
+
+  // Platform settings state
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsEditing, setSettingsEditing] = useState(false);
+  const [settingsFormData, setSettingsFormData] = useState<PlatformSettings | null>(null);
+
   // Load users when viewing users section
   useEffect(() => {
     if (currentSubRoute === AppRoute.ADMIN_USERS) {
       loadUsers();
     }
   }, [currentSubRoute, currentPage, searchTerm]);
+
+  // Load boards when viewing board governance section
+  useEffect(() => {
+    if (currentSubRoute === AppRoute.ADMIN_BOARDS) {
+      loadBoards();
+      loadBoardStats();
+    }
+  }, [currentSubRoute, boardPage, boardSearchTerm]);
+
+  // Load settings when viewing settings section
+  useEffect(() => {
+    if (currentSubRoute === AppRoute.ADMIN_SETTINGS) {
+      loadSettings();
+    }
+  }, [currentSubRoute]);
+
+  // Load reports when viewing moderation section
+  useEffect(() => {
+    if (currentSubRoute === AppRoute.ADMIN_MODERATION) {
+      loadReports();
+      loadReportStats();
+    }
+  }, [currentSubRoute]);
 
   // Load total user count on mount
   useEffect(() => {
@@ -104,9 +153,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       setUsageLoading(true);
       
       // Get health with realtime stats (no auth required)
-      const health = await usageService.getHealth();
-      if (health.usage_stats) {
-        setRealtimeStats(health.usage_stats);
+      try {
+        const health = await usageService.getHealth();
+        if (health.usage_stats) {
+          setRealtimeStats(health.usage_stats);
+        }
+      } catch (healthError: any) {
+        console.warn('AI engine unavailable, health check failed');
+        setRealtimeStats(null);
       }
       
       // Try to get public stats (no auth required)
@@ -120,7 +174,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
           await loadUserNames(userIds);
         }
       } catch (statsError: any) {
-        console.warn('Could not load public stats, trying authenticated endpoint:', statsError.message);
+        console.warn('Could not load public stats, trying authenticated endpoint');
         // Fallback to authenticated endpoint
         try {
           const usage = await usageService.getGlobalUsage(7);
@@ -132,12 +186,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
             await loadUserNames(userIds);
           }
         } catch (authError: any) {
-          console.warn('Global usage requires authentication:', authError.message);
+          console.warn('AI engine unavailable, usage stats not loaded');
           setGlobalUsage(null);
         }
       }
     } catch (error: any) {
-      console.error('Failed to load usage data:', error);
+      console.warn('Failed to load usage data, AI engine may be offline');
+      setGlobalUsage(null);
+      setRealtimeStats(null);
     } finally {
       setUsageLoading(false);
     }
@@ -150,7 +206,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         setRealtimeStats(health.usage_stats);
       }
     } catch (error: any) {
-      console.error('Failed to load realtime stats:', error);
+      console.warn('AI engine unavailable, realtime stats not loaded');
+      setRealtimeStats(null);
     }
   };
 
@@ -240,6 +297,267 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Report/Moderation functions
+  const loadReports = async () => {
+    try {
+      setReportsLoading(true);
+      const data = await reportService.getReports({
+        status: 'pending',
+        limit: 50
+      });
+      setReports(data.reports || []);
+    } catch (error: any) {
+      console.error('Failed to load reports:', error.message || error);
+      setReports([]);
+      showAlert({
+        type: 'error',
+        title: 'Load Failed',
+        message: 'Could not load reports. Please check your connection.'
+      });
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const loadReportStats = async () => {
+    try {
+      const stats = await reportService.getReportStats();
+      setReportStats(stats);
+    } catch (error: any) {
+      console.error('Failed to load report stats:', error.message || error);
+      setReportStats(null);
+    }
+  };
+
+  const handleDismissReport = async (report: Report) => {
+    try {
+      setReportsLoading(true);
+      await reportService.dismissReport(report._id, 'Not a violation');
+      showAlert({
+        type: 'success',
+        title: 'Report Dismissed',
+        message: 'Report has been dismissed successfully'
+      });
+      loadReports();
+      loadReportStats();
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        title: 'Operation Failed',
+        message: error.message || 'Failed to dismiss report'
+      });
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const handleTakeAction = (report: Report) => {
+    setSelectedReport(report);
+    setShowReportModal(true);
+    setActionNotes('');
+    setSelectedAction('none');
+  };
+
+  const handleSubmitAction = async () => {
+    if (!selectedReport) return;
+
+    try {
+      setReportsLoading(true);
+      await reportService.resolveReport(selectedReport._id, {
+        action: selectedAction,
+        reviewNotes: actionNotes
+      });
+      showAlert({
+        type: 'success',
+        title: 'Action Taken',
+        message: 'Report has been resolved successfully'
+      });
+      setShowReportModal(false);
+      loadReports();
+      loadReportStats();
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        title: 'Operation Failed',
+        message: error.message || 'Failed to resolve report'
+      });
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  // Board governance functions
+  const loadBoards = async () => {
+    try {
+      setBoardsLoading(true);
+      const data = await adminBoardService.getAllBoards({
+        page: boardPage,
+        limit: 20,
+        search: boardSearchTerm
+      });
+      setBoards(data.boards || []);
+      setBoardTotalPages(data.pagination?.pages || 1);
+    } catch (error) {
+      console.error('Failed to load boards:', error);
+    } finally {
+      setBoardsLoading(false);
+    }
+  };
+
+  const loadBoardStats = async () => {
+    try {
+      const stats = await adminBoardService.getBoardStats();
+      setBoardStats(stats);
+    } catch (error: any) {
+      console.error('Failed to load board stats:', error.message || error);
+      setBoardStats(null);
+    }
+  };
+
+  const handleSuspendBoard = async (board: AdminBoard) => {
+    const reason = prompt(`Enter reason for suspending "${board.title}":`);
+    if (!reason) return;
+
+    try {
+      setBoardsLoading(true);
+      await adminBoardService.suspendBoard(board._id, reason);
+      showAlert({
+        type: 'success',
+        title: 'Board Suspended',
+        message: `"${board.title}" has been suspended`
+      });
+      loadBoards();
+      loadBoardStats();
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        title: 'Operation Failed',
+        message: error.message || 'Failed to suspend board'
+      });
+    } finally {
+      setBoardsLoading(false);
+    }
+  };
+
+  const handleForceDeleteBoard = async (board: AdminBoard) => {
+    if (!confirm(`Permanently delete "${board.title}"? This cannot be undone!`)) return;
+
+    try {
+      setBoardsLoading(true);
+      await adminBoardService.forceDeleteBoard(board._id);
+      showAlert({
+        type: 'success',
+        title: 'Board Deleted',
+        message: `"${board.title}" has been permanently deleted`
+      });
+      loadBoards();
+      loadBoardStats();
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete board'
+      });
+    } finally {
+      setBoardsLoading(false);
+    }
+  };
+
+  // Platform settings functions
+  const loadSettings = async () => {
+    try {
+      setSettingsLoading(true);
+      const data = await settingsService.getSettings();
+      
+      // Ensure all nested objects exist with defaults
+      const normalizedSettings: PlatformSettings = {
+        ...data,
+        platform: data.platform || { name: '', description: '', maintenanceMode: false, maintenanceMessage: '' },
+        email: data.email || { enabled: false, service: '', from: '', templates: { welcome: '', passwordReset: '', boardInvite: '' } },
+        ai: data.ai || { enabled: false, baseUrl: '', timeout: 30000, maxTokens: 4000, rateLimits: { perUser: 100, perHour: 1000 } },
+        features: data.features || { studyBoard: true, voiceChat: true, studyPlanner: true, aiTutor: true, collaborativeNotes: true },
+        storage: data.storage || { maxFileSize: 52428800, maxBoardElements: 10000, maxBoardsPerUser: 50 },
+        security: data.security || { jwtExpiresIn: '7d', bcryptRounds: 10, passwordMinLength: 8, enableTwoFactor: false },
+        analytics: data.analytics || { enabled: true, trackUserActivity: true, trackBoardUsage: true, retentionDays: 90 }
+      };
+      
+      setSettings(normalizedSettings);
+      setSettingsFormData(normalizedSettings);
+    } catch (error: any) {
+      console.error('Failed to load settings:', error.message || error);
+      setSettings(null);
+      setSettingsFormData(null);
+      showAlert({
+        type: 'error',
+        title: 'Load Failed',
+        message: 'Could not load platform settings. Please check your connection.'
+      });
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleEditSettings = () => {
+    setSettingsEditing(true);
+  };
+
+  const handleCancelEditSettings = () => {
+    setSettingsEditing(false);
+    setSettingsFormData(settings);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!settingsFormData) return;
+
+    try {
+      setSettingsLoading(true);
+      const updated = await settingsService.updateSettings(settingsFormData);
+      setSettings(updated);
+      setSettingsFormData(updated);
+      setSettingsEditing(false);
+      showAlert({
+        type: 'success',
+        title: 'Settings Saved',
+        message: 'Platform settings have been updated successfully'
+      });
+    } catch (error: any) {
+      showAlert({
+        type: 'error',
+        title: 'Save Failed',
+        message: error.message || 'Failed to save settings'
+      });
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const updateSettingsField = (category: keyof PlatformSettings, field: string, value: any) => {
+    if (!settingsFormData) return;
+    
+    setSettingsFormData({
+      ...settingsFormData,
+      [category]: {
+        ...(settingsFormData[category] as any),
+        [field]: value
+      }
+    });
+  };
+
+  const updateNestedSettingsField = (category: keyof PlatformSettings, parent: string, field: string, value: any) => {
+    if (!settingsFormData) return;
+    
+    setSettingsFormData({
+      ...settingsFormData,
+      [category]: {
+        ...(settingsFormData[category] as any),
+        [parent]: {
+          ...((settingsFormData[category] as any)[parent]),
+          [field]: value
+        }
+      }
+    });
   };
 
   const handleToggleStatus = async (user: User) => {
@@ -611,48 +929,182 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         );
       case AppRoute.ADMIN_MODERATION:
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="lg:col-span-2 space-y-6">
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="lg:col-span-2 space-y-6">
                 <Card noPadding>
                   <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
                     <h3 className="text-xl font-black text-slate-800">Flagged Activity</h3>
-                    <Badge variant="rose">12 New</Badge>
+                    <Badge variant="rose">{reportStats?.pending || 0} New</Badge>
                   </div>
                   <div className="p-4 space-y-4">
-                    {[
-                      { user: 'BannedUser12', reason: 'Spamming Study Buddy', room: 'Physics 101', time: '5m ago' },
-                      { user: 'AnonExplorer', reason: 'Inappropriate Drawing', room: 'Art Class', time: '12m ago' },
-                      { user: 'BotHunter', reason: 'Suspicious API activity', room: 'Global', time: '1h ago' },
-                    ].map((m, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-[1.5rem] border-2 border-transparent hover:border-rose-100 transition-all">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center font-black">!</div>
-                          <div>
-                            <p className="text-sm font-black text-slate-800">{m.user} <span className="text-[10px] text-slate-400 uppercase font-bold ml-2">in {m.room}</span></p>
-                            <p className="text-xs text-rose-500 font-bold">{m.reason}</p>
+                    {reportsLoading ? (
+                      <div className="text-center py-12 text-slate-400">
+                        Loading reports...
+                      </div>
+                    ) : reports.length === 0 ? (
+                      <div className="text-center py-12 text-slate-400">
+                        <p className="text-sm font-bold">No pending reports</p>
+                        <p className="text-xs mt-2">All content is in good standing</p>
+                      </div>
+                    ) : (
+                      reports.map((report) => (
+                        <div key={report._id} className="flex items-center justify-between p-4 bg-slate-50 rounded-[1.5rem] border-2 border-transparent hover:border-rose-100 transition-all">
+                          <div className="flex gap-4 items-center flex-1">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black ${
+                              report.priority === 'critical' ? 'bg-rose-200 text-rose-700' :
+                              report.priority === 'high' ? 'bg-rose-100 text-rose-600' :
+                              report.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
+                              'bg-slate-200 text-slate-600'
+                            }`}>
+                              !
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-black text-slate-800">
+                                {report.reportedBy.name}
+                                <span className="text-[10px] text-slate-400 uppercase font-bold ml-2">
+                                  reported {report.contentType}
+                                </span>
+                              </p>
+                              <p className="text-xs text-rose-500 font-bold">
+                                {reportService.formatReason(report.reason)}: {report.description.slice(0, 50)}...
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                {report.timeSinceReport || new Date(report.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="secondary" 
+                              size="sm"
+                              onClick={() => handleDismissReport(report)}
+                              disabled={reportsLoading}
+                            >
+                              Dismiss
+                            </Button>
+                            <Button 
+                              variant="danger" 
+                              size="sm"
+                              onClick={() => handleTakeAction(report)}
+                              disabled={reportsLoading}
+                            >
+                              Take Action
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                           <Button variant="secondary" size="sm">Dismiss</Button>
-                           <Button variant="danger" size="sm">Take Action</Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </Card>
-             </div>
-             <Card className="h-fit">
-                <h3 className="text-xl font-black text-slate-800 mb-6">Moderator Notes</h3>
-                <div className="space-y-4">
-                  <div className="p-4 bg-indigo-50 rounded-2xl">
-                    <p className="text-xs font-bold text-indigo-700 italic">"Keep an eye on the Physics board, some users are trying to break the focus timer logic."</p>
-                    <p className="text-[10px] text-indigo-400 mt-2 uppercase font-black">— Admin Donna</p>
+
+                {/* Report Statistics */}
+                {reportStats && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card className="bg-rose-50 border-rose-100">
+                      <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Pending</p>
+                      <h4 className="text-3xl font-black text-slate-800">{reportStats.pending}</h4>
+                    </Card>
+                    <Card className="bg-amber-50 border-amber-100">
+                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Reviewing</p>
+                      <h4 className="text-3xl font-black text-slate-800">{reportStats.reviewing}</h4>
+                    </Card>
+                    <Card className="bg-emerald-50 border-emerald-100">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Resolved</p>
+                      <h4 className="text-3xl font-black text-slate-800">{reportStats.resolved}</h4>
+                    </Card>
+                    <Card className="bg-slate-50 border-slate-100">
+                      <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Total</p>
+                      <h4 className="text-3xl font-black text-slate-800">{reportStats.total}</h4>
+                    </Card>
                   </div>
-                  <textarea className="w-full h-32 bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:border-indigo-400" placeholder="Add a global note..." />
-                  <Button variant="primary" className="w-full">Save Note</Button>
+                )}
+              </div>
+
+              <Card className="h-fit">
+                <h3 className="text-xl font-black text-slate-800 mb-6">Report Summary</h3>
+                <div className="space-y-4">
+                  {reportStats?.byType && Object.entries(reportStats.byType).length > 0 ? (
+                    Object.entries(reportStats.byType).map(([type, count]) => (
+                      <div key={type} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl">
+                        <span className="text-sm font-bold text-slate-700 capitalize">{type}</span>
+                        <Badge variant="slate">{count}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400 text-center py-4">No reports yet</p>
+                  )}
                 </div>
-             </Card>
-          </div>
+              </Card>
+            </div>
+
+            {/* Action Modal */}
+            {showReportModal && selectedReport && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <Card className="w-full max-w-2xl">
+                  <h3 className="text-2xl font-black text-slate-800 mb-4">Take Action on Report</h3>
+                  
+                  <div className="space-y-4 mb-6">
+                    <div className="p-4 bg-slate-50 rounded-2xl">
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-2">Reported By</p>
+                      <p className="text-sm font-bold text-slate-800">{selectedReport.reportedBy.name}</p>
+                      <p className="text-xs text-slate-500">{selectedReport.reportedBy.email}</p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-2xl">
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-2">Reason</p>
+                      <p className="text-sm font-bold text-rose-600">{reportService.formatReason(selectedReport.reason)}</p>
+                      <p className="text-sm text-slate-700 mt-2">{selectedReport.description}</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Action to Take</label>
+                      <select 
+                        value={selectedAction}
+                        onChange={(e) => setSelectedAction(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-400"
+                      >
+                        <option value="none">No Action</option>
+                        <option value="warning">Issue Warning</option>
+                        <option value="content_removed">Remove Content</option>
+                        <option value="user_suspended">Suspend User</option>
+                        <option value="user_banned">Ban User</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Review Notes</label>
+                      <textarea 
+                        value={actionNotes}
+                        onChange={(e) => setActionNotes(e.target.value)}
+                        placeholder="Add notes about this decision..."
+                        className="w-full h-32 bg-white border-2 border-slate-200 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => setShowReportModal(false)}
+                      disabled={reportsLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      variant="danger" 
+                      className="flex-1"
+                      onClick={handleSubmitAction}
+                      disabled={reportsLoading}
+                    >
+                      {reportsLoading ? 'Processing...' : 'Submit Action'}
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+          </>
         );
       case AppRoute.ADMIN_AI:
         return (
@@ -824,6 +1276,562 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
              </Card>
           </div>
         );
+      case AppRoute.ADMIN_BOARDS:
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Board Statistics */}
+            {boardStats && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-indigo-50 border-indigo-100">
+                  <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Total Boards</p>
+                  <h4 className="text-3xl font-black text-slate-800">{boardStats.total}</h4>
+                </Card>
+                <Card className="bg-emerald-50 border-emerald-100">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Public</p>
+                  <h4 className="text-3xl font-black text-slate-800">{boardStats.public}</h4>
+                </Card>
+                <Card className="bg-amber-50 border-amber-100">
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Private</p>
+                  <h4 className="text-3xl font-black text-slate-800">{boardStats.private}</h4>
+                </Card>
+                <Card className="bg-rose-50 border-rose-100">
+                  <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Archived</p>
+                  <h4 className="text-3xl font-black text-slate-800">{boardStats.archived}</h4>
+                </Card>
+              </div>
+            )}
+
+            {/* Boards Table */}
+            <Card noPadding>
+              <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
+                <h3 className="text-xl font-black text-slate-800">Board Management</h3>
+                <Input 
+                  placeholder="Search boards..." 
+                  className="w-64" 
+                  value={boardSearchTerm}
+                  onChange={(e) => setBoardSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <tr>
+                      <th className="px-6 py-4">Board</th>
+                      <th className="px-6 py-4">Owner</th>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Activity</th>
+                      <th className="px-6 py-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y-2 divide-slate-50 font-bold">
+                    {boardsLoading && boards.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                          Loading boards...
+                        </td>
+                      </tr>
+                    ) : boards.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                          No boards found
+                        </td>
+                      </tr>
+                    ) : (
+                      boards.map((board) => (
+                        <tr key={board._id} className="hover:bg-slate-50/50">
+                          <td className="px-6 py-4">
+                            <div className="leading-tight">
+                              <p className="text-sm text-slate-800 font-bold">{board.title}</p>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-tight">
+                                {board.elements?.length || 0} elements • {board.members?.length || 0} members
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              {board.owner.avatar ? (
+                                <img src={board.owner.avatar} className="w-8 h-8 rounded-lg object-cover" alt={board.owner.name} />
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black text-xs">
+                                  {board.owner.name[0]}
+                                </div>
+                              )}
+                              <div className="leading-tight">
+                                <p className="text-xs text-slate-700">{board.owner.name}</p>
+                                <p className="text-[10px] text-slate-400">{board.owner.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant={board.isPublic ? 'emerald' : 'slate'}>
+                              {board.isPublic ? 'Public' : 'Private'}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <Badge variant={board.isArchived ? 'rose' : 'emerald'}>
+                              {board.isArchived ? 'Archived' : 'Active'}
+                            </Badge>
+                          </td>
+                          <td className="px-6 py-4 text-xs text-slate-400">
+                            {new Date(board.lastActivity).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              {!board.isArchived && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={() => handleSuspendBoard(board)}
+                                  title="Suspend board"
+                                  className="text-amber-500 hover:text-amber-600"
+                                >
+                                  <ICONS.Admin size={18} />
+                                </Button>
+                              )}
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={() => handleForceDeleteBoard(board)}
+                                title="Delete board permanently"
+                                className="text-rose-500 hover:text-rose-600"
+                              >
+                                <ICONS.Trash size={18} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {boardTotalPages > 1 && (
+                <div className="p-6 border-t-2 border-slate-50 flex items-center justify-between">
+                  <p className="text-sm text-slate-500 font-bold">
+                    Page {boardPage} of {boardTotalPages}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={boardPage === 1}
+                      onClick={() => setBoardPage(p => p - 1)}
+                    >
+                      Previous
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={boardPage === boardTotalPages}
+                      onClick={() => setBoardPage(p => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        );
+
+      case AppRoute.ADMIN_SETTINGS:
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {settingsLoading && !settings ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-slate-400">Loading settings...</div>
+              </div>
+            ) : settings && settingsFormData ? (
+              <>
+                {/* Header */}
+                <Card>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-800">Platform Settings</h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Configure platform-wide settings and features
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      {settingsEditing ? (
+                        <>
+                          <Button 
+                            variant="outline"
+                            onClick={handleCancelEditSettings}
+                            disabled={settingsLoading}
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            variant="primary"
+                            onClick={handleSaveSettings}
+                            disabled={settingsLoading}
+                            className="gap-2"
+                          >
+                            <ICONS.Check size={18} />
+                            {settingsLoading ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button 
+                          variant="primary"
+                          onClick={handleEditSettings}
+                          className="gap-2"
+                        >
+                          <ICONS.Edit size={18} />
+                          Edit Settings
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Platform Settings */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Platform Configuration</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Platform Name</label>
+                      <Input
+                        value={settingsFormData.platform.name}
+                        onChange={(e) => updateSettingsField('platform', 'name', e.target.value)}
+                        disabled={!settingsEditing}
+                        placeholder="Enter platform name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Description</label>
+                      <Input
+                        value={settingsFormData.platform.description}
+                        onChange={(e) => updateSettingsField('platform', 'description', e.target.value)}
+                        disabled={!settingsEditing}
+                        placeholder="Enter platform description"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="maintenanceMode"
+                        checked={settingsFormData.platform.maintenanceMode}
+                        onChange={(e) => updateSettingsField('platform', 'maintenanceMode', e.target.checked)}
+                        disabled={!settingsEditing}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="maintenanceMode" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Enable Maintenance Mode
+                      </label>
+                    </div>
+                    {settingsFormData.platform.maintenanceMode && (
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Maintenance Message</label>
+                        <textarea
+                          value={settingsFormData.platform.maintenanceMessage}
+                          onChange={(e) => updateSettingsField('platform', 'maintenanceMessage', e.target.value)}
+                          disabled={!settingsEditing}
+                          placeholder="Message to display during maintenance"
+                          className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl text-sm resize-none"
+                          rows={3}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Feature Toggles */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Feature Toggles</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {Object.entries(settingsFormData.features).map(([feature, enabled]) => (
+                      <div key={feature} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                        <input
+                          type="checkbox"
+                          id={`feature-${feature}`}
+                          checked={enabled as boolean}
+                          onChange={(e) => updateSettingsField('features', feature, e.target.checked)}
+                          disabled={!settingsEditing}
+                          className="w-5 h-5 rounded"
+                        />
+                        <label htmlFor={`feature-${feature}`} className="text-sm font-bold text-slate-700 cursor-pointer flex-1">
+                          {feature.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}
+                        </label>
+                        <Badge variant={enabled ? 'emerald' : 'slate'}>
+                          {enabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Storage & Limits */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Storage & Limits</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">
+                        Max File Size ({settingsService.formatFileSize(settingsFormData.storage.maxFileSize)})
+                      </label>
+                      <Input
+                        type="number"
+                        value={settingsFormData.storage.maxFileSize}
+                        onChange={(e) => updateSettingsField('storage', 'maxFileSize', parseInt(e.target.value))}
+                        disabled={!settingsEditing}
+                        placeholder="Max file size in bytes"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Max Board Elements</label>
+                      <Input
+                        type="number"
+                        value={settingsFormData.storage.maxBoardElements}
+                        onChange={(e) => updateSettingsField('storage', 'maxBoardElements', parseInt(e.target.value))}
+                        disabled={!settingsEditing}
+                        placeholder="Maximum elements per board"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Max Boards Per User</label>
+                      <Input
+                        type="number"
+                        value={settingsFormData.storage.maxBoardsPerUser}
+                        onChange={(e) => updateSettingsField('storage', 'maxBoardsPerUser', parseInt(e.target.value))}
+                        disabled={!settingsEditing}
+                        placeholder="Maximum boards per user"
+                      />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* AI Engine Settings */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">AI Engine Configuration</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="aiEnabled"
+                        checked={settingsFormData.ai.enabled}
+                        onChange={(e) => updateSettingsField('ai', 'enabled', e.target.checked)}
+                        disabled={!settingsEditing}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="aiEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Enable AI Engine
+                      </label>
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Base URL</label>
+                      <Input
+                        value={settingsFormData.ai.baseUrl}
+                        onChange={(e) => updateSettingsField('ai', 'baseUrl', e.target.value)}
+                        disabled={!settingsEditing}
+                        placeholder="AI engine base URL"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Timeout (ms)</label>
+                        <Input
+                          type="number"
+                          value={settingsFormData.ai.timeout}
+                          onChange={(e) => updateSettingsField('ai', 'timeout', parseInt(e.target.value))}
+                          disabled={!settingsEditing}
+                          placeholder="Timeout in milliseconds"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Max Tokens</label>
+                        <Input
+                          type="number"
+                          value={settingsFormData.ai.maxTokens}
+                          onChange={(e) => updateSettingsField('ai', 'maxTokens', parseInt(e.target.value))}
+                          disabled={!settingsEditing}
+                          placeholder="Maximum tokens per request"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Rate Limit (per user)</label>
+                        <Input
+                          type="number"
+                          value={settingsFormData.ai?.rateLimits?.perUser || 0}
+                          onChange={(e) => updateNestedSettingsField('ai', 'rateLimits', 'perUser', parseInt(e.target.value))}
+                          disabled={!settingsEditing}
+                          placeholder="Requests per user"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Rate Limit (per hour)</label>
+                        <Input
+                          type="number"
+                          value={settingsFormData.ai?.rateLimits?.perHour || 0}
+                          onChange={(e) => updateNestedSettingsField('ai', 'rateLimits', 'perHour', parseInt(e.target.value))}
+                          disabled={!settingsEditing}
+                          placeholder="Total requests per hour"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Security Settings */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Security Configuration</h3>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">JWT Expires In</label>
+                        <Input
+                          value={settingsFormData.security.jwtExpiresIn}
+                          onChange={(e) => updateSettingsField('security', 'jwtExpiresIn', e.target.value)}
+                          disabled={!settingsEditing}
+                          placeholder="e.g., 7d, 24h"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-bold text-slate-700 block mb-2">Password Min Length</label>
+                        <Input
+                          type="number"
+                          value={settingsFormData.security.passwordMinLength}
+                          onChange={(e) => updateSettingsField('security', 'passwordMinLength', parseInt(e.target.value))}
+                          disabled={!settingsEditing}
+                          placeholder="Minimum password length"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Bcrypt Rounds</label>
+                      <Input
+                        type="number"
+                        value={settingsFormData.security.bcryptRounds}
+                        onChange={(e) => updateSettingsField('security', 'bcryptRounds', parseInt(e.target.value))}
+                        disabled={!settingsEditing}
+                        placeholder="Bcrypt salt rounds"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="twoFactor"
+                        checked={settingsFormData.security.enableTwoFactor}
+                        onChange={(e) => updateSettingsField('security', 'enableTwoFactor', e.target.checked)}
+                        disabled={!settingsEditing}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="twoFactor" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Enable Two-Factor Authentication
+                      </label>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Analytics Settings */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Analytics Configuration</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="analyticsEnabled"
+                        checked={settingsFormData.analytics.enabled}
+                        onChange={(e) => updateSettingsField('analytics', 'enabled', e.target.checked)}
+                        disabled={!settingsEditing}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="analyticsEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Enable Analytics
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="trackUserActivity"
+                        checked={settingsFormData.analytics.trackUserActivity}
+                        onChange={(e) => updateSettingsField('analytics', 'trackUserActivity', e.target.checked)}
+                        disabled={!settingsEditing || !settingsFormData.analytics.enabled}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="trackUserActivity" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Track User Activity
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="trackBoardUsage"
+                        checked={settingsFormData.analytics.trackBoardUsage}
+                        onChange={(e) => updateSettingsField('analytics', 'trackBoardUsage', e.target.checked)}
+                        disabled={!settingsEditing || !settingsFormData.analytics.enabled}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="trackBoardUsage" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Track Board Usage
+                      </label>
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Data Retention (days)</label>
+                      <Input
+                        type="number"
+                        value={settingsFormData.analytics.retentionDays}
+                        onChange={(e) => updateSettingsField('analytics', 'retentionDays', parseInt(e.target.value))}
+                        disabled={!settingsEditing || !settingsFormData.analytics.enabled}
+                        placeholder="Number of days to retain data"
+                      />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Email Settings */}
+                <Card>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">Email Configuration</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <input
+                        type="checkbox"
+                        id="emailEnabled"
+                        checked={settingsFormData.email.enabled}
+                        onChange={(e) => updateSettingsField('email', 'enabled', e.target.checked)}
+                        disabled={!settingsEditing}
+                        className="w-5 h-5 rounded"
+                      />
+                      <label htmlFor="emailEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                        Enable Email Service
+                      </label>
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">Email Service</label>
+                      <Input
+                        value={settingsFormData.email.service}
+                        onChange={(e) => updateSettingsField('email', 'service', e.target.value)}
+                        disabled={!settingsEditing || !settingsFormData.email.enabled}
+                        placeholder="e.g., gmail, sendgrid"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-slate-700 block mb-2">From Address</label>
+                      <Input
+                        value={settingsFormData.email.from}
+                        onChange={(e) => updateSettingsField('email', 'from', e.target.value)}
+                        disabled={!settingsEditing || !settingsFormData.email.enabled}
+                        placeholder="noreply@example.com"
+                      />
+                    </div>
+                  </div>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <div className="text-center py-12 text-slate-400">
+                  No settings available
+                </div>
+              </Card>
+            )}
+          </div>
+        );
+
       default:
         return (
           <div className="flex flex-col items-center justify-center h-80 text-center animate-in fade-in zoom-in duration-500">

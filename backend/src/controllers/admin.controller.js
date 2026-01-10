@@ -1,5 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const User = require('../models/User');
+const boardService = require('../services/board.service');
+const PlatformSettings = require('../models/PlatformSettings');
 const AppError = require('../utils/AppError');
 
 /**
@@ -177,6 +179,135 @@ const deleteUser = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Get all boards (Admin)
+ * @route   GET /api/admin/boards
+ * @access  Private/Admin
+ */
+const getAllBoards = asyncHandler(async (req, res) => {
+  const options = {
+    page: parseInt(req.query.page) || 1,
+    limit: parseInt(req.query.limit) || 20,
+    search: req.query.search || '',
+    isPublic: req.query.isPublic ? req.query.isPublic === 'true' : null,
+    isArchived: req.query.isArchived ? req.query.isArchived === 'true' : null,
+    sortBy: req.query.sortBy || 'lastActivity',
+    sortOrder: req.query.sortOrder || 'desc'
+  };
+
+  const result = await boardService.getAllBoards(options);
+
+  res.status(200).json({
+    success: true,
+    data: result.boards,
+    pagination: result.pagination
+  });
+});
+
+/**
+ * @desc    Get board analytics (Admin)
+ * @route   GET /api/admin/boards/:id/analytics
+ * @access  Private/Admin
+ */
+const getBoardAnalytics = asyncHandler(async (req, res) => {
+  const analytics = await boardService.getBoardAnalytics(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    data: analytics
+  });
+});
+
+/**
+ * @desc    Suspend a board (Admin)
+ * @route   PUT /api/admin/boards/:id/suspend
+ * @access  Private/Admin
+ */
+const suspendBoard = asyncHandler(async (req, res) => {
+  const { reason } = req.body;
+
+  if (!reason) {
+    throw new AppError('Suspension reason is required', 400);
+  }
+
+  const board = await boardService.suspendBoard(req.params.id, reason);
+
+  res.status(200).json({
+    success: true,
+    message: 'Board suspended successfully',
+    data: board
+  });
+});
+
+/**
+ * @desc    Force delete a board (Admin)
+ * @route   DELETE /api/admin/boards/:id/force
+ * @access  Private/Admin
+ */
+const forceDeleteBoard = asyncHandler(async (req, res) => {
+  const result = await boardService.forceDeleteBoard(req.params.id);
+
+  res.status(200).json({
+    success: true,
+    message: result.message
+  });
+});
+
+/**
+ * @desc    Get board statistics (Admin)
+ * @route   GET /api/admin/boards/stats
+ * @access  Private/Admin
+ */
+const getBoardStats = asyncHandler(async (req, res) => {
+  const stats = await boardService.getBoardStats();
+
+  res.status(200).json({
+    success: true,
+    data: stats
+  });
+});
+
+/**
+ * @desc    Get platform settings (Admin)
+ * @route   GET /api/admin/settings
+ * @access  Private/Admin
+ */
+const getSettings = asyncHandler(async (req, res) => {
+  const settings = await PlatformSettings.getSettings();
+
+  res.status(200).json({
+    success: true,
+    data: settings
+  });
+});
+
+/**
+ * @desc    Update platform settings (Admin)
+ * @route   PUT /api/admin/settings
+ * @access  Private/Admin
+ */
+const updateSettings = asyncHandler(async (req, res) => {
+  let settings = await PlatformSettings.getSettings();
+
+  // Update settings
+  Object.keys(req.body).forEach(key => {
+    if (settings[key] !== undefined) {
+      settings[key] = { ...settings[key], ...req.body[key] };
+    }
+  });
+
+  settings.updatedBy = req.user._id;
+  settings.updatedAt = new Date();
+
+  await settings.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Settings updated successfully',
+    data: settings
+  });
+});
+
 module.exports = {
   getDashboard,
   getAllUsers,
@@ -184,4 +315,11 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  getAllBoards,
+  getBoardAnalytics,
+  suspendBoard,
+  forceDeleteBoard,
+  getBoardStats,
+  getSettings,
+  updateSettings,
 };
