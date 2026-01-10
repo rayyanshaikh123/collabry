@@ -104,9 +104,10 @@ class NotebookService {
   }
 
   async linkArtifact(notebookId: string, data: {
-    type: 'quiz' | 'mindmap' | 'flashcards';
+    type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic';
     referenceId: string;
     title: string;
+    data?: any;
   }) {
     const response = await api.post(
       `/notebook/notebooks/${notebookId}/artifacts`,

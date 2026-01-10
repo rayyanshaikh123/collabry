@@ -97,7 +97,7 @@ export const useNotebookContext = (id: string | undefined) => {
 export const useLinkArtifact = (notebookId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards'; referenceId: string; title: string }) => 
+    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic'; referenceId: string; title: string; data?: any }) => 
       notebookService.linkArtifact(notebookId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notebooks', notebookId] });

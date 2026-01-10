@@ -38,7 +38,8 @@ interface CursorData {
   y: number;
 }
 
-interface ParticipantData {
+// ParticipantData used for socket event typing
+type ParticipantData = {
   userId: string;
   email: string;
   name?: string;
@@ -46,10 +47,7 @@ interface ParticipantData {
   color: string;
 }
 
-interface SocketResponseData {
-  userId: string;
-  email: string;
-  color: string;
+interface SocketResponseData extends ParticipantData {
   position?: CursorData;
 }
 

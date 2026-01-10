@@ -116,7 +116,7 @@ export function extractFlashcardsFromMarkdown(markdown: string): {
     }
     
     // Try markdown format: "Front: ... / Back: ..."
-    const markdownPattern = /(?:^|\n)(?:Card \d+:|Front:)\s*(.+?)\s*(?:\/|Back:)\s*(.+?)(?=\n(?:Card \d+:|Front:)|\n\n|$)/gis;
+    const markdownPattern = /(?:^|\n)(?:Card \d+:|Front:)\s*(.+?)\s*(?:\/|Back:)\s*(.+?)(?=\n(?:Card \d+:|Front:)|\n\n|$)/gim;
     const matches = [...markdown.matchAll(markdownPattern)];
     
     if (matches.length > 0) {
@@ -137,7 +137,7 @@ export function extractFlashcardsFromMarkdown(markdown: string): {
     }
     
     // Try simple Q&A format
-    const qaPattern = /(?:^|\n)(?:Q:|Question \d+:)\s*(.+?)\s*\n(?:A:|Answer:)\s*(.+?)(?=\n(?:Q:|Question)|\n\n|$)/gis;
+    const qaPattern = /(?:^|\n)(?:Q:|Question \d+:)\s*(.+?)\s*\n(?:A:|Answer:)\s*(.+?)(?=\n(?:Q:|Question)|\n\n|$)/gim;
     const qaMatches = [...markdown.matchAll(qaPattern)];
     
     if (qaMatches.length > 0) {
@@ -178,12 +178,12 @@ export function containsFlashcardData(text: string): boolean {
   }
   
   // Check for markdown format
-  if (text.match(/(?:Front:|Card \d+:).+?(?:Back:|\/)/is)) {
+  if (text.match(/(?:Front:|Card \d+:).+?(?:Back:|\/)/im)) {
     return true;
   }
   
   // Check for Q&A format
-  if (text.match(/(?:Q:|Question \d+:).+?(?:A:|Answer:)/is)) {
+  if (text.match(/(?:Q:|Question \d+:).+?(?:A:|Answer:)/im)) {
     return true;
   }
   
