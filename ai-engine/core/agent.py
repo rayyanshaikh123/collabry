@@ -343,12 +343,11 @@ class COLLABRYAgent:
             return
 
         # 3. Retrieve relevant documents (RAG) - cite sources in answer
-        # Pass session_id and source_ids to filter documents by notebook and selected sources
+        # Get user's documents across all sessions for better context
         retrieved_docs = self.rag_retriever.get_relevant_documents(
             corrected, 
-            user_id=self.user_id,
-            session_id=self.session_id,
-            source_ids=source_ids
+            user_id=self.user_id
+            # source_ids=source_ids  # Temporarily disabled to allow access to all user documents
         )
         
         # 3.5. Safety check: If source_ids were requested but no docs found, warn user
@@ -359,7 +358,7 @@ class COLLABRYAgent:
                 "- The sources were uploaded before the latest update\n"
                 "- The documents haven't been processed yet\n\n"
                 "**Solution:** Please delete and re-upload your sources to fix this issue.\n\n"
-                "Once re-uploaded, I'll be able to answer questions about your documents!"
+                "For now, I'll answer using your general knowledge since no specific documents were found."
             )
             on_token(error_msg)
             self.memory.save_context({"user_input": corrected}, {"output": error_msg})

@@ -69,6 +69,7 @@ CONFIG = {
 
     # External API keys (optional, loaded from ENV only for security)
     "serper_api_key": os.environ.get("SERPER_API_KEY"),
+    "huggingface_api_key": os.environ.get("HUGGINGFACE_API_KEY"),
     "stable_diffusion_api": os.environ.get("STABLE_DIFFUSION_API", "http://127.0.0.1:7860"),
 
     # Agent options
@@ -76,8 +77,8 @@ CONFIG = {
 
     # Temperature for LLM responses
     "temperature": float(os.environ.get("COLLABRY_TEMPERATURE", "0.2")),
-    # Embedding model name (sentence-transformers) - PRESERVED for FAISS
-    "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+    # Embedding model name (Hugging Face) - UPDATED for cloud API
+    "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"),
 
     # FAISS index path prefix (two files will be created: {prefix}.index and {prefix}.meta.json)
     "faiss_index_path": str(ROOT / "memory" / "faiss_index"),
@@ -153,17 +154,6 @@ CONFIG["tool_synonyms"] = {
     "make_ppt": "ppt_generator",
     "generate_ppt": "ppt_generator",
     "presentation": "ppt_generator",
-    # OCR synonyms (actual tool name is ocr_read)
-    "ocr_reader": "ocr_read",
-    "extract_text": "ocr_read",
-    "read_image": "ocr_read",
-    "scan": "ocr_read",
-    # Image generation synonyms (actual tool name is image_gen)
-    "image_generation": "image_gen",
-    "create_image": "image_gen",
-    "generate_image": "image_gen",
-    "make_image": "image_gen",
-    "draw": "image_gen",
 }
 
 # Preferred site mappings for web_search context (study-platform relevant)
