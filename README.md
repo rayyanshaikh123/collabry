@@ -1,9 +1,5 @@
 # 🎓 Collabry - One Platform, All Your Study Needs
 
-<div align="center">
-
-![Collabry Banner](https://via.placeholder.com/800x200/4F46E5/FFFFFF?text=Collabry+-+Study+Smarter+Together)
-
 ### **Stop Juggling 10 Apps. Start Learning in One Intelligent Workspace.**
 
 *AI that understands YOUR materials • Real-time collaboration • Gamified learning • Career-ready skills*
