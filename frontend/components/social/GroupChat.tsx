@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Paperclip, Smile, Reply, Edit2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { showConfirm } from '@/src/lib/alert';
 import chatSocketClient from '@/src/lib/chatSocket';
 
 interface GroupChatProps {
@@ -278,17 +279,23 @@ export default function GroupChat({
   const handleDeleteMessage = (messageId: string) => {
     if (!isConnected) return;
 
-    if (!confirm('Delete this message?')) return;
-
-    chatSocketClient.deleteMessage(messageId, (response: { error?: string }) => {
-      if (response.error) {
-        toast({
-          title: 'Error',
-          description: response.error,
-          variant: 'destructive',
+    showConfirm(
+      'Delete this message?',
+      () => {
+        chatSocketClient.deleteMessage(messageId, (response: { error?: string }) => {
+          if (response.error) {
+            toast({
+              title: 'Error',
+              description: response.error,
+              variant: 'destructive',
+            });
+          }
         });
-      }
-    });
+      },
+      'Delete Message',
+      'Delete',
+      'Cancel'
+    );
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -299,7 +306,7 @@ export default function GroupChat({
   };
 
   return (
-    <Card className="h-150 flex flex-col">
+    <Card className="h-150 flex flex-col rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
       <CardHeader className="border-b">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">{groupName}</CardTitle>
@@ -379,11 +386,10 @@ export default function GroupChat({
 
                         {/* Message actions */}
                         {!isDeleted && isOwnMessage && (
-                          <div className="absolute -top-2 right-0 hidden group-hover:flex gap-1 bg-background border rounded-md shadow-sm">
+                          <div className="absolute -top-2 right-0 hidden group-hover:flex gap-1 bg-transparent border rounded-md shadow-sm">
                             <Button
-                              variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 text-emerald-600 hover:bg-emerald-50"
                               onClick={() => {
                                 setEditingMessage(message);
                                 setNewMessage(message.content);
@@ -392,9 +398,8 @@ export default function GroupChat({
                               <Edit2 className="w-3 h-3" />
                             </Button>
                             <Button
-                              variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 text-rose-600 hover:bg-rose-50"
                               onClick={() => handleDeleteMessage(message._id)}
                             >
                               <Trash2 className="w-3 h-3" />
@@ -403,11 +408,10 @@ export default function GroupChat({
                         )}
 
                         {!isDeleted && !isOwnMessage && (
-                          <div className="absolute -top-2 left-0 hidden group-hover:flex gap-1 bg-background border rounded-md shadow-sm">
+                          <div className="absolute -top-2 left-0 hidden group-hover:flex gap-1 bg-transparent border rounded-md shadow-sm">
                             <Button
-                              variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 text-emerald-600 hover:bg-emerald-50"
                               onClick={() => setReplyingTo(message)}
                             >
                               <Reply className="w-3 h-3" />
@@ -434,7 +438,7 @@ export default function GroupChat({
 
         {/* Reply/Edit indicator */}
         {(replyingTo || editingMessage) && (
-          <div className="px-4 py-2 bg-muted border-t flex items-center justify-between">
+            <div className="px-4 py-2 bg-transparent border-t flex items-center justify-between">
             <div className="text-sm">
               <span className="font-medium">
                 {editingMessage ? 'Editing message' : `Replying to ${replyingTo?.sender.name}`}
@@ -444,8 +448,8 @@ export default function GroupChat({
               </p>
             </div>
             <Button
-              variant="ghost"
               size="sm"
+              className="text-emerald-600"
               onClick={() => {
                 setReplyingTo(null);
                 setEditingMessage(null);
@@ -458,7 +462,7 @@ export default function GroupChat({
         )}
 
         {/* Input Area */}
-        <div className="border-t p-4">
+        <div className="border-t p-4 bg-transparent">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" disabled>
               <Paperclip className="w-4 h-4" />
@@ -485,6 +489,7 @@ export default function GroupChat({
               onClick={handleSendMessage}
               disabled={!newMessage.trim() || !isConnected}
               size="icon"
+              className="flex-shrink-0 bg-emerald-400 hover:bg-emerald-500 text-white"
             >
               <Send className="w-4 h-4" />
             </Button>

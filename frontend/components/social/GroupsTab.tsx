@@ -130,16 +130,16 @@ export default function GroupsTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="md:col-span-1 space-y-4">
+    <div className="flex flex-col md:flex-row gap-6 bg-transparent items-start">
+      <div className="md:w-80 flex-shrink-0 space-y-4">
         <div className="flex gap-2">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="flex-1">
+              <Button className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-md rounded-md">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Group
               </Button>
-            </DialogTrigger>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Group</DialogTitle>
@@ -171,14 +171,14 @@ export default function GroupsTab() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateGroup}>Create Group</Button>
+                <Button onClick={handleCreateGroup} className="bg-emerald-400 hover:bg-emerald-500 text-white">Create Group</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
           <Dialog open={isJoinOpen} onOpenChange={setIsJoinOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="flex-1">
+                <Button className="flex-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-transparent dark:text-emerald-300 dark:hover:bg-emerald-900/20 border border-emerald-200/40 rounded-md">
                 Join Group
               </Button>
             </DialogTrigger>
@@ -196,25 +196,25 @@ export default function GroupsTab() {
                 />
               </div>
               <DialogFooter>
-                <Button onClick={handleJoinGroup}>Join Group</Button>
+                <Button onClick={handleJoinGroup} className="bg-emerald-400 hover:bg-emerald-500 text-white">Join Group</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
           <CardHeader>
             <CardTitle>Your Groups</CardTitle>
             <CardDescription>{groups.length} groups</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {groups.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
+              <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-4">
                 No groups yet. Create or join one!
               </p>
             ) : (
               groups.map((group) => (
-                <div
+                  <div
                   key={group._id}
                   onClick={() => {
                     console.log('🎯 [GroupsTab] Group selected:', group.name, group._id);
@@ -227,7 +227,7 @@ export default function GroupsTab() {
                     setSelectedGroup(group);
                   }}
                   className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedGroup?._id === group._id ? 'bg-primary/10 border-primary' : 'hover:bg-accent'
+                    selectedGroup?._id === group._id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -250,7 +250,7 @@ export default function GroupsTab() {
         </Card>
       </div>
 
-      <div className="md:col-span-2">
+      <div className="flex-1">
         {(() => {
           console.log('🔍 [GroupsTab] Render check:', { 
             isLoading, 
@@ -275,7 +275,7 @@ export default function GroupsTab() {
             console.log('✅ [GroupsTab] Rendering GroupChat');
             console.log('🔍 [GroupsTab] Passing currentUserId:', currentUser._id || currentUser.id || '');
             console.log('🔍 [GroupsTab] currentUser object:', currentUser);
-            return (
+              return (
               <div className="space-y-4">
                 {/* Group Chat */}
                 <GroupChat
@@ -287,7 +287,7 @@ export default function GroupsTab() {
                 />
 
                 {/* Group Details */}
-                <Card>
+                <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
@@ -304,20 +304,20 @@ export default function GroupsTab() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon">
+                  <Button className="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" size="icon">
                     <Settings className="w-4 h-4" />
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 bg-transparent">
                 {selectedGroup.inviteCode && (
                   <div>
                     <Label>Invite Code</Label>
                     <div className="flex gap-2 mt-2">
                       <Input value={selectedGroup.inviteCode} readOnly />
                       <Button
-                        variant="outline"
                         size="icon"
+                        className="border-emerald-200/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                         onClick={() => copyInviteCode(selectedGroup.inviteCode!)}
                       >
                         <Copy className="w-4 h-4" />
@@ -328,9 +328,9 @@ export default function GroupsTab() {
 
                 <div>
                   <Label className="text-base">Members</Label>
-                  <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-2">
                     {selectedGroup.members.map((member) => (
-                      <div key={member.user._id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div key={member.user._id} className="flex items-center justify-between p-3 border rounded-lg bg-transparent">
                         <div className="flex items-center gap-3">
                           <Avatar>
                             <AvatarImage src={member.user.avatar} />
@@ -350,9 +350,8 @@ export default function GroupsTab() {
                 </div>
 
                 <Button
-                  variant="destructive"
                   onClick={() => handleLeaveGroup(selectedGroup._id)}
-                  className="w-full"
+                  className="w-full bg-rose-500 hover:bg-rose-600 text-white"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
                   Leave Group

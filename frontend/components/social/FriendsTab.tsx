@@ -110,8 +110,8 @@ export default function FriendsTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="space-y-6 bg-transparent">
+      <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
         <CardHeader>
           <CardTitle>Find Friends</CardTitle>
           <CardDescription>Search for users to add as friends</CardDescription>
@@ -156,29 +156,29 @@ export default function FriendsTab() {
       </Card>
 
       <Tabs defaultValue="friends">
-        <TabsList>
-          <TabsTrigger value="friends">
+        <TabsList className="bg-transparent rounded-2xl border-2 border-slate-200/20 dark:border-slate-700/20 p-1 mb-4">
+          <TabsTrigger value="friends" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
             Friends ({friends.length})
           </TabsTrigger>
-          <TabsTrigger value="pending">
+          <TabsTrigger value="pending" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
             Requests ({pendingRequests.length})
           </TabsTrigger>
-          <TabsTrigger value="sent">
+          <TabsTrigger value="sent" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
             Sent ({sentRequests.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="friends" className="space-y-2">
-          {friends.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center text-muted-foreground">
+          <TabsContent value="friends" className="space-y-2">
+            {friends.length === 0 ? (
+            <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
+              <CardContent className="p-6 text-center text-slate-600 dark:text-slate-300">
                 No friends yet. Search and add some friends!
               </CardContent>
             </Card>
           ) : (
             friends.map((friendship) => (
-              <Card key={friendship._id}>
-                <CardContent className="p-4 flex items-center justify-between">
+              <Card key={friendship._id} className="rounded-lg border border-slate-100/40 dark:border-slate-800/30 bg-transparent">
+                <CardContent className="p-4 flex items-center justify-between bg-transparent">
                   <div className="flex items-center gap-3">
                     <Avatar>
                       <AvatarImage src={friendship.user.avatar} />
@@ -207,14 +207,14 @@ export default function FriendsTab() {
 
         <TabsContent value="pending" className="space-y-2">
           {pendingRequests.length === 0 ? (
-            <Card>
+            <Card className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
               <CardContent className="p-6 text-center text-muted-foreground">
                 No pending requests
               </CardContent>
             </Card>
           ) : (
             pendingRequests.map((request) => (
-              <Card key={request._id}>
+              <Card key={request._id} className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
@@ -230,7 +230,7 @@ export default function FriendsTab() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={() => handleAcceptRequest(request._id)}>
+                    <Button size="sm" variant="ghost" onClick={() => handleAcceptRequest(request._id)}>
                       <Check className="w-4 h-4 mr-1" />
                       Accept
                     </Button>
@@ -251,14 +251,14 @@ export default function FriendsTab() {
 
         <TabsContent value="sent" className="space-y-2">
           {sentRequests.length === 0 ? (
-            <Card>
+            <Card className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
               <CardContent className="p-6 text-center text-muted-foreground">
                 No sent requests
               </CardContent>
             </Card>
           ) : (
             sentRequests.map((request) => (
-              <Card key={request._id}>
+            <Card key={request._id} className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>

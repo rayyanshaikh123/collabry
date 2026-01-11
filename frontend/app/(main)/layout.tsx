@@ -36,8 +36,9 @@ const getAppRouteFromPath = (path: string): string => {
     '/visual-aids': 'visual-aids',
     '/social': 'social',
   };
-  // Handle dynamic routes like /study-notebook/[id]
+  // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
+  if (path.startsWith('/study-board')) return 'study-board';
   return routeMap[path] || 'dashboard';
 };
 
@@ -171,7 +172,7 @@ export default function MainLayout({
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50 dark:bg-slate-950">
+        <main className="flex-1 overflow-y-auto md:p-8  bg-slate-50 dark:bg-slate-950">
           {children}
         </main>
       </div>

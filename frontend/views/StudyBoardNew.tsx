@@ -628,7 +628,7 @@ const CollaborativeBoard: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col relative bg-slate-50 overflow-hidden">
+    <div className="h-full flex flex-col relative bg-slate-50 overflow-hidden -m-4 md:-m-8">
       {/* Board Header */}
       <div className="bg-white/80 backdrop-blur-md border-b-2 border-slate-100 px-8 py-4 flex items-center justify-between z-20">
         <div className="flex items-center gap-5">
@@ -693,7 +693,7 @@ const CollaborativeBoard: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
         {/* tldraw Canvas */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative p-0">
           <Tldraw 
             store={store}
             autoFocus

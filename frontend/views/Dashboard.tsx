@@ -76,10 +76,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   }
   
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-8 pb-10 text-slate-800 dark:text-slate-200">
       {/* Hero / Profile Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-        <div className="lg:col-span-8 flex flex-col md:flex-row items-center gap-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-xl">
+        <div className="lg:col-span-8 flex flex-col md:flex-row items-center gap-6 bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-indigo-700 dark:to-purple-800 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-xl dark:shadow-none">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32 blur-3xl" />
           <div className="relative shrink-0">
              {user?.avatar ? (
@@ -89,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                  className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] border-4 border-white/30 shadow-2xl object-cover"
                />
              ) : (
-               <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] border-4 border-white/30 shadow-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black text-4xl">
+               <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] border-4 border-white/30 shadow-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 dark:from-indigo-600 dark:to-indigo-800 flex items-center justify-center text-white font-black text-4xl">
                  {userInitials}
                </div>
              )}
@@ -136,7 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => {
                  const isActive = i < (gamificationStats?.streak.current || 0);
                  return (
-                   <div key={i} className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black ${isActive ? 'bg-rose-500 dark:bg-rose-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
+                   <div key={i} className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black ${isActive ? 'bg-rose-500 dark:bg-rose-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-400'}`}>
                      {day}
                    </div>
                  );
@@ -340,7 +340,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 const isCompleted = task.status === 'completed';
                 return (
                   <div key={task.id} className={`flex items-center gap-4 p-4 rounded-2xl bg-white dark:bg-slate-800 transition-all border-2 ${isCompleted ? 'border-emerald-100 dark:border-emerald-800' : 'border-white dark:border-slate-800'}`}>
-                    <button className={`${isCompleted ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-200 dark:text-slate-600'} shrink-0`}>
+                    <button className={`${isCompleted ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-400'} shrink-0`}>
                       <TaskIcon size={24} />
                     </button>
                     <div className="flex-1 min-w-0">

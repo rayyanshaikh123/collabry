@@ -216,9 +216,9 @@ export default function ChatTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px]">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px] bg-transparent">
       <div className="md:col-span-1">
-        <Card className="h-full">
+        <Card className="h-full rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
           <CardHeader>
             <CardTitle>Direct Messages</CardTitle>
           </CardHeader>
@@ -271,7 +271,7 @@ export default function ChatTab() {
       </div>
 
       <div className="md:col-span-2">
-        <Card className="h-full flex flex-col">
+        <Card className="h-full flex flex-col rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
           {selectedConversation ? (
             <>
               <CardHeader className="border-b flex-shrink-0">
@@ -347,7 +347,7 @@ export default function ChatTab() {
                 </ScrollArea>
               </div>
               
-              <div className="p-4 border-t bg-background flex-shrink-0">
+              <div className="p-4 border-t bg-transparent flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <Input
                     value={newMessage}
@@ -368,7 +368,7 @@ export default function ChatTab() {
                     onClick={handleSendMessage} 
                     size="icon"
                     disabled={!newMessage.trim()}
-                    className="flex-shrink-0"
+                    className="flex-shrink-0 bg-emerald-400 hover:bg-emerald-500 text-white"
                   >
                     <Send className="w-4 h-4" />
                   </Button>

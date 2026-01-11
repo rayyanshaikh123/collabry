@@ -89,11 +89,11 @@ reportSchema.virtual('timeSinceReport').get(function() {
   return 'just now';
 });
 
-// Populate reporter and reviewer info
-reportSchema.pre(/^find/, function(next) {
+// Populate reporter and reviewer info on find queries
+// Use the promise-aware middleware signature (no `next`) to avoid callback issues
+reportSchema.pre(/^find/, function() {
   this.populate('reportedBy', 'name email avatar')
       .populate('reviewedBy', 'name email');
-  next();
 });
 
 const Report = mongoose.model('Report', reportSchema);
