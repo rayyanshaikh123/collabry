@@ -162,13 +162,27 @@ const CollaborativeBoard: React.FC = () => {
     setEditor(editorInstance);
   }, []);
 
-  // Debounced update element to batch rapid changes
+  // Debounced update element to batch rapid changes (not for draw shapes)
   const debouncedUpdateElement = useMemo(
     () => debounce((boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
       socketClient.updateElement(boardId, elementId, changeSet);
     }, 100),
     []
   );
+
+  // Throttled update for draw shapes - faster updates for real-time drawing
+  const throttledDrawUpdate = useMemo(() => {
+    let lastCall = 0;
+    const throttleMs = 50; // Update every 50ms for smoother drawing
+    
+    return (boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
+      const now = Date.now();
+      if (now - lastCall >= throttleMs) {
+        lastCall = now;
+        socketClient.updateElement(boardId, elementId, changeSet);
+      }
+    };
+  }, []);
 
   // Sync tldraw store changes to other users via editor
   useEffect(() => {
@@ -199,7 +213,21 @@ const CollaborativeBoard: React.FC = () => {
             if (record.type === 'draw') {
               isDrawingRef.current = true;
               drawingShapeIdRef.current = record.id;
-              // Don't broadcast incomplete draw shapes - wait for completion
+              // Broadcast draw shape immediately so others can see it
+              socketClient.createElement(boardId, {
+                id: record.id,
+                type: record.type,
+                typeName: record.typeName || 'shape',
+                x: record.x || 0,
+                y: record.y || 0,
+                props: record.props || {},
+                parentId: record.parentId || 'page:page',
+                index: record.index || 'a1',
+                rotation: record.rotation || 0,
+                isLocked: record.isLocked || false,
+                opacity: record.opacity || 1,
+                meta: record.meta || {},
+              });
               return;
             }
             
@@ -225,31 +253,30 @@ const CollaborativeBoard: React.FC = () => {
       if (updated) {
         Object.values(updated).forEach(([from, to]: any) => {
           if (to?.typeName === 'shape') {
-            // Skip updates for shapes currently being drawn
-            if (isDrawingRef.current && to.id === drawingShapeIdRef.current) {
-              // Check if the draw is complete (isComplete flag or stable segments)
-              const toProps = to.props as { isComplete?: boolean; segments?: unknown[] };
-              const fromProps = from.props as { segments?: unknown[] };
+            // For draw shapes, send complete shape data for real-time drawing
+            if (to.type === 'draw') {
+              // Send the full shape with all segments, not just changes
+              const fullShapeData: any = {
+                x: to.x || 0,
+                y: to.y || 0,
+                rotation: to.rotation || 0,
+                opacity: to.opacity || 1,
+                isLocked: to.isLocked || false,
+                props: to.props || {}, // Complete props with all segments
+                type: to.type,
+                typeName: to.typeName || 'shape',
+                parentId: to.parentId || 'page:page',
+                index: to.index || 'a1',
+                meta: to.meta || {}
+              };
               
-              if (toProps?.isComplete || 
-                  (toProps?.segments && fromProps?.segments && 
-                   JSON.stringify(toProps.segments) === JSON.stringify(fromProps.segments))) {
-                // Drawing is complete, broadcast the final shape
+              // Use throttled update for draw shapes (faster than debounce)
+              throttledDrawUpdate(boardId, to.id, fullShapeData);
+              
+              // Check if the draw is complete (isComplete flag)
+              const toProps = to.props as { isComplete?: boolean };
+              if (toProps?.isComplete) {
                 isDrawingRef.current = false;
-                socketClient.createElement(boardId, {
-                  id: to.id,
-                  type: to.type,
-                  typeName: to.typeName || 'shape',
-                  x: to.x || 0,
-                  y: to.y || 0,
-                  props: to.props || {},
-                  parentId: to.parentId || 'page:page',
-                  index: to.index || 'a1',
-                  rotation: to.rotation || 0,
-                  isLocked: to.isLocked || false,
-                  opacity: to.opacity || 1,
-                  meta: to.meta || {},
-                });
                 drawingShapeIdRef.current = null;
               }
               return;
@@ -285,32 +312,15 @@ const CollaborativeBoard: React.FC = () => {
     const dispose = editor.store.listen(handleStoreChange);
 
     return () => dispose();
-  }, [editor, boardId, isConnected, debouncedUpdateElement]);
+  }, [editor, boardId, isConnected, debouncedUpdateElement, throttledDrawUpdate]);
 
-  // Handle pointer up to finalize drawing and broadcast
+  // Handle pointer up to finalize drawing
   useEffect(() => {
     if (!editor || !boardId || !isConnected) return;
 
     const handlePointerUp = () => {
-      // When pointer is released, broadcast any pending draw shape
+      // When pointer is released, mark drawing as complete
       if (isDrawingRef.current && drawingShapeIdRef.current) {
-        const shape = editor.store.get(drawingShapeIdRef.current) as any;
-        if (shape && shape.typeName === 'shape') {
-          socketClient.createElement(boardId, {
-            id: shape.id,
-            type: shape.type,
-            typeName: shape.typeName || 'shape',
-            x: shape.x || 0,
-            y: shape.y || 0,
-            props: shape.props || {},
-            parentId: shape.parentId || 'page:page',
-            index: shape.index || 'a1',
-            rotation: shape.rotation || 0,
-            isLocked: shape.isLocked || false,
-            opacity: shape.opacity || 1,
-            meta: shape.meta || {},
-          });
-        }
         isDrawingRef.current = false;
         drawingShapeIdRef.current = null;
       }
@@ -357,17 +367,19 @@ const CollaborativeBoard: React.FC = () => {
     }
   }, [editor]);
 
-  const handleElementUpdated = useCallback((data: ElementData) => {
+  const handleElementUpdated = useCallback((data: any) => {
     if (!editor) return;
     
     isApplyingRemoteChange.current = true;
     
     try {
       const existing = editor.store.get(data.elementId);
-      if (existing && data.changeSet) {
+      const updates = data.changes || data.changeSet; // Support both formats
+      
+      if (existing && updates) {
         editor.store.put([{
           ...existing,
-          ...data.changeSet,
+          ...updates,
         }]);
       }
     } catch (error) {
