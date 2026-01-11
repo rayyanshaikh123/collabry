@@ -168,6 +168,33 @@ export const authService = {
       throw new Error(response.error?.message || 'Email verification failed');
     }
   },
+
+  /**
+   * Change password (authenticated user)
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const response = await apiClient.post('/users/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to change password');
+    }
+  },
+
+  /**
+   * Delete user account
+   */
+  async deleteAccount(password: string): Promise<void> {
+    const response = await apiClient.delete('/users/me', {
+      data: { password },
+    });
+    
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to delete account');
+    }
+  },
 };
 
 export default authService;

@@ -150,6 +150,8 @@ const CollaborativeBoard: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const isApplyingRemoteChange = useRef(false);
+  const isDrawingRef = useRef(false);
+  const drawingShapeIdRef = useRef<string | null>(null);
   const [editor, setEditor] = useState<TLEditor | null>(null);
   const [pendingElements, setPendingElements] = useState<PendingElement[]>([]);
   const animationFrameRef = useRef<number | null>(null);
@@ -193,6 +195,14 @@ const CollaborativeBoard: React.FC = () => {
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            // Track if this is a draw/freehand shape being created
+            if (record.type === 'draw') {
+              isDrawingRef.current = true;
+              drawingShapeIdRef.current = record.id;
+              // Don't broadcast incomplete draw shapes - wait for completion
+              return;
+            }
+            
             socketClient.createElement(boardId, {
               id: record.id,
               type: record.type,
@@ -215,6 +225,36 @@ const CollaborativeBoard: React.FC = () => {
       if (updated) {
         Object.values(updated).forEach(([from, to]: any) => {
           if (to?.typeName === 'shape') {
+            // Skip updates for shapes currently being drawn
+            if (isDrawingRef.current && to.id === drawingShapeIdRef.current) {
+              // Check if the draw is complete (isComplete flag or stable segments)
+              const toProps = to.props as { isComplete?: boolean; segments?: unknown[] };
+              const fromProps = from.props as { segments?: unknown[] };
+              
+              if (toProps?.isComplete || 
+                  (toProps?.segments && fromProps?.segments && 
+                   JSON.stringify(toProps.segments) === JSON.stringify(fromProps.segments))) {
+                // Drawing is complete, broadcast the final shape
+                isDrawingRef.current = false;
+                socketClient.createElement(boardId, {
+                  id: to.id,
+                  type: to.type,
+                  typeName: to.typeName || 'shape',
+                  x: to.x || 0,
+                  y: to.y || 0,
+                  props: to.props || {},
+                  parentId: to.parentId || 'page:page',
+                  index: to.index || 'a1',
+                  rotation: to.rotation || 0,
+                  isLocked: to.isLocked || false,
+                  opacity: to.opacity || 1,
+                  meta: to.meta || {},
+                });
+                drawingShapeIdRef.current = null;
+              }
+              return;
+            }
+            
             const changeSet: any = {};
             if (from.x !== to.x) changeSet.x = to.x;
             if (from.y !== to.y) changeSet.y = to.y;
@@ -246,6 +286,44 @@ const CollaborativeBoard: React.FC = () => {
 
     return () => dispose();
   }, [editor, boardId, isConnected, debouncedUpdateElement]);
+
+  // Handle pointer up to finalize drawing and broadcast
+  useEffect(() => {
+    if (!editor || !boardId || !isConnected) return;
+
+    const handlePointerUp = () => {
+      // When pointer is released, broadcast any pending draw shape
+      if (isDrawingRef.current && drawingShapeIdRef.current) {
+        const shape = editor.store.get(drawingShapeIdRef.current) as any;
+        if (shape && shape.typeName === 'shape') {
+          socketClient.createElement(boardId, {
+            id: shape.id,
+            type: shape.type,
+            typeName: shape.typeName || 'shape',
+            x: shape.x || 0,
+            y: shape.y || 0,
+            props: shape.props || {},
+            parentId: shape.parentId || 'page:page',
+            index: shape.index || 'a1',
+            rotation: shape.rotation || 0,
+            isLocked: shape.isLocked || false,
+            opacity: shape.opacity || 1,
+            meta: shape.meta || {},
+          });
+        }
+        isDrawingRef.current = false;
+        drawingShapeIdRef.current = null;
+      }
+    };
+
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('mouseup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('mouseup', handlePointerUp);
+    };
+  }, [editor, boardId, isConnected]);
 
   // Memoized socket event handlers
   const handleElementCreated = useCallback((data: any) => {

@@ -79,6 +79,7 @@ async def get_public_stats(
     description="Get usage statistics for the authenticated user"
 )
 async def get_my_usage(
+    request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
     user_id: str = Depends(get_current_user)
 ):
