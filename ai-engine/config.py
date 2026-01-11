@@ -48,7 +48,7 @@ CONFIG = {
     # CORS configuration (comma-separated origins)
     "cors_origins": os.environ.get(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000"
+        "http://localhost:3000,https://colab-back.onrender.com,http://127.0.0.1:3000,http://127.0.0.1:5000"
     ).split(","),
 
     # External API keys (optional, loaded from ENV only for security)

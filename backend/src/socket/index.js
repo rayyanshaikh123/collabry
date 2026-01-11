@@ -13,7 +13,7 @@ const initializeSocket = (httpServer) => {
     cors: {
       origin: config.cors.origin === '*' 
         ? '*' 
-        : ['http://localhost:3000', 'http://localhost:5000'],
+        : ['http://localhost:3000', 'https://colab-back.onrender.com'],
       credentials: true,
       methods: ['GET', 'POST']
     },

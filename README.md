@@ -194,7 +194,7 @@ python run_server.py
 ### 5️⃣ Access the Application
 
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000
+- **Backend API**: https://colab-back.onrender.com
 - **AI Engine**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
@@ -282,8 +282,8 @@ SMTP_PASS=your-app-password
 ### Frontend (.env.local)
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
-NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+NEXT_PUBLIC_API_BASE_URL=https://colab-back.onrender.com/api
+NEXT_PUBLIC_SOCKET_URL=https://colab-back.onrender.com
 NEXT_PUBLIC_AI_URL=http://localhost:8000
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
 ```
