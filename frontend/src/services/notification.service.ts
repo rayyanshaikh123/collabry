@@ -48,8 +48,8 @@ class NotificationService {
       const response = await apiClient.get(this.baseURL, { params: filters });
       return {
         notifications: response.data,
-        total: response.meta?.total || 0,
-        unreadCount: response.meta?.unreadCount || 0,
+        total: (response as any).meta?.total || 0,
+        unreadCount: (response as any).meta?.unreadCount || 0,
       };
     } catch (error: any) {
       console.error('Failed to fetch notifications:', error);

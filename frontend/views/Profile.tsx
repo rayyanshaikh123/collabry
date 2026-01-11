@@ -319,7 +319,7 @@ const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
         {/* Achievements & Badges */}
         <div className="lg:col-span-2 space-y-8">
           <Card>
@@ -334,7 +334,7 @@ const ProfileView: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
                 {userBadges.map((badge: any, i) => (
                   <div 
                     key={badge.id || i} 

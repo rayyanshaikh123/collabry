@@ -13,12 +13,12 @@ import type { StudyBoard, BoardElement } from '../types';
  */
 export const useStudyBoard = () => {
   const {
-    activeBoard,
+    currentBoard,
     boards,
     selectedElements,
     participants,
     syncStatus,
-    setActiveBoard,
+    setCurrentBoard,
     addElement,
     updateElement,
     removeElement,
@@ -30,12 +30,12 @@ export const useStudyBoard = () => {
   } = useStudyBoardStore();
 
   return {
-    activeBoard,
+    currentBoard,
     boards,
     selectedElements,
     participants,
     syncStatus,
-    setActiveBoard,
+    setCurrentBoard,
     addElement,
     updateElement,
     removeElement,

@@ -277,8 +277,8 @@ class AIEngineService {
     try {
       const response = await this.client.get('/health');
       return {
-        status: 'healthy',
         ...response,
+        status: 'healthy',
       };
     } catch (error: any) {
       return {

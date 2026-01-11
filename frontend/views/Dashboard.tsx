@@ -149,7 +149,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       {/* Stats Cards */}
       {gamificationStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 border-blue-100 dark:border-blue-800">
             <div className="text-center space-y-2">
               <div className="text-3xl font-black text-blue-600 dark:text-blue-400">{gamificationStats.stats.tasksCompleted}</div>

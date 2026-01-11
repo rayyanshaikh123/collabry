@@ -95,10 +95,10 @@ export function useUpdatePlan(): UseMutationResult<StudyPlan, Error, { planId: s
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.plan(variables.planId) });
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.plans() });
-      showAlert('Plan updated successfully! ✅', 'success');
+      showAlert({ message: 'Plan updated successfully! ✅', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to update plan: ${error.message}`, 'error');
+      showAlert({ message: `Failed to update plan: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -112,10 +112,10 @@ export function useDeletePlan(): UseMutationResult<void, Error, string, unknown>
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.plans() });
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.userAnalytics() });
-      showAlert('Plan archived successfully', 'success');
+      showAlert({ message: 'Plan archived successfully', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to delete plan: ${error.message}`, 'error');
+      showAlert({ message: `Failed to delete plan: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -204,10 +204,10 @@ export function useCreateTask(): UseMutationResult<StudyTask, Error, CreateTaskD
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayTasks() });
       queryClient.invalidateQueries({ queryKey: [...studyPlannerKeys.all, 'tasks', 'upcoming'] });
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.overdueTasks() });
-      showAlert('Task added! 📝', 'success');
+      showAlert({ message: 'Task added! 📝', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to create task: ${error.message}`, 'error');
+      showAlert({ message: `Failed to create task: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -264,7 +264,7 @@ export function useUpdateTask(): UseMutationResult<
       showAlert({ message: 'Task updated! ✏️', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to update task: ${error.message}`, 'error');
+      showAlert({ message: `Failed to update task: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -306,7 +306,7 @@ export function useCompleteTask(): UseMutationResult<
       showAlert({ message: 'Great work! Task completed! 🎉', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to complete task: ${error.message}`, 'error');
+      showAlert({ message: `Failed to complete task: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -330,10 +330,10 @@ export function useRescheduleTask(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayTasks() });
       queryClient.invalidateQueries({ queryKey: [...studyPlannerKeys.all, 'tasks', 'upcoming'] });
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.overdueTasks() });
-      showAlert('Task rescheduled 📅', 'success');
+      showAlert({ message: 'Task rescheduled 📅', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to reschedule task: ${error.message}`, 'error');
+      showAlert({ message: `Failed to reschedule task: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -350,10 +350,10 @@ export function useDeleteTask(): UseMutationResult<void, Error, string, unknown>
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayTasks() });
       queryClient.invalidateQueries({ queryKey: [...studyPlannerKeys.all, 'tasks', 'upcoming'] });
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.overdueTasks() });
-      showAlert('Task removed', 'success');
+      showAlert({ message: 'Task removed', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to delete task: ${error.message}`, 'error');
+      showAlert({ message: `Failed to delete task: ${error.message}`, type: 'error' });
     },
   });
 }
@@ -368,10 +368,10 @@ export function useGeneratePlan(): UseMutationResult<AIGeneratedPlan, Error, Cre
   return useMutation({
     mutationFn: (data: CreatePlanData) => studyPlannerService.generatePlan(data),
     onSuccess: () => {
-      showAlert('AI plan generated successfully! 🤖✨', 'success');
+      showAlert({ message: 'AI plan generated successfully! 🤖✨', type: 'success' });
     },
     onError: (error: Error) => {
-      showAlert(`Failed to generate plan: ${error.message}`, 'error');
+      showAlert({ message: `Failed to generate plan: ${error.message}`, type: 'error' });
     },
   });
 }

@@ -193,7 +193,7 @@ const Planner: React.FC = () => {
 
       const createdTasks = await createBulkTasks.mutateAsync({
         planId: plan.id,
-        tasks: tasksToCreate,
+        tasks: tasksToCreate as any,
       });
 
       console.log('Tasks created successfully:', createdTasks.length);
@@ -260,7 +260,7 @@ const Planner: React.FC = () => {
 
       const createdTasks = await createBulkTasks.mutateAsync({
         planId: plan.id,
-        tasks: tasksToCreate,
+        tasks: tasksToCreate as any,
       });
 
       showAlert({ message: `✅ Plan "${plan.title}" created with ${createdTasks.length} tasks!`, type: 'success' });
@@ -355,17 +355,17 @@ const Planner: React.FC = () => {
           <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200">Study Planner 📚</h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Organize your learning journey with AI-powered planning</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Button
             variant="secondary"
-            className="gap-2"
+            className="gap-2 w-full sm:w-auto"
             onClick={() => setShowManualModal(true)}
           >
             <ICONS.Plus size={18} strokeWidth={3} /> Create Manual Plan
           </Button>
           <Button
             variant="primary"
-            className="gap-2 shadow-lg shadow-indigo-200"
+            className="gap-2 shadow-lg shadow-indigo-200 w-full sm:w-auto"
             onClick={() => setShowAIModal(true)}
           >
             <ICONS.Dashboard size={18} /> Generate AI Plan
@@ -374,7 +374,7 @@ const Planner: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-indigo-50 dark:from-indigo-900/30 to-white dark:to-slate-800 border-indigo-100 dark:border-indigo-800">
           <div className="flex items-center justify-between">
             <div>
@@ -425,9 +425,9 @@ const Planner: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Sidebar: Plans */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="md:col-span-4 lg:col-span-3 space-y-4">
           <Card>
             <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg mb-4">My Plans</h3>
             <div className="space-y-2">
@@ -500,13 +500,14 @@ const Planner: React.FC = () => {
         </div>
 
         {/* Main Tasks Area */}
-        <div className="lg:col-span-9 space-y-4">
+        <div className="md:col-span-8 lg:col-span-9 space-y-4">
           {/* View Tabs */}
           <Card>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant={selectedView === 'today' ? 'primary' : 'ghost'}
                 size="sm"
+                className="flex-1 sm:flex-none"
                 onClick={() => setSelectedView('today')}
               >
                 Today
@@ -514,6 +515,7 @@ const Planner: React.FC = () => {
               <Button
                 variant={selectedView === 'upcoming' ? 'primary' : 'ghost'}
                 size="sm"
+                className="flex-1 sm:flex-none"
                 onClick={() => setSelectedView('upcoming')}
               >
                 Upcoming
@@ -521,6 +523,7 @@ const Planner: React.FC = () => {
               <Button
                 variant={selectedView === 'calendar' ? 'primary' : 'ghost'}
                 size="sm"
+                className="flex-1 sm:flex-none"
                 onClick={() => setSelectedView('calendar')}
               >
                 Calendar
@@ -600,7 +603,7 @@ const Planner: React.FC = () => {
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                           placeholder="Description"
                         />
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <Input
                             type="date"
                             value={editForm.scheduledDate?.split('T')[0] || ''}
@@ -683,18 +686,18 @@ const Planner: React.FC = () => {
                               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{task.description}</p>
                             )}
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
-                              <Badge variant="secondary" className="text-[10px]">
+                              <Badge variant="slate" className="text-[10px]">
                                 {formatDate(task.scheduledDate)}
                               </Badge>
                               {task.scheduledTime && (
-                                <Badge variant="secondary" className="text-[10px]">
+                                <Badge variant="slate" className="text-[10px]">
                                   {formatTime(task.scheduledTime)}
                                 </Badge>
                               )}
                               <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${priorityColors[task.priority]}`}>
                                 {task.priority}
                               </span>
-                              <Badge variant="secondary" className="text-[10px]">
+                              <Badge variant="slate" className="text-[10px]">
                                 {task.duration} min
                               </Badge>
                               {task.topic && (
@@ -832,7 +835,7 @@ const Planner: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Daily Study Hours</label>
                     <Input
@@ -1091,7 +1094,7 @@ const Planner: React.FC = () => {
                     rows={2}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Start Date</label>
                     <Input

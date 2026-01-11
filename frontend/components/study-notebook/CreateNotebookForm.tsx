@@ -43,7 +43,8 @@ export default function CreateNotebookForm() {
       console.log('Create notebook response:', response);
 
       // Handle both response formats: wrapped (ApiResponse) and direct
-      const notebookId = response?.data?._id || response?._id;
+      const maybeData = (response as any)?.data;
+      const notebookId = maybeData?._id || (response as any)?._id;
 
       if (!notebookId) {
         console.error('Failed to get notebook ID from response:', response);

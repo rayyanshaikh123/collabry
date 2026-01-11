@@ -53,7 +53,7 @@ export interface StudyTask {
   order: number;
   isOverdue?: boolean;
   isToday?: boolean;
-  planId?: { title: string; subject?: string };
+  planMeta?: { title: string; subject?: string };
 }
 
 export interface Resource {

@@ -95,7 +95,7 @@ export const reportService = {
     if (response.success) {
       return {
         reports: response.data || [],
-        pagination: response.pagination || {}
+        pagination: (response as any).pagination || {}
       };
     }
 

@@ -141,4 +141,3 @@ class SessionsService {
 }
 
 export const sessionsService = new SessionsService();
-export type { Message, ChatSession, SessionsListResponse };

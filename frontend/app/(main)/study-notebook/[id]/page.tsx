@@ -1049,20 +1049,29 @@ Requirements:
     showSuccess('Saved prompt changes locally (frontend only).');
   };
 
-  const handleDeleteArtifact = async (artifactId: string) => {
+  const handleDeleteArtifact = (artifactId: string) => {
     if (!notebook) return;
-    try {
-      // Clear viewer first to avoid React unmount ordering issues
-      if (selectedArtifact?.id === artifactId) {
-        setSelectedArtifact(null);
-      }
-      // Fire mutation (don't rely on UI state during awaiting)
-      await unlinkArtifact.mutateAsync(artifactId);
-      showSuccess('Artifact deleted');
-    } catch (error) {
-      console.error('Failed to delete artifact:', error);
-      showError('Failed to delete artifact');
-    }
+
+    showConfirm(
+      'Are you sure you want to delete this artifact?',
+      async () => {
+        try {
+          // Clear viewer first to avoid React unmount ordering issues
+          if (selectedArtifact?.id === artifactId) {
+            setSelectedArtifact(null);
+          }
+          // Fire mutation (don't rely on UI state during awaiting)
+          await unlinkArtifact.mutateAsync(artifactId);
+          showSuccess('Artifact deleted');
+        } catch (error) {
+          console.error('Failed to delete artifact:', error);
+          showError('Failed to delete artifact');
+        }
+      },
+      'Delete Artifact',
+      'Delete',
+      'Cancel'
+    );
   };
 
   const handleSelectArtifact = (id: string) => {

@@ -557,9 +557,9 @@ const CollaborativeBoard: React.FC = () => {
     socketClient.onElementDeleted(handleElementDeleted);
 
     return () => {
-      socketClient.offBoardEvent('element:created', handleElementCreated);
-      socketClient.offBoardEvent('element:updated', handleElementUpdated);
-      socketClient.offBoardEvent('element:deleted', handleElementDeleted);
+      socketClient.off('element:created', handleElementCreated);
+      socketClient.off('element:updated', handleElementUpdated);
+      socketClient.off('element:deleted', handleElementDeleted);
     };
   }, [editor, boardId, handleElementCreated, handleElementUpdated, handleElementDeleted, pendingElements]);
 

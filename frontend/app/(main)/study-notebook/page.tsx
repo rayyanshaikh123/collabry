@@ -12,11 +12,12 @@ export default function StudyNotebooksPage() {
   const { data: notebooksData, isLoading, error } = useNotebooks();
   const deleteNotebook = useDeleteNotebook();
 
-  // Handle both response structures
-  const notebooks = Array.isArray(notebooksData?.data) 
-    ? notebooksData.data 
-    : Array.isArray(notebooksData) 
-    ? notebooksData 
+  // Handle both response structures (wrapped { data: [...] } or raw array)
+  const maybeWrapped = (notebooksData as any)?.data;
+  const notebooks = Array.isArray(maybeWrapped)
+    ? (maybeWrapped as any[])
+    : Array.isArray(notebooksData)
+    ? (notebooksData as any[])
     : [];
 
   const handleCreateNew = () => {

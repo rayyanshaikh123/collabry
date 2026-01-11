@@ -1,14 +1,39 @@
-'use client';
+"use client";
 
 import React from 'react';
 import { Card, Button } from './UIElements';
 import { ICONS } from '../constants';
 import { useUIStore } from '../src/stores/ui.store';
 
-const AlertModal: React.FC = () => {
+interface AlertModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  title?: string;
+  message?: string;
+  type?: 'success' | 'error' | 'warning' | 'info';
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+}
+
+const AlertModal: React.FC<AlertModalProps> = (props) => {
   const { alert, hideAlert } = useUIStore();
 
-  if (!alert.isOpen) return null;
+  const propsMode = props.isOpen !== undefined;
+
+  const source = propsMode ? {
+    isOpen: props.isOpen,
+    title: props.title,
+    message: props.message || '',
+    type: props.type || 'info',
+    confirmText: props.confirmText,
+    cancelText: props.cancelText,
+    onConfirm: props.onConfirm,
+    onCancel: props.onCancel
+  } : alert;
+
+  if (!source.isOpen) return null;
 
   const typeConfig = {
     success: {
@@ -41,24 +66,32 @@ const AlertModal: React.FC = () => {
     }
   };
 
-  const config = typeConfig[alert.type];
+  const config = typeConfig[source.type as keyof typeof typeConfig];
   const Icon = config.icon;
 
   const handleConfirm = () => {
-    if (alert.onConfirm) {
-      alert.onConfirm();
+    if (source.onConfirm) {
+      source.onConfirm();
     }
-    hideAlert();
+    if (propsMode) {
+      props.onClose?.();
+    } else {
+      hideAlert();
+    }
   };
 
   const handleCancel = () => {
-    if (alert.onCancel) {
-      alert.onCancel();
+    if (source.onCancel) {
+      source.onCancel();
     }
-    hideAlert();
+    if (propsMode) {
+      props.onClose?.();
+    } else {
+      hideAlert();
+    }
   };
 
-  const isConfirmDialog = alert.type === 'warning' && alert.onConfirm;
+  const isConfirmDialog = source.type === 'warning' && !!source.onConfirm;
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
@@ -68,13 +101,13 @@ const AlertModal: React.FC = () => {
             <Icon className={`w-6 h-6 ${config.iconColor}`} />
           </div>
           <div className="flex-1">
-            {alert.title && (
+            {source.title && (
               <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">
-                {alert.title}
+                {source.title}
               </h3>
             )}
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-              {alert.message}
+              {source.message}
             </p>
           </div>
         </div>
@@ -85,7 +118,7 @@ const AlertModal: React.FC = () => {
               onClick={handleCancel}
               className="px-6"
             >
-              {alert.cancelText || 'Cancel'}
+              {source.cancelText || 'Cancel'}
             </Button>
           )}
           <Button 
@@ -93,7 +126,7 @@ const AlertModal: React.FC = () => {
             onClick={handleConfirm}
             className="px-8"
           >
-            {alert.confirmText || 'OK'}
+            {source.confirmText || 'OK'}
           </Button>
         </div>
       </Card>

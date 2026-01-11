@@ -16,6 +16,7 @@ import { useSocket } from '../../src/hooks/useCollaboration';
 import { AppRoute } from '../../types';
 import { DarkModeToggle } from '../../src/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
+import FocusWidget from '../../components/FocusWidget';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -176,6 +177,9 @@ export default function MainLayout({
           {children}
         </main>
       </div>
+
+      {/* Focus Widget - only shown on protected pages when logged in */}
+      <FocusWidget />
     </div>
   );
 }

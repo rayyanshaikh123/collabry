@@ -14,7 +14,7 @@ export interface RouteConfig {
   title: string;
 }
 
-export const ROUTES: Record<AppRoute, RouteConfig> = {
+export const ROUTES: Partial<Record<AppRoute, RouteConfig>> = {
   [AppRoute.LANDING]: {
     route: AppRoute.LANDING,
     path: '/',

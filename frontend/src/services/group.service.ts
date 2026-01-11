@@ -43,34 +43,37 @@ class GroupService {
     isPrivate?: boolean;
   }) {
     const data_response = await api.post('/groups', data);
-    if (!data_response.group) {
+    const group = (data_response as any).group || (data_response as any).data?.group;
+    if (!group) {
       throw new Error('Failed to create group');
     }
-    return data_response.group as Group;
+    return group as Group;
   }
 
   // Get user's groups
   async getUserGroups() {
     const data = await api.get('/groups');
-    return (data.groups || []) as Group[];
+    return ((data as any).groups || (data as any).data?.groups || []) as Group[];
   }
 
   // Get group by ID
   async getGroup(groupId: string) {
     const data = await api.get(`/groups/${groupId}`);
-    if (!data.group) {
+    const group = (data as any).group || (data as any).data?.group;
+    if (!group) {
       throw new Error('Group not found');
     }
-    return data.group as Group;
+    return group as Group;
   }
 
   // Update group
   async updateGroup(groupId: string, data: Partial<Group>) {
     const result = await api.put(`/groups/${groupId}`, data);
-    if (!result.group) {
+    const updated = (result as any).group || (result as any).data?.group;
+    if (!updated) {
       throw new Error('Failed to update group');
     }
-    return result.group as Group;
+    return updated as Group;
   }
 
   // Delete group
@@ -82,19 +85,21 @@ class GroupService {
   // Add member
   async addMember(groupId: string, memberId: string) {
     const data = await api.post(`/groups/${groupId}/members`, { memberId });
-    if (!data.group) {
+    const updated = (data as any).group || (data as any).data?.group;
+    if (!updated) {
       throw new Error('Failed to add member');
     }
-    return data.group as Group;
+    return updated as Group;
   }
 
   // Remove member
   async removeMember(groupId: string, memberId: string) {
     const data = await api.delete(`/groups/${groupId}/members/${memberId}`);
-    if (!data.group) {
+    const updated = (data as any).group || (data as any).data?.group;
+    if (!updated) {
       throw new Error('Failed to remove member');
     }
-    return data.group as Group;
+    return updated as Group;
   }
 
   // Leave group
@@ -106,34 +111,37 @@ class GroupService {
   // Make admin
   async makeAdmin(groupId: string, memberId: string) {
     const data = await api.put(`/groups/${groupId}/admins/${memberId}`);
-    if (!data.group) {
+    const updated = (data as any).group || (data as any).data?.group;
+    if (!updated) {
       throw new Error('Failed to make admin');
     }
-    return data.group as Group;
+    return updated as Group;
   }
 
   // Remove admin
   async removeAdmin(groupId: string, memberId: string) {
     const data = await api.delete(`/groups/${groupId}/admins/${memberId}`);
-    if (!data.group) {
+    const updated = (data as any).group || (data as any).data?.group;
+    if (!updated) {
       throw new Error('Failed to remove admin');
     }
-    return data.group as Group;
+    return updated as Group;
   }
 
   // Join with invite code
   async joinWithCode(inviteCode: string) {
     const data = await api.post('/groups/join', { inviteCode });
-    if (!data.group) {
+    const group = (data as any).group || (data as any).data?.group;
+    if (!group) {
       throw new Error('Failed to join group');
     }
-    return data.group as Group;
+    return group as Group;
   }
 
   // Regenerate invite code
   async regenerateInviteCode(groupId: string) {
     const data = await api.post(`/groups/${groupId}/invite-code/regenerate`);
-    return data.inviteCode as string;
+    return ((data as any).inviteCode || (data as any).data?.inviteCode) as string;
   }
 }
 

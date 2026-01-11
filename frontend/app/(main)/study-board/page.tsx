@@ -60,12 +60,15 @@ export default function StudyBoardListPage() {
   const createNewBoard = async (template?: BoardTemplate) => {
     try {
       setIsCreating(true);
-      const newBoard = await studyBoardService.createBoard({
+      const payload: any = {
         title: template ? `${template.name} - ${boards.length + 1}` : `New Board ${boards.length + 1}`,
         description: template ? template.description : 'Collaborative study board',
         isPublic: false,
-        template: template?.id,
-      });
+      };
+
+      if (template?.id) payload.template = template.id;
+
+      const newBoard = await studyBoardService.createBoard(payload as any);
       
       // Store template shapes with fresh IDs in sessionStorage
       if (template && template.shapes.length > 0) {
@@ -154,7 +157,7 @@ export default function StudyBoardListPage() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-          <Button variant="secondary" size="small" onClick={fetchBoards} className="mt-2">
+                <Button variant="secondary" size="sm" onClick={fetchBoards} className="mt-2">
             Retry
           </Button>
         </div>
@@ -224,7 +227,7 @@ export default function StudyBoardListPage() {
                     {board.owner._id === user?.id && (
                       <Button 
                         variant="ghost" 
-                        size="small"
+                        size="sm"
                         onClick={(e) => handleDeleteClick(e, board)}
                         disabled={deletingBoardId === board._id}
                         className="text-red-500 hover:text-red-700 hover:bg-red-50"
@@ -238,7 +241,7 @@ export default function StudyBoardListPage() {
                     )}
                     <Button 
                       variant="ghost" 
-                      size="small"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         openBoard(board._id);

@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import notebookService, { Notebook, Source, Artifact } from '../services/notebook.service';
+import notebookService, { Notebook, Source, Artifact, ApiResponse } from '../services/notebook.service';
 
 export const useNotebooks = () => {
-  return useQuery<{ success: boolean; count: number; data: Notebook[] }>({
+  return useQuery<ApiResponse<Notebook[]>>({
     queryKey: ['notebooks'],
     queryFn: () => notebookService.getNotebooks()
   });
@@ -26,7 +26,7 @@ export const useCreateNotebook = () => {
       queryClient.invalidateQueries({ queryKey: ['notebooks'] });
       
       // Set the new notebook data in cache
-      const notebookId = response?.data?._id || response?._id;
+      const notebookId = (response as any)?.data?._id || (response as any)?._id;
       if (notebookId) {
         queryClient.setQueryData(['notebooks', notebookId], response);
       }

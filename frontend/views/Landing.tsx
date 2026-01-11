@@ -1,13 +1,12 @@
 'use client';
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DarkModeToggle from '../src/components/DarkModeToggle';
 import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { motion } from 'framer-motion';
 import { Highlighter } from '../components/ui/highlighter';
-import { ProgressiveBlur } from '../components/ui/progressive-blur';
 import Pricing from './Pricing';
 import { SmoothCursor } from '../components/ui/smooth-cursor';
 
@@ -27,11 +26,9 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
   return (
     <div className="min-h-screen bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-hidden flex flex-col relative">
       <SmoothCursor />
-      {/* Progressive blur effects */}
-      <ProgressiveBlur position="bottom" height="15vh" className="fixed bottom-0 left-0 right-0 z-50" />
       
       {/* Navbar */}
-      <nav className="p-6 flex items-center justify-between max-w-7xl mx-auto w-full relative z-20">
+      <nav className="p-4 md:p-6 flex items-center justify-between max-w-7xl mx-auto w-full relative z-20">
         <div className="flex items-center gap-3">
           <button 
             onClick={handleLogoClick}
@@ -57,33 +54,33 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
       </nav>
 
       {/* Hero Section */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-12 relative">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 text-center space-y-8 md:space-y-12 relative">
         <div className="max-w-4xl space-y-6 relative z-10">
           <div className="inline-block px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-200 rounded-full text-xs font-black uppercase tracking-[0.2em] border-2 border-indigo-100 mb-4 animate-bounce">
             Learning Reimagined 🚀
           </div>
-          <h1 className="text-5xl md:text-8xl font-black text-slate-800 dark:text-white leading-[1.1] tracking-tight font-display">
+          <h1 className="text-4xl md:text-5xl lg:text-8xl font-black text-slate-800 dark:text-white leading-[1.1] tracking-tight font-display">
             Study Together, <br/> 
             <Highlighter color="#c7d2fe" action="highlight" strokeWidth={2} animationDuration={1200} isView={true}>
               <span className="text-indigo-600">Smarter & Better.</span>
             </Highlighter>
           </h1>
-          <p className="text-lg md:text-2xl text-slate-500 dark:text-slate-300 font-bold max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg lg:text-2xl text-slate-500 dark:text-slate-300 font-bold max-w-2xl mx-auto leading-relaxed">
             The all-in-one <Highlighter color="#fef08a" action="underline" strokeWidth={2} animationDuration={1200} isView={true}><span className="text-slate-700 dark:text-slate-200">AI study buddy</span></Highlighter> & collaborative workspace for students who want to crush their goals while having fun.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 relative z-10">
-          <Button size="lg" className="px-12 py-5 text-xl shadow-2xl shadow-indigo-200" onClick={onGetStarted}>
+        <div className="flex flex-col sm:flex-row gap-3 md:gap-4 relative z-10">
+          <Button size="lg" className="px-8 md:px-12 py-4 md:py-5 text-lg md:text-xl shadow-2xl shadow-indigo-200" onClick={onGetStarted}>
             Start Your Journey
           </Button>
-          <Button variant="secondary" size="lg" className="px-12 py-5 text-xl border-2 border-slate-100 dark:border-slate-700 dark:bg-transparent">
+          <Button variant="secondary" size="lg" className="px-8 md:px-12 py-4 md:py-5 text-lg md:text-xl border-2 border-slate-100 dark:border-slate-700 dark:bg-transparent">
             See it in Action
           </Button>
         </div>
 
         {/* Feature Teasers */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full mt-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-6xl w-full mt-16 md:mt-20">
           {[
             { title: 'AI Study Buddy', desc: 'Your 24/7 personal tutor powered by Gemini.', icon: '🤖', color: 'bg-amber-100 text-amber-700' },
             { title: 'Live Boards', desc: 'Real-time collaborative drawing and brainstorming.', icon: '🎨', color: 'bg-indigo-100 text-indigo-700' },
@@ -108,7 +105,7 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
       </main>
 
       {/* How It Works Section */}
-      <section className="py-32 px-6 bg-gradient-to-br from-indigo-50 to-rose-50 dark:from-slate-800 dark:to-slate-900 relative overflow-hidden">
+      <section className="py-20 md:py-32 px-4 md:px-6 bg-gradient-to-br from-indigo-50 to-rose-50 dark:from-slate-800 dark:to-slate-900 relative overflow-hidden">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200 rounded-full blur-3xl opacity-20" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-rose-200 rounded-full blur-3xl opacity-20" />
         
@@ -123,10 +120,10 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
             <div className="inline-block px-4 py-2 bg-white dark:bg-slate-800 rounded-full text-xs font-black uppercase tracking-[0.2em] border-2 border-indigo-100 mb-6">
               Simple Process ✨
             </div>
-            <h2 className="text-4xl md:text-6xl font-black text-slate-800 dark:text-white mb-6 font-display">
+            <h2 className="text-3xl md:text-4xl lg:text-6xl font-black text-slate-800 dark:text-white mb-4 md:mb-6 font-display">
               How <Highlighter color="#fbbf24" action="highlight" strokeWidth={3} animationDuration={1200} isView={true}><span>Collabry Works</span></Highlighter>
             </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-300 font-bold max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 font-bold max-w-2xl mx-auto">
               Get started in minutes and transform your study experience
             </p>
           </motion.div>
@@ -153,10 +150,10 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
                 <div className="absolute left-16 top-0 bottom-0 w-1 bg-red-300 opacity-40"></div>
 
                 {/* Content */}
-                <div className="relative p-12 pl-24 space-y-8">
+                <div className="relative p-8 md:p-12 pl-20 md:pl-24 space-y-6 md:space-y-8">
                   {/* Title with highlighter */}
                   <div className="mb-8">
-                    <h3 className="text-4xl font-bold text-slate-800 mb-2 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                    <h3 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
                       <span className="relative z-10">How to Get Started</span>
                       <div className="absolute inset-0 bg-yellow-300 opacity-30 transform -skew-x-3 -rotate-1" style={{ top: '40%', height: '50%' }}></div>
                     </h3>
@@ -206,8 +203,8 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
                       className="relative"
                     >
                       {/* Step number badge */}
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className={`w-16 h-16 ${step.color} border-2 rounded-2xl flex items-center justify-center text-3xl shadow-md transform -rotate-2`}>
+                        <div className="flex items-start gap-3 md:gap-4">
+                          <div className={`w-12 h-12 md:w-16 md:h-16 ${step.color} border-2 rounded-2xl flex items-center justify-center text-2xl md:text-3xl shadow-md transform -rotate-2`}>
                           {step.icon}
                         </div>
                         <div className="flex-1">
@@ -215,12 +212,12 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
                             <span className="text-2xl font-bold text-indigo-600" style={{ fontFamily: 'Caveat, cursive' }}>
                               {step.step}.
                             </span>
-                            <h4 className="text-2xl font-bold text-slate-800 dark:text-white relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                            <h4 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
                               <span className="relative z-10">{step.title}</span>
                               <div className={`absolute inset-0 ${step.highlight} opacity-30 transform -skew-x-2 rotate-1`} style={{ top: '45%', height: '45%' }}></div>
                             </h4>
                           </div>
-                          <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed" style={{ fontFamily: 'Caveat, cursive' }}>
+                          <p className="text-base md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed" style={{ fontFamily: 'Caveat, cursive' }}>
                             {step.desc}
                           </p>
                         </div>
@@ -247,11 +244,11 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
                     <div className="flex items-center gap-4">
                       <div className="text-4xl">✨</div>
                       <div>
-                        <div className="text-2xl font-bold text-emerald-800 mb-1 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
+                        <div className="text-xl md:text-2xl font-bold text-emerald-800 mb-1 relative inline-block" style={{ fontFamily: 'Caveat, cursive' }}>
                           <span className="relative z-10">You're all set!</span>
                           <div className="absolute inset-0 bg-emerald-400 opacity-40 transform -skew-x-2" style={{ top: '40%', height: '50%' }}></div>
                         </div>
-                        <div className="text-lg text-emerald-700" style={{ fontFamily: 'Caveat, cursive' }}>
+                        <div className="text-base md:text-lg text-emerald-700" style={{ fontFamily: 'Caveat, cursive' }}>
                           Ready to start your study journey
                         </div>
                       </div>
@@ -273,9 +270,9 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
       <Pricing />
 
       {/* Stats Section */}
-      <section className="py-24 px-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
+      <section className="py-16 md:py-24 px-4 md:px-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
             {[
               { number: '10K+', label: 'Active Students', icon: '👥' },
               { number: '500K+', label: 'Study Sessions', icon: '📖' },
@@ -291,8 +288,8 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
                 viewport={{ once: true }}
               >
                 <div className="text-5xl mb-4">{stat.icon}</div>
-                <div className="text-5xl md:text-6xl font-black mb-2 font-display">{stat.number}</div>
-                <div className="text-indigo-200 font-bold text-sm uppercase tracking-widest">{stat.label}</div>
+                <div className="text-4xl md:text-5xl lg:text-6xl font-black mb-2 font-display">{stat.number}</div>
+                <div className="text-indigo-200 font-bold text-xs md:text-sm uppercase tracking-widest">{stat.label}</div>
               </motion.div>
             ))}
           </div>
@@ -300,7 +297,7 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
       </section>
 
       {/* CTA Section */}
-      <section className="py-32 px-6 bg-white dark:bg-slate-900 relative overflow-hidden">
+      <section className="py-20 md:py-32 px-4 md:px-6 bg-white dark:bg-slate-900 relative overflow-hidden">
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-100 rounded-full blur-3xl opacity-30" />
         
         <motion.div 
@@ -310,17 +307,17 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
           transition={{ duration: 0.6 }}
           viewport={{ once: true }}
         >
-            <h2 className="text-5xl md:text-7xl font-black text-slate-800 dark:text-white mb-8 font-display leading-tight">
+            <h2 className="text-4xl md:text-5xl lg:text-7xl font-black text-slate-800 dark:text-white mb-6 md:mb-8 font-display leading-tight">
             Ready to <Highlighter color="#c7d2fe" action="box" strokeWidth={3} animationDuration={1400} isView={true}><span className="text-indigo-600">Level Up</span></Highlighter><br/> Your Study Game?
           </h2>
-          <p className="text-2xl text-slate-600 dark:text-slate-300 font-bold mb-12 max-w-2xl mx-auto">
+          <p className="text-lg md:text-2xl text-slate-600 dark:text-slate-300 font-bold mb-8 md:mb-12 max-w-2xl mx-auto">
             Join thousands of students who are studying smarter, not harder
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="px-16 py-6 text-2xl shadow-2xl shadow-indigo-200" onClick={onGetStarted}>
+          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center">
+            <Button size="lg" className="px-12 md:px-16 py-4 md:py-6 text-lg md:text-2xl shadow-2xl shadow-indigo-200" onClick={onGetStarted}>
               Get Started Free
             </Button>
-            <Button variant="secondary" size="lg" className="px-16 py-6 text-2xl border-2 border-slate-100 dark:border-slate-700 dark:bg-transparent">
+            <Button variant="secondary" size="lg" className="px-12 md:px-16 py-4 md:py-6 text-lg md:text-2xl border-2 border-slate-100 dark:border-slate-700 dark:bg-transparent">
               Book a Demo
             </Button>
           </div>
@@ -329,7 +326,7 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
       </section>
 
       {/* Footer */}
-      <footer className="p-12 border-t-2 border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 mt-20">
+      <footer className="p-8 md:p-12 border-t-2 border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 mt-16 md:mt-20">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-3">
              <button 

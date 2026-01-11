@@ -60,8 +60,8 @@ export default function AdminLayout({
   };
 
   const handleNavigate = (route: string | AppRoute) => {
-    // Convert route to AppRoute enum if it's a string
-    const routeValue = typeof route === 'string' ? route : route.toString();
+    // Convert route to string value
+    const routeValue = typeof route === 'string' ? route : String(route);
     
     // Map the route to AppRoute enum
     const routeEnumMap: Record<string, AppRoute> = {

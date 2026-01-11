@@ -12,9 +12,10 @@ import CourseCard from './CourseCard';
 interface ArtifactViewerProps {
   artifact: Artifact;
   onClose: () => void;
+  onEdit?: (id: string) => void;
 }
 
-const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose }) => {
+const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEdit }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -457,9 +458,24 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose }) =>
             </Badge>
             <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">{artifact.title}</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <ICONS.close className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {typeof onEdit === 'function' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(artifact.id)}
+                className="mr-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
+                </svg>
+                Edit
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <ICONS.close className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* Content */}

@@ -1,13 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import LandingPage from '../views/Landing';
+import Loader from '../components/ui/loader';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '../src/stores/ui.store';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
 export default function Home() {
+  const [showLoader, setShowLoader] = useState(true);
   const router = useRouter();
   const { theme, setTheme } = useUIStore();
 
@@ -20,9 +22,17 @@ export default function Home() {
     router.push('/role-selection');
   };
 
+  const handleLoaderComplete = () => {
+    setShowLoader(false);
+  };
+
+  if (showLoader) {
+    return <Loader onComplete={handleLoaderComplete} />;
+  }
+
   return (
-    <LandingPage 
-      onGetStarted={handleGetStarted} 
+    <LandingPage
+      onGetStarted={handleGetStarted}
       onCycleTheme={cycleTheme}
     />
   );

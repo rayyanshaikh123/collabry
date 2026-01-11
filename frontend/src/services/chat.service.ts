@@ -72,7 +72,7 @@ class ChatService {
     if (!result.message) {
       throw new Error('Failed to send message');
     }
-    return result.message as Message;
+    return result.message as unknown as Message;
   }
 
   // Get messages
@@ -90,19 +90,19 @@ class ChatService {
     if (params.before) searchParams.append('before', params.before);
 
     const response = await api.get(`/chat/messages/${params.type}?${searchParams.toString()}`);
-    return (response.messages || []) as Message[];
+    return ((response as any).messages || (response as any).data?.messages || []) as Message[];
   }
 
   // Get conversations (direct, group)
   async getConversations() {
     const data = await api.get('/chat/conversations');
-    return (data.conversations || []) as Conversation[];
+    return ((data as any).conversations || (data as any).data?.conversations || []) as Conversation[];
   }
 
   // Get group conversations
   async getGroupConversations() {
     const data = await api.get('/groups');
-    return (data.groups || []).map((group: any) => ({
+    return ((data as any).groups || (data as any).data?.groups || []).map((group: any) => ({
       type: 'group' as const,
       group: {
         id: group._id || group.id,
@@ -126,7 +126,7 @@ class ChatService {
     if (!result.message) {
       throw new Error('Failed to edit message');
     }
-    return result.message as Message;
+    return result.message as unknown as Message;
   }
 
   // Delete message

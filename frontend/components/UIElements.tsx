@@ -44,18 +44,18 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-export const Card: React.FC<{ 
-  children: React.ReactNode; 
-  className?: string;
-  noPadding?: boolean;
-  hoverable?: boolean;
-}> = ({ children, className = '', noPadding = false, hoverable = false }) => (
-  <div className={`
-    bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800 bubble-shadow overflow-hidden 
-    ${noPadding ? '' : 'p-6'} 
-    ${hoverable ? 'hover:border-indigo-300 dark:hover:border-indigo-700 hover:-translate-y-1 transition-all duration-300' : ''}
-    ${className}
-  `}>
+export const Card: React.FC<
+  React.HTMLAttributes<HTMLDivElement> & {
+    noPadding?: boolean;
+    hoverable?: boolean;
+  }
+> = ({ children, className = '', noPadding = false, hoverable = false, ...props }) => (
+  <div
+    {...props}
+    className={`bg-white dark:bg-slate-900 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800 bubble-shadow overflow-hidden ${
+      noPadding ? '' : 'p-6'
+    } ${hoverable ? 'hover:border-indigo-300 dark:hover:border-indigo-700 hover:-translate-y-1 transition-all duration-300' : ''} ${className}`}
+  >
     {children}
   </div>
 );
@@ -69,7 +69,7 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ c
 
 export const Badge: React.FC<{ 
   children: React.ReactNode; 
-  variant?: 'indigo' | 'rose' | 'emerald' | 'amber' | 'slate';
+  variant?: 'indigo' | 'rose' | 'emerald' | 'amber' | 'slate' | 'success' | 'error';
   className?: string;
 }> = ({ children, variant = 'indigo', className = '' }) => {
   const colors = {
@@ -78,6 +78,9 @@ export const Badge: React.FC<{
     emerald: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
     amber: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
     slate: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+    // Semantic aliases
+    success: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
+    error: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",
   };
 
   return (

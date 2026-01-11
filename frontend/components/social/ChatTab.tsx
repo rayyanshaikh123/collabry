@@ -21,7 +21,7 @@ export default function ChatTab() {
   const [isTyping, setIsTyping] = useState(false);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedConversationRef = useRef<Conversation | null>(null);
   const { user } = useAuthStore();
   const { toast } = useToast();

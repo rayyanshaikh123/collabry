@@ -32,13 +32,13 @@ class FriendService {
   // Get pending requests (received)
   async getPendingRequests() {
     const data = await api.get('/friends/requests/pending');
-    return (data.requests || []) as FriendRequest[];
+    return ((data as any).requests || (data as any).data?.requests || []) as FriendRequest[];
   }
 
   // Get sent requests
   async getSentRequests() {
     const data = await api.get('/friends/requests/sent');
-    return (data.requests || []) as FriendRequest[];
+    return ((data as any).requests || (data as any).data?.requests || []) as FriendRequest[];
   }
 
   // Accept friend request
@@ -62,7 +62,7 @@ class FriendService {
   // Get friends list
   async getFriends() {
     const data = await api.get('/friends');
-    return (data.friends || []) as Friendship[];
+    return ((data as any).friends || (data as any).data?.friends || []) as Friendship[];
   }
 
   // Remove friend
@@ -75,7 +75,7 @@ class FriendService {
   async searchUsers(query: string) {
     const url = `/friends/search?q=${encodeURIComponent(query)}`;
     const data = await api.get(url);
-    return (data.users || []) as User[];
+    return ((data as any).users || (data as any).data?.users || []) as User[];
   }
 
   // Block friend

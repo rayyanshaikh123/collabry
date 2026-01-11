@@ -11,7 +11,6 @@ import { queryClient } from '../lib/queryClient';
 import { ThemeProvider } from './ThemeProvider';
 import { DarkModeInit } from './DarkModeInit';
 import AlertModal from '../../components/AlertModal';
-import FocusWidget from '../../components/FocusWidget';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -24,7 +23,6 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
       <ThemeProvider>
         {children}
         <AlertModal />
-        <FocusWidget />
       </ThemeProvider>
     </QueryClientProvider>
   );

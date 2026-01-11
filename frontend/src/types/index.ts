@@ -38,10 +38,14 @@ export enum AppRoute {
   ROLE_SELECTION = 'role-selection',
   DASHBOARD = 'dashboard',
   STUDY_BOARD = 'study-board',
+  STUDY_NOTEBOOK = 'study-notebook',
   PLANNER = 'planner',
   FOCUS = 'focus',
   FLASHCARDS = 'flashcards',
   PROFILE = 'profile',
+  PROFILE_USAGE = 'usage',
+  SUBSCRIPTION = 'subscription',
+  PRICING = 'pricing',
   ADMIN = 'admin',
   ADMIN_USERS = 'admin-users',
   ADMIN_MODERATION = 'admin-moderation',
@@ -55,6 +59,7 @@ export enum AppRoute {
   LEARNING_JOURNAL = 'learning-journal',
   VISUAL_AIDS = 'visual-aids',
   STUDY_BUDDY = 'study-buddy',
+  SOCIAL = 'social',
 }
 
 export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';

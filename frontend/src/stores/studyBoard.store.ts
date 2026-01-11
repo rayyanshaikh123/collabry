@@ -96,10 +96,10 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
       boards: state.boards.map((b) =>
         b.id === boardId ? { ...b, ...updates } : b
       ),
-      activeBoard:
-        state.activeBoard?.id === boardId
-          ? { ...state.activeBoard, ...updates }
-          : state.activeBoard,
+      currentBoard:
+        state.currentBoard?.id === boardId
+          ? { ...state.currentBoard, ...updates }
+          : state.currentBoard,
     }));
   },
 
@@ -107,19 +107,19 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
   removeBoard: (boardId: string) => {
     set((state) => ({
       boards: state.boards.filter((b) => b.id !== boardId),
-      activeBoard: state.activeBoard?.id === boardId ? null : state.activeBoard,
+      currentBoard: state.currentBoard?.id === boardId ? null : state.currentBoard,
     }));
   },
 
   // Add element
   addElement: (element: BoardElement) => {
     set((state) => {
-      if (!state.activeBoard) return state;
+      if (!state.currentBoard) return state;
       
       return {
-        activeBoard: {
-          ...state.activeBoard,
-          elements: [...state.activeBoard.elements, element],
+        currentBoard: {
+          ...state.currentBoard,
+          elements: [...state.currentBoard.elements, element],
         },
       };
     });
@@ -128,12 +128,12 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
   // Update element
   updateElement: (elementId: string, updates: Partial<BoardElement>) => {
     set((state) => {
-      if (!state.activeBoard) return state;
+      if (!state.currentBoard) return state;
       
       return {
-        activeBoard: {
-          ...state.activeBoard,
-          elements: state.activeBoard.elements.map((el) =>
+        currentBoard: {
+          ...state.currentBoard,
+          elements: state.currentBoard.elements.map((el) =>
             el.id === elementId ? { ...el, ...updates } : el
           ),
         },
@@ -144,12 +144,12 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
   // Remove element
   removeElement: (elementId: string) => {
     set((state) => {
-      if (!state.activeBoard) return state;
+      if (!state.currentBoard) return state;
       
       return {
-        activeBoard: {
-          ...state.activeBoard,
-          elements: state.activeBoard.elements.filter((el) => el.id !== elementId),
+        currentBoard: {
+          ...state.currentBoard,
+          elements: state.currentBoard.elements.filter((el) => el.id !== elementId),
         },
         selectedElements: state.selectedElements.filter((id) => id !== elementId),
       };
@@ -309,11 +309,11 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
 
   // Broadcast update (realtime)
   broadcastUpdate: (update: any) => {
-    const { activeBoard } = get();
-    if (!activeBoard) return;
+    const { currentBoard } = get();
+    if (!currentBoard) return;
     
     // TODO: Emit socket event with update
-    socketClient.sendBoardUpdate(activeBoard.id, update);
+    socketClient.sendBoardUpdate(currentBoard.id, update);
   },
 
   // Clear error
@@ -323,7 +323,7 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
 }));
 
 // Selectors
-export const selectActiveBoard = (state: StudyBoardState) => state.activeBoard;
+export const selectActiveBoard = (state: StudyBoardState) => state.currentBoard;
 export const selectBoards = (state: StudyBoardState) => state.boards;
 export const selectSelectedElements = (state: StudyBoardState) => state.selectedElements;
 export const selectParticipants = (state: StudyBoardState) => state.participants;

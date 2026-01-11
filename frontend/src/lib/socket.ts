@@ -128,6 +128,10 @@ class SocketClient {
     this.boardSocket?.emit('element:delete', { boardId, elementId }, callback);
   }
 
+  sendBoardUpdate(boardId: string, update: any) {
+    this.boardSocket?.emit('board:update', { boardId, update });
+  }
+
   sendCursorPosition(boardId: string, position: { x: number; y: number }) {
     this.boardSocket?.emit('cursor:move', { boardId, position });
   }
@@ -156,15 +160,15 @@ class SocketClient {
   onCursorMove(callback: (data: any) => void) {
     this.boardSocket?.on('cursor:moved', callback);
   }
-
-  // Remove event listeners from main socket
+  // Remove event listeners from sockets
   off(event: string, callback?: any) {
     this.socket?.off(event, callback);
+    this.boardSocket?.off(event, callback);
   }
 
-  // Remove event listeners from board socket
-  offBoardEvent(event: string, callback?: any) {
-    this.boardSocket?.off(event, callback);
+  // Listen for full board updates
+  onBoardUpdate(callback: (data: any) => void) {
+    this.boardSocket?.on('board:update', callback);
   }
 
   // Check connection status

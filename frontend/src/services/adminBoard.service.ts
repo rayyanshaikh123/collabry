@@ -75,7 +75,7 @@ export const adminBoardService = {
     if (response.success) {
       return {
         boards: response.data || [],
-        pagination: response.pagination || {}
+        pagination: (response as any).pagination || {}
       };
     }
 
