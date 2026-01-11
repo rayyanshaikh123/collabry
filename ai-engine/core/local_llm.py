@@ -38,6 +38,8 @@ logger.setLevel(logging.INFO)
 
 # Import Gemini service
 from core.gemini_service import GeminiService, create_gemini_service
+# Import Ollama service as fallback
+from core.ollama_service import OllamaService, create_ollama_service
 
 # LangChain compatibility
 from langchain_core.language_models.llms import LLM
@@ -45,21 +47,23 @@ from langchain_core.language_models.llms import LLM
 
 class LocalLLM(LLM):
     """
-    Gemini-powered LLM wrapper.
+    Gemini-powered LLM wrapper with Ollama fallback.
     
     REPLACES: Old Ollama-based LocalLLM
     
     Maintains the same interface for backward compatibility,
-    but uses Google Gemini under the hood.
+    uses Google Gemini with Ollama fallback when Gemini is unavailable.
     
     Features:
-    - Drop-in replacement for Ollama LocalLLM
+    - Primary: Google Gemini API
+    - Fallback: Local Ollama API
     - Automatic retry with exponential backoff
     - Streaming support
     - JSON mode for structured outputs
     - LangChain compatibility
     """
     gemini_service: Any  # GeminiService instance
+    ollama_service: Any  # OllamaService instance (fallback)
     model_name: str
     temperature: float
     timeout: int = 120
@@ -76,7 +80,7 @@ class LocalLLM(LLM):
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
         """
-        Generate response from Gemini (non-streaming).
+        Generate response from Gemini with Ollama fallback.
         
         Args:
             prompt: Input prompt
@@ -86,6 +90,7 @@ class LocalLLM(LLM):
         Returns:
             Generated text response
         """
+        # Try Gemini first
         try:
             response = self.gemini_service.generate(
                 prompt=prompt,
@@ -95,16 +100,31 @@ class LocalLLM(LLM):
             
             # gemini_service.generate() returns a string, not a response object
             self.last_response = response
+            logger.info("[Gemini] Generation successful")
             return self.last_response
             
         except Exception as e:
-            logger.error(f"[Gemini] Generation failed: {e}")
-            # Return error in JSON format (for agent compatibility)
-            return json.dumps({"tool": None, "answer": f"LLM error: {e}"})
+            logger.warning(f"[Gemini] Generation failed: {e}, trying Ollama fallback")
+            
+            # Fallback to Ollama
+            try:
+                response = self.ollama_service.generate(
+                    prompt=prompt,
+                    temperature=self.temperature,
+                    max_tokens=kwargs.get('max_tokens')
+                )
+                self.last_response = response
+                logger.info("[Ollama] Fallback generation successful")
+                return self.last_response
+                
+            except Exception as e2:
+                logger.error(f"[Ollama] Fallback also failed: {e2}")
+                # Return error in JSON format (for agent compatibility)
+                return json.dumps({"tool": None, "answer": f"LLM error: Gemini ({e}) and Ollama ({e2}) both failed"})
 
     def _stream(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any):
         """
-        Generate streaming response from Gemini.
+        Generate streaming response from Gemini with Ollama fallback.
         
         Args:
             prompt: Input prompt
@@ -114,6 +134,7 @@ class LocalLLM(LLM):
         Yields:
             Text chunks as they are generated
         """
+        # Try Gemini first
         try:
             full_response = ""
             for chunk in self.gemini_service.generate_stream(
@@ -125,10 +146,30 @@ class LocalLLM(LLM):
                 yield chunk
             
             self.last_response = full_response
+            logger.info("[Gemini] Streaming successful")
+            return
             
         except Exception as e:
-            logger.error(f"[Gemini] Streaming failed: {e}")
-            yield f"[Error] Gemini request failed: {e}"
+            logger.warning(f"[Gemini] Streaming failed: {e}, trying Ollama fallback")
+            
+            # Fallback to Ollama
+            try:
+                full_response = ""
+                for chunk in self.ollama_service.generate_stream(
+                    prompt=prompt,
+                    temperature=self.temperature,
+                    max_tokens=kwargs.get('max_tokens')
+                ):
+                    full_response += chunk
+                    yield chunk
+                
+                self.last_response = full_response
+                logger.info("[Ollama] Fallback streaming successful")
+                return
+                
+            except Exception as e2:
+                logger.error(f"[Ollama] Fallback streaming also failed: {e2}")
+                yield f"[Error] Both Gemini ({e}) and Ollama ({e2}) failed"
 
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
@@ -201,35 +242,48 @@ class LocalLLM(LLM):
 
 def create_llm(config):
     """
-    Factory function to create Gemini-powered LLM.
+    Factory function to create Gemini-powered LLM with Ollama fallback.
     
     REPLACES: Old Ollama LocalLLM creation
+    
+    Primary: Google Gemini API
+    Fallback: Local Ollama API
     
     Supports ENV-based configuration:
     - GEMINI_API_KEY: Google AI Studio API key
     - GEMINI_MODEL: Model name (default: gemini-2.0-flash-lite)
     - GEMINI_MAX_TOKENS: Max output tokens (default: 8192)
     - GEMINI_TIMEOUT: Request timeout in seconds (default: 120)
+    - OLLAMA_BASE_URL: Ollama API endpoint (default: http://localhost:11434)
+    - OLLAMA_MODEL: Ollama model name (default: llama3.1)
     
     Args:
         config: Configuration dictionary
         
     Returns:
-        LocalLLM instance powered by Gemini
+        LocalLLM instance with Gemini primary and Ollama fallback
     """
     # Create Gemini service
     gemini_service = create_gemini_service(config)
     
+    # Create Ollama service as fallback
+    ollama_service = create_ollama_service(
+        base_url=config.get("ollama_host", "http://localhost:11434"),
+        model=config.get("llm_model", "llama3.1"),
+        timeout=config.get("ollama_timeout", 180)
+    )
+    
     # Create LocalLLM wrapper
     llm = LocalLLM(
         gemini_service=gemini_service,
+        ollama_service=ollama_service,
         model_name=config.get("gemini_model", "gemini-2.0-flash-lite"),
         temperature=config.get("temperature", 0.2),
         timeout=config.get("gemini_timeout", 120),
         max_retries=config.get("gemini_max_retries", 3)
     )
     
-    logger.info(f"✓ [Gemini] Initialized LLM: model={llm.model_name}, temperature={llm.temperature}")
+    logger.info(f"✓ [Gemini+Ollama] Initialized LLM: primary={llm.model_name}, fallback=ollama:{ollama_service.model}, temperature={llm.temperature}")
     return llm
 
 

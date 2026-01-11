@@ -6,7 +6,7 @@ Automatically discovers all study-platform-relevant tools with a TOOL={} export.
 
 Legacy tools (browser_control, system_automation, task_scheduler) are excluded.
 Active tools: web_search, web_scraper, read_file, write_file, doc_generator, 
-              ppt_generator, ocr_reader, image_generation
+              ppt_generator
 """
 
 import pkgutil

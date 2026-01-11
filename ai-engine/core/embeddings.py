@@ -1,6 +1,8 @@
 """
 Embeddings + Vector Store (FAISS + Fallback)
 
+Uses Hugging Face Inference API for cloud-based embeddings.
+
 Fixes:
 - Proper incremental FAISS indexing (no full rebuild)
 - Correct fallback vector reconstruction on load()
@@ -14,40 +16,130 @@ from typing import List, Sequence, Optional, Tuple, Dict
 import math
 import hashlib
 import threading
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
-#  Embedding Model
+#  Embedding Model - Hugging Face Cloud
 # ============================================================
 
 class EmbeddingModel:
     """
-    Embedding Model:
-    - Uses Sentence Transformers when available
-    - Else fallback deterministic SHA-256 vector
+    Embedding Model using Hugging Face Inference API:
+    - Uses cloud-based models via Hugging Face API
+    - Fallback to deterministic SHA-256 vector if API fails
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", dim: int = 384):
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", dim: int = 384, api_key: Optional[str] = None):
         self.model_name = model_name
         self.dim = dim
-        self._use_transformer = False
+        self.api_key = api_key
+        self.api_url = f"https://router.huggingface.co/hf-inference/models/{model_name}"
+        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self._use_huggingface = bool(api_key)
 
-        # Try sentence-transformers
+        # Test connection and get actual dimension
+        if self._use_huggingface:
+            try:
+                # Test with a simple text
+                test_result = self._test_connection()
+                if test_result and len(test_result) > 0:
+                    self.dim = len(test_result)
+                    logger.info(f"Connected to Hugging Face API. Model: {model_name}, Dimension: {self.dim}")
+                else:
+                    logger.warning("Hugging Face API test failed, falling back to local processing")
+                    self._use_huggingface = False
+            except Exception as e:
+                logger.warning(f"Hugging Face API initialization failed: {e}, falling back to local processing")
+                self._use_huggingface = False
+
+    def _test_connection(self) -> Optional[List[float]]:
+        """Test Hugging Face API connection."""
         try:
-            from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer(model_name)
-            self.dim = self._encoder.get_sentence_embedding_dimension()
-            self._use_transformer = True
-        except Exception:
-            self._encoder = None
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json={"inputs": "test"},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if isinstance(result, list) and len(result) > 0:
+                    return result
+                elif isinstance(result, list) and len(result) == 0:
+                    return None
+                else:
+                    logger.warning(f"Unexpected API response format: {type(result)}")
+                    return None
+            else:
+                logger.warning(f"Hugging Face API test failed with status {response.status_code}: {response.text}")
+                return None
+
+        except Exception as e:
+            logger.warning(f"Hugging Face API test failed: {e}")
+            return None
 
     # ------------------------------
     def embed(self, texts: Sequence[str]) -> List[List[float]]:
-        if self._use_transformer and self._encoder:
-            emb = self._encoder.encode(list(texts), show_progress_bar=False)
-            return [list(map(float, e)) for e in emb]
+        """Generate embeddings using Hugging Face API."""
+        if self._use_huggingface and texts:
+            try:
+                # Batch process texts
+                embeddings = []
+                batch_size = 10  # Process in batches to avoid rate limits
 
-        # fallback deterministic hashing
+                for i in range(0, len(texts), batch_size):
+                    batch_texts = list(texts[i:i + batch_size])
+
+                    # For single text, send as string; for multiple, send as list
+                    payload = {"inputs": batch_texts[0] if len(batch_texts) == 1 else batch_texts}
+
+                    response = requests.post(
+                        self.api_url,
+                        headers=self.headers,
+                        json=payload,
+                        timeout=30
+                    )
+
+                    if response.status_code != 200:
+                        # Fallback to old API format
+                        response = requests.post(
+                            self.api_url,
+                            headers=self.headers,
+                            json=payload,
+                            timeout=30
+                        )
+
+                    if response.status_code == 200:
+                        result = response.json()
+                        # Handle both single embedding and batch embeddings
+                        if isinstance(result, list) and len(result) > 0:
+                            if isinstance(result[0], list):
+                                # Batch result
+                                embeddings.extend(result)
+                            else:
+                                # Single result
+                                embeddings.append(result)
+                        else:
+                            logger.warning(f"Unexpected API response format: {type(result)}")
+                            break
+                    else:
+                        logger.warning(f"Hugging Face API error: {response.status_code} - {response.text}")
+                        break
+
+                if len(embeddings) == len(texts):
+                    # Ensure all embeddings are lists of floats
+                    return [[float(x) for x in emb] for emb in embeddings]
+
+            except Exception as e:
+                logger.warning(f"Hugging Face API embedding failed: {e}")
+
+        # Fallback to deterministic hashing
+        logger.info("Using fallback deterministic embeddings")
         return [self._fallback_embed(t) for t in texts]
 
     # ------------------------------
