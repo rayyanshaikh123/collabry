@@ -54,7 +54,7 @@ app.use(helmet({
 // Security: Rate limiting for all routes
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // More lenient in dev
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -63,7 +63,7 @@ const globalLimiter = rateLimit({
 // Security: Stricter rate limiting for authentication routes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Much more lenient in dev
   skipSuccessfulRequests: true, // Don't count successful requests
   message: 'Too many login attempts, please try again after 15 minutes.',
 });
