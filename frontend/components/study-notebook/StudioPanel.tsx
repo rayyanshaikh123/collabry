@@ -93,12 +93,29 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
       {/* Header */}
       <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">Studio</h2>
-          {artifacts.length > 0 && (
-            <Badge variant="indigo" className="text-xs">
-              {artifacts.length}
-            </Badge>
-          )}
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">Studio</h2>
+            {artifacts.length > 0 && (
+              <Badge variant="indigo" className="text-xs">
+                {artifacts.length}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {typeof onEditArtifact === 'function' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEditArtifact(selectedArtifact?.id || artifacts[0]?.id || 'action-quiz')}
+                className="text-xs"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
+                </svg>
+                Edit
+              </Button>
+            )}
+          </div>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {hasSelectedSources
@@ -134,39 +151,28 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
         <div className="grid grid-cols-2 gap-2">
           {studioActions.map((action) => (
             <div key={action.type} className="relative">
-              <Button
-                variant={action.available ? 'outline' : 'ghost'}
-                size="sm"
-                onClick={() => action.available && onGenerateArtifact(action.type)}
-                disabled={!hasSelectedSources || isGenerating || !action.available}
-                className={`flex flex-col items-center justify-center h-20 gap-1 ${
-                  action.available ? 'hover:border-indigo-500 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : 'opacity-50'
-                }`}
-              >
-                <span className="text-2xl">{action.icon}</span>
-                <span className="text-xs font-bold">{action.label}</span>
-                {!action.available && (
-                  <Badge variant="slate" className="text-[10px] mt-1">
-                    Coming Soon
-                  </Badge>
-                )}
-              </Button>
+              <div className="h-28">
+                <Button
+                  variant={action.available ? 'outline' : 'ghost'}
+                  size="sm"
+                  onClick={() => action.available && onGenerateArtifact(action.type)}
+                  disabled={!hasSelectedSources || isGenerating || !action.available}
+                  className={`w-full h-full px-0 py-0 flex flex-col items-center justify-center gap-2 text-center ${
+                    action.available ? 'hover:border-indigo-500 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : 'opacity-50'
+                  }`}
+                >
+                  <span className="text-3xl leading-none">{action.icon}</span>
+                  <span className="text-sm font-bold leading-tight max-w-full break-words">{action.label}</span>
+                  {!action.available && (
+                    <Badge variant="slate" className="text-[10px] mt-1">
+                      Coming Soon
+                    </Badge>
+                  )}
+                </Button>
+              </div>
 
               {/* Small edit button for generator presets (Quiz) - render as a sibling to avoid nested <button> */}
-              {action.type === 'quiz' && typeof onEditArtifact === 'function' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditArtifact('action-quiz');
-                  }}
-                  title="Edit Quiz settings"
-                  className="absolute right-2 top-2 p-1 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
-                  </svg>
-                </button>
-              )}
+              {/* per-action small edit removed; use the top Edit control instead */}
             </div>
           ))}
         </div>
@@ -241,9 +247,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm('Delete this artifact?')) {
-                                    onDeleteArtifact(artifact.id);
-                                  }
+                                  onDeleteArtifact(artifact.id);
                                 }}
                                 className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-500 p-1 rounded bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700"
                                 aria-label="Delete artifact"

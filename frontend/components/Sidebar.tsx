@@ -30,13 +30,13 @@ const NavItem: React.FC<NavItemProps> = ({
         onNavigate(id);
         setMobileOpen(false);
       }}
-      className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-[1.5rem] transition-all mb-2 bouncy-hover press-effect border-b-2 ${
+      className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-4 px-4 py-3.5'} rounded-[1.5rem] transition-all mb-2 bouncy-hover press-effect border-b-2 ${
         isActive 
           ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50 border-indigo-700 dark:border-indigo-800' 
           : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-500 dark:hover:text-indigo-400 border-transparent'
       }`}
     >
-      <span className={`${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500 group-hover:text-indigo-400 dark:group-hover:text-indigo-400'}`}>
+      <span className={`${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'} flex items-center justify-center` }>
         <Icon size={22} strokeWidth={isActive ? 3 : 2} />
       </span>
       {!isCollapsed && <span className="font-black text-sm text-left truncate">{label}</span>}

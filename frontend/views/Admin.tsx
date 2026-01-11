@@ -29,6 +29,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
@@ -281,12 +283,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
     }
   };
 
-  const handleDeleteUser = async (user: User) => {
-    if (!confirm(`Are you sure you want to delete ${user.name}?`)) return;
+  const handleDeleteUser = (user: User) => {
+    setUserToDelete(user);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
 
     try {
       setLoading(true);
-      await adminService.deleteUser(user.id);
+      await adminService.deleteUser(userToDelete.id);
+      showAlert({ type: 'success', title: 'User Deleted', message: `${userToDelete.name} has been deleted.` });
       loadUsers();
     } catch (error: any) {
       showAlert({
@@ -296,7 +304,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       });
     } finally {
       setLoading(false);
+      setShowDeleteConfirm(false);
+      setUserToDelete(null);
     }
+  };
+
+  const cancelDeleteUser = () => {
+    setShowDeleteConfirm(false);
+    setUserToDelete(null);
   };
 
   // Report/Moderation functions
@@ -639,7 +654,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{s.label}</p>
-                    <h4 className="text-2xl font-black text-slate-800">{s.value}</h4>
+                    <h4 className="text-2xl font-black text-slate-800 dark:text-slate-200">{s.value}</h4>
                     <span className={`text-[10px] font-black ${s.change.includes('active') || s.change.includes('success') || s.change.includes('in') ? 'text-emerald-500' : s.change.startsWith('+') ? 'text-emerald-500' : 'text-slate-500'}`}>{s.change}</span>
                   </div>
                 </Card>
@@ -648,7 +663,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <Card className="lg:col-span-2">
-                <h3 className="text-xl font-black text-slate-800 mb-8">Platform Traffic</h3>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-8">Platform Traffic</h3>
                 <div className="h-[300px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
@@ -666,7 +681,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 </div>
               </Card>
               <Card>
-                <h3 className="text-xl font-black text-slate-800 mb-8">Active Operations</h3>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-8">Active Operations</h3>
                 <div className="space-y-4">
                   {globalUsage?.operations_by_type && Object.keys(globalUsage.operations_by_type).length > 0 ? (
                     Object.entries(globalUsage.operations_by_type)
@@ -708,7 +723,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
           <>
             <Card noPadding className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
-                <h3 className="text-xl font-black text-slate-800">User Directory</h3>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200">User Directory</h3>
                 <div className="flex gap-2">
                   <Input 
                     placeholder="Search users..." 
@@ -723,7 +738,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] font-black  dark:text-slate-200 text-slate-400 uppercase tracking-widest">
                     <tr>
                       <th className="px-6 py-4">User</th>
                       <th className="px-6 py-4">Role</th>
@@ -762,7 +777,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                                   </div>
                                 )}
                                 <div className="leading-tight">
-                                  <p className="text-sm text-slate-800">{user.name}</p>
+                                  <p className="text-sm text-slate-800 dark:text-slate-200">{user.name}</p>
                                   <p className="text-[10px] text-slate-400 uppercase tracking-tight">{user.email}</p>
                                 </div>
                               </div>
@@ -844,7 +859,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
             {showModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <Card className="w-full max-w-md">
-                  <h3 className="text-2xl font-black text-slate-800 mb-6">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-6">
                     {editingUser ? 'Edit User' : 'Create New User'}
                   </h3>
                   
@@ -885,7 +900,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       <select 
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-400"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-400"
                       >
                         <option value="student">Student</option>
                         <option value="mentor">Mentor</option>
@@ -893,14 +908,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       </select>
                     </div>
 
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input 
                         type="checkbox"
                         checked={formData.isActive}
                         onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                        className="w-5 h-5 rounded border-2 border-slate-300"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label className="text-sm font-bold text-slate-700">Account Active</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200">Account Active</label>
                     </div>
                   </div>
 
@@ -925,6 +940,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 </Card>
               </div>
             )}
+            {/* Delete User Confirmation Modal */}
+            {showDeleteConfirm && userToDelete && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <Card className="w-full max-w-md">
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-4">Delete User</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">Are you sure you want to permanently delete <span className="font-bold text-slate-800 dark:text-slate-200">{userToDelete.name}</span>? This action cannot be undone.</p>
+                  <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1" onClick={cancelDeleteUser} disabled={loading}>Cancel</Button>
+                    <Button variant="danger" className="flex-1" onClick={confirmDeleteUser} disabled={loading}>{loading ? 'Deleting...' : 'Delete User'}</Button>
+                  </div>
+                </Card>
+              </div>
+            )}
           </>
         );
       case AppRoute.ADMIN_MODERATION:
@@ -934,7 +962,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               <div className="lg:col-span-2 space-y-6">
                 <Card noPadding>
                   <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
-                    <h3 className="text-xl font-black text-slate-800">Flagged Activity</h3>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-slate-200">Flagged Activity</h3>
                     <Badge variant="rose">{reportStats?.pending || 0} New</Badge>
                   </div>
                   <div className="p-4 space-y-4">
@@ -960,7 +988,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                               !
                             </div>
                             <div className="flex-1">
-                              <p className="text-sm font-black text-slate-800">
+                              <p className="text-sm font-black text-slate-800 dark:text-slate-200">
                                 {report.reportedBy.name}
                                 <span className="text-[10px] text-slate-400 uppercase font-bold ml-2">
                                   reported {report.contentType}
@@ -1003,26 +1031,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <Card className="bg-rose-50 border-rose-100">
                       <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Pending</p>
-                      <h4 className="text-3xl font-black text-slate-800">{reportStats.pending}</h4>
+                      <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{reportStats.pending}</h4>
                     </Card>
                     <Card className="bg-amber-50 border-amber-100">
                       <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Reviewing</p>
-                      <h4 className="text-3xl font-black text-slate-800">{reportStats.reviewing}</h4>
+                      <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{reportStats.reviewing}</h4>
                     </Card>
                     <Card className="bg-emerald-50 border-emerald-100">
                       <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Resolved</p>
-                      <h4 className="text-3xl font-black text-slate-800">{reportStats.resolved}</h4>
+                      <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{reportStats.resolved}</h4>
                     </Card>
                     <Card className="bg-slate-50 border-slate-100">
                       <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Total</p>
-                      <h4 className="text-3xl font-black text-slate-800">{reportStats.total}</h4>
+                      <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{reportStats.total}</h4>
                     </Card>
                   </div>
                 )}
               </div>
 
               <Card className="h-fit">
-                <h3 className="text-xl font-black text-slate-800 mb-6">Report Summary</h3>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Report Summary</h3>
                 <div className="space-y-4">
                   {reportStats?.byType && Object.entries(reportStats.byType).length > 0 ? (
                     Object.entries(reportStats.byType).map(([type, count]) => (
@@ -1042,12 +1070,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
             {showReportModal && selectedReport && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                 <Card className="w-full max-w-2xl">
-                  <h3 className="text-2xl font-black text-slate-800 mb-4">Take Action on Report</h3>
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-4">Take Action on Report</h3>
                   
                   <div className="space-y-4 mb-6">
                     <div className="p-4 bg-slate-50 rounded-2xl">
                       <p className="text-xs font-bold text-slate-500 uppercase mb-2">Reported By</p>
-                      <p className="text-sm font-bold text-slate-800">{selectedReport.reportedBy.name}</p>
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{selectedReport.reportedBy.name}</p>
                       <p className="text-xs text-slate-500">{selectedReport.reportedBy.email}</p>
                     </div>
 
@@ -1062,7 +1090,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       <select 
                         value={selectedAction}
                         onChange={(e) => setSelectedAction(e.target.value)}
-                        className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-400"
+                        className="w-full px-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-400"
                       >
                         <option value="none">No Action</option>
                         <option value="warning">Issue Warning</option>
@@ -1078,7 +1106,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         value={actionNotes}
                         onChange={(e) => setActionNotes(e.target.value)}
                         placeholder="Add notes about this decision..."
-                        className="w-full h-32 bg-white border-2 border-slate-200 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:border-indigo-400"
+                        className="w-full h-32 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-400"
                       />
                     </div>
                   </div>
@@ -1112,7 +1140,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-amber-50 border-amber-100">
                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Token Usage (7d)</p>
-                  <h4 className="text-3xl font-black text-slate-800">
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">
                     {usageLoading ? '...' : usageService.formatNumber(globalUsage?.total_tokens || 0)}
                   </h4>
                   <div className="mt-4">
@@ -1127,7 +1155,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 </Card>
                 <Card className="bg-indigo-50 border-indigo-100">
                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Success Rate</p>
-                  <h4 className="text-3xl font-black text-slate-800">
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">
                     {usageLoading ? '...' : `${globalUsage?.success_rate?.toFixed(1) || 0}%`}
                   </h4>
                   <div className="mt-4">
@@ -1142,7 +1170,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 </Card>
                 <Card className="bg-emerald-50 border-emerald-100">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Avg Latency</p>
-                  <h4 className="text-3xl font-black text-slate-800">
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">
                     {usageLoading ? '...' : `${(globalUsage?.avg_response_time_ms || 0).toFixed(0)}ms`}
                   </h4>
                   <div className="mt-4">
@@ -1159,7 +1187,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
              
              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-8">Operations by Type (7d)</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-8">Operations by Type (7d)</h3>
                   <div className="h-[400px]">
                      {usageLoading ? (
                        <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>
@@ -1194,20 +1222,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                </Card>
                
                <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-8">Top Users by Operations</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-8">Top Users by Operations</h3>
                   <div className="space-y-4 max-h-[400px] overflow-y-auto">
                     {usageLoading ? (
                       <div className="text-slate-400 text-center py-8">Loading...</div>
                     ) : globalUsage?.top_users && globalUsage.top_users.length > 0 ? (
                       globalUsage.top_users.map((user, idx) => (
-                        <div key={user.user_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                        <div key={user.user_id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black">
                               #{idx + 1}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-800">{userNames[user.user_id] || user.user_id}</p>
-                              <p className="text-xs text-slate-400">{user.operations} operations</p>
+                              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{userNames[user.user_id] || user.user_id}</p>
+                              <p className="text-xs text-slate-400 dark:text-slate-400">{user.operations} operations</p>
                             </div>
                           </div>
                           <Badge variant="indigo">{usageService.formatNumber(user.operations)}</Badge>
@@ -1221,7 +1249,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
              </div>
              
              <Card>
-                <h3 className="text-xl font-black text-slate-800 mb-8">Daily Activity (Last 7 Days)</h3>
+                <h3 className="text-xl font-black text-slate-800  dark:text-slate-200 mb-8">Daily Activity (Last 7 Days)</h3>
                 <div className="h-[300px]">
                   {usageLoading ? (
                     <div className="flex items-center justify-center h-full text-slate-400">Loading...</div>
@@ -1284,19 +1312,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <Card className="bg-indigo-50 border-indigo-100">
                   <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Total Boards</p>
-                  <h4 className="text-3xl font-black text-slate-800">{boardStats.total}</h4>
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{boardStats.total}</h4>
                 </Card>
                 <Card className="bg-emerald-50 border-emerald-100">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Public</p>
-                  <h4 className="text-3xl font-black text-slate-800">{boardStats.public}</h4>
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{boardStats.public}</h4>
                 </Card>
                 <Card className="bg-amber-50 border-amber-100">
                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Private</p>
-                  <h4 className="text-3xl font-black text-slate-800">{boardStats.private}</h4>
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{boardStats.private}</h4>
                 </Card>
                 <Card className="bg-rose-50 border-rose-100">
                   <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Archived</p>
-                  <h4 className="text-3xl font-black text-slate-800">{boardStats.archived}</h4>
+                  <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">{boardStats.archived}</h4>
                 </Card>
               </div>
             )}
@@ -1304,7 +1332,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
             {/* Boards Table */}
             <Card noPadding>
               <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
-                <h3 className="text-xl font-black text-slate-800">Board Management</h3>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200">Board Management</h3>
                 <Input 
                   placeholder="Search boards..." 
                   className="w-64" 
@@ -1314,7 +1342,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] font-black dark:text-slate-200 text-slate-400 uppercase tracking-widest">
                     <tr>
                       <th className="px-6 py-4">Board</th>
                       <th className="px-6 py-4">Owner</th>
@@ -1342,7 +1370,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         <tr key={board._id} className="hover:bg-slate-50/50">
                           <td className="px-6 py-4">
                             <div className="leading-tight">
-                              <p className="text-sm text-slate-800 font-bold">{board.title}</p>
+                              <p className="text-sm text-slate-800 dark:text-slate-200 font-bold">{board.title}</p>
                               <p className="text-[10px] text-slate-400 uppercase tracking-tight">
                                 {board.elements?.length || 0} elements • {board.members?.length || 0} members
                               </p>
@@ -1450,8 +1478,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 <Card>
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-2xl font-black text-slate-800">Platform Settings</h3>
-                      <p className="text-sm text-slate-500 mt-1">
+                      <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200">Platform Settings</h3>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                         Configure platform-wide settings and features
                       </p>
                     </div>
@@ -1491,10 +1519,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
                 {/* Platform Settings */}
                 <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-6">Platform Configuration</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Platform Configuration</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Platform Name</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">Platform Name</label>
                       <Input
                         value={settingsFormData.platform.name}
                         onChange={(e) => updateSettingsField('platform', 'name', e.target.value)}
@@ -1503,7 +1531,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Description</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">Description</label>
                       <Input
                         value={settingsFormData.platform.description}
                         onChange={(e) => updateSettingsField('platform', 'description', e.target.value)}
@@ -1511,28 +1539,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         placeholder="Enter platform description"
                       />
                     </div>
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="maintenanceMode"
                         checked={settingsFormData.platform.maintenanceMode}
                         onChange={(e) => updateSettingsField('platform', 'maintenanceMode', e.target.checked)}
                         disabled={!settingsEditing}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="maintenanceMode" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="maintenanceMode" className="text-sm font-bold text-slate-700 dark:text-slate-200 cursor-pointer">
                         Enable Maintenance Mode
                       </label>
                     </div>
                     {settingsFormData.platform.maintenanceMode && (
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Maintenance Message</label>
+                        <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">Maintenance Message</label>
                         <textarea
                           value={settingsFormData.platform.maintenanceMessage}
                           onChange={(e) => updateSettingsField('platform', 'maintenanceMessage', e.target.value)}
                           disabled={!settingsEditing}
                           placeholder="Message to display during maintenance"
-                          className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl text-sm resize-none"
+                          className="w-full px-4 py-2 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-xl text-sm text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none"
                           rows={3}
                         />
                       </div>
@@ -1542,19 +1570,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
                 {/* Feature Toggles */}
                 <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-6">Feature Toggles</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Feature Toggles</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {Object.entries(settingsFormData.features).map(([feature, enabled]) => (
-                      <div key={feature} className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <div key={feature} className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                         <input
                           type="checkbox"
                           id={`feature-${feature}`}
                           checked={enabled as boolean}
                           onChange={(e) => updateSettingsField('features', feature, e.target.checked)}
                           disabled={!settingsEditing}
-                          className="w-5 h-5 rounded"
+                          className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                         />
-                        <label htmlFor={`feature-${feature}`} className="text-sm font-bold text-slate-700 cursor-pointer flex-1">
+                        <label htmlFor={`feature-${feature}`} className="text-sm font-bold text-slate-700 dark:text-slate-200 cursor-pointer flex-1">
                           {feature.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}
                         </label>
                         <Badge variant={enabled ? 'emerald' : 'slate'}>
@@ -1567,10 +1595,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
                 {/* Storage & Limits */}
                 <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-6">Storage & Limits</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Storage & Limits</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">
                         Max File Size ({settingsService.formatFileSize(settingsFormData.storage.maxFileSize)})
                       </label>
                       <Input
@@ -1582,7 +1610,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Max Board Elements</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">Max Board Elements</label>
                       <Input
                         type="number"
                         value={settingsFormData.storage.maxBoardElements}
@@ -1592,7 +1620,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Max Boards Per User</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">Max Boards Per User</label>
                       <Input
                         type="number"
                         value={settingsFormData.storage.maxBoardsPerUser}
@@ -1606,9 +1634,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
                 {/* AI Engine Settings */}
                 <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-6">AI Engine Configuration</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">AI Engine Configuration</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="aiEnabled"
@@ -1617,12 +1645,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         disabled={!settingsEditing}
                         className="w-5 h-5 rounded"
                       />
-                      <label htmlFor="aiEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="aiEnabled" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Enable AI Engine
                       </label>
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Base URL</label>
+                      <label className="text-sm font-bold dark:text-slate-200 block mb-2 ">Base URL</label>
                       <Input
                         value={settingsFormData.ai.baseUrl}
                         onChange={(e) => updateSettingsField('ai', 'baseUrl', e.target.value)}
@@ -1632,7 +1660,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Timeout (ms)</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">Timeout (ms)</label>
                         <Input
                           type="number"
                           value={settingsFormData.ai.timeout}
@@ -1642,7 +1670,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Max Tokens</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">Max Tokens</label>
                         <Input
                           type="number"
                           value={settingsFormData.ai.maxTokens}
@@ -1654,7 +1682,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Rate Limit (per user)</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">Rate Limit (per user)</label>
                         <Input
                           type="number"
                           value={settingsFormData.ai?.rateLimits?.perUser || 0}
@@ -1664,7 +1692,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Rate Limit (per hour)</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">Rate Limit (per hour)</label>
                         <Input
                           type="number"
                           value={settingsFormData.ai?.rateLimits?.perHour || 0}
@@ -1683,7 +1711,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">JWT Expires In</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">JWT Expires In</label>
                         <Input
                           value={settingsFormData.security.jwtExpiresIn}
                           onChange={(e) => updateSettingsField('security', 'jwtExpiresIn', e.target.value)}
@@ -1692,7 +1720,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-2">Password Min Length</label>
+                        <label className="text-sm font-bold dark:text-slate-200 block mb-2">Password Min Length</label>
                         <Input
                           type="number"
                           value={settingsFormData.security.passwordMinLength}
@@ -1703,7 +1731,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       </div>
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Bcrypt Rounds</label>
+                      <label className="text-sm font-bold dark:text-slate-200 block mb-2">Bcrypt Rounds</label>
                       <Input
                         type="number"
                         value={settingsFormData.security.bcryptRounds}
@@ -1712,16 +1740,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                         placeholder="Bcrypt salt rounds"
                       />
                     </div>
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="twoFactor"
                         checked={settingsFormData.security.enableTwoFactor}
                         onChange={(e) => updateSettingsField('security', 'enableTwoFactor', e.target.checked)}
                         disabled={!settingsEditing}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="twoFactor" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="twoFactor" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Enable Two-Factor Authentication
                       </label>
                     </div>
@@ -1732,47 +1760,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                 <Card>
                   <h3 className="text-xl font-black text-slate-800 mb-6">Analytics Configuration</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="analyticsEnabled"
                         checked={settingsFormData.analytics.enabled}
                         onChange={(e) => updateSettingsField('analytics', 'enabled', e.target.checked)}
                         disabled={!settingsEditing}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="analyticsEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="analyticsEnabled" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Enable Analytics
                       </label>
                     </div>
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="trackUserActivity"
                         checked={settingsFormData.analytics.trackUserActivity}
                         onChange={(e) => updateSettingsField('analytics', 'trackUserActivity', e.target.checked)}
                         disabled={!settingsEditing || !settingsFormData.analytics.enabled}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="trackUserActivity" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="trackUserActivity" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Track User Activity
                       </label>
                     </div>
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="trackBoardUsage"
                         checked={settingsFormData.analytics.trackBoardUsage}
                         onChange={(e) => updateSettingsField('analytics', 'trackBoardUsage', e.target.checked)}
                         disabled={!settingsEditing || !settingsFormData.analytics.enabled}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="trackBoardUsage" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="trackBoardUsage" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Track Board Usage
                       </label>
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Data Retention (days)</label>
+                      <label className="text-sm font-bold dark:text-slate-200 block mb-2">Data Retention (days)</label>
                       <Input
                         type="number"
                         value={settingsFormData.analytics.retentionDays}
@@ -1786,23 +1814,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
                 {/* Email Settings */}
                 <Card>
-                  <h3 className="text-xl font-black text-slate-800 mb-6">Email Configuration</h3>
+                  <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Email Configuration</h3>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                       <input
                         type="checkbox"
                         id="emailEnabled"
                         checked={settingsFormData.email.enabled}
                         onChange={(e) => updateSettingsField('email', 'enabled', e.target.checked)}
                         disabled={!settingsEditing}
-                        className="w-5 h-5 rounded"
+                        className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
                       />
-                      <label htmlFor="emailEnabled" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      <label htmlFor="emailEnabled" className="text-sm font-bold dark:text-slate-200 cursor-pointer">
                         Enable Email Service
                       </label>
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">Email Service</label>
+                      <label className="text-sm font-bold dark:text-slate-200 block mb-2">Email Service</label>
                       <Input
                         value={settingsFormData.email.service}
                         onChange={(e) => updateSettingsField('email', 'service', e.target.value)}
@@ -1811,7 +1839,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-2">From Address</label>
+                      <label className="text-sm font-bold text-slate-700 dark:text-slate-200 block mb-2">From Address</label>
                       <Input
                         value={settingsFormData.email.from}
                         onChange={(e) => updateSettingsField('email', 'from', e.target.value)}
@@ -1836,7 +1864,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         return (
           <div className="flex flex-col items-center justify-center h-80 text-center animate-in fade-in zoom-in duration-500">
             <div className="text-8xl mb-6">🛠️</div>
-            <h3 className="text-2xl font-black text-slate-800">Module Under Construction</h3>
+            <h3 className="text-2xl font-black text-slate-800  dark:text-slate-200">Module Under Construction</h3>
             <p className="text-slate-500 font-bold max-w-sm mt-2">The management portal for this section is being tuned by the robot squad. Check back soon!</p>
             <Button variant="outline" className="mt-8">View Platform Status</Button>
           </div>
@@ -1845,11 +1873,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 text-slate-800 dark:text-slate-200">
       <div className="flex flex-col md:flex-row md:items-center justify-between px-2 gap-4">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Admin Command Center</h2>
-          <p className="text-slate-500 font-bold">
+          <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200 tracking-tight">Admin Command Center</h2>
+          <p className="text-slate-500 dark:text-slate-400 font-bold">
             Total control over the Collabry universe. 
             {totalUsers > 0 && (
               <span className="ml-2 text-indigo-600">
@@ -1868,9 +1896,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
              <ICONS.Sparkles size={18} /> 
              {usageLoading ? 'Loading...' : 'Refresh Data'}
            </Button>
-           <Button variant="primary" className="gap-2 px-6 shadow-xl shadow-indigo-100">
-             <ICONS.Plus size={18} /> New Event
-           </Button>
+         
         </div>
       </div>
 

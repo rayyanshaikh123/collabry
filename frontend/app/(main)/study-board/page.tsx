@@ -264,22 +264,22 @@ export default function StudyBoardListPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && boardToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                <ICONS.Trash size={24} className="text-red-600" />
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                <ICONS.Trash size={24} className="text-red-600 dark:text-red-300" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Delete Board?</h3>
-                <p className="text-sm text-slate-500">This action cannot be undone</p>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">Delete Board?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone</p>
               </div>
             </div>
             
-            <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-sm text-slate-700">
-                Are you sure you want to delete <strong>"{boardToDelete.title}"</strong>?
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+              <p className="text-sm text-slate-700 dark:text-slate-200">
+                Are you sure you want to delete <strong className="text-slate-800 dark:text-slate-100">"{boardToDelete.title}"</strong>?
               </p>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                 All board data, elements, and member access will be permanently removed.
               </p>
             </div>
@@ -295,7 +295,7 @@ export default function StudyBoardListPage() {
               </Button>
               <Button 
                 variant="primary" 
-                className="flex-1 bg-red-500 hover:bg-red-600"
+                className="flex-1 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white"
                 onClick={confirmDelete}
                 disabled={!!deletingBoardId}
               >

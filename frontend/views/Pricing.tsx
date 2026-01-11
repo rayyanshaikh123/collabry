@@ -298,12 +298,12 @@ const PricingView: React.FC = () => {
   const currentTier = user?.subscriptionTier || 'free';
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50 to-purple-50 py-20 px-6">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-20 px-6-m-4 md:-m-8 text-slate-800 dark:text-slate-100">
       <div className="max-w-7xl mx-auto">
         {/* Current Plan Badge */}
         {currentTier !== 'free' && (
           <div className="text-center mb-8">
-            <div className="inline-flex items-center px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-lg">
+            <div className="inline-flex items-center px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-lg dark:shadow-none dark:bg-indigo-700">
               <Crown className="w-5 h-5 mr-2" />
               <span className="font-semibold">Current Plan: {currentTier.charAt(0).toUpperCase() + currentTier.slice(1)}</span>
             </div>
@@ -312,21 +312,21 @@ const PricingView: React.FC = () => {
         
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-black text-slate-800 mb-6 font-display">
-            Choose Your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">Perfect Plan</span>
+          <h1 className="text-5xl md:text-6xl font-black text-slate-800 dark:text-white mb-6 font-display">
+            Choose Your <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-indigo-600">Perfect Plan</span>
           </h1>
-          <p className="text-xl text-slate-600 font-bold max-w-2xl mx-auto mb-8">
+          <p className="text-xl text-slate-600 dark:text-slate-300 font-bold max-w-2xl mx-auto mb-8">
             Start free and upgrade as you grow. No hidden fees, cancel anytime.
           </p>
 
           {/* Billing toggle */}
-          <div className="inline-flex items-center gap-4 bg-white rounded-full p-2 shadow-lg border-2 border-slate-200">
+          <div className="inline-flex items-center gap-4 bg-white dark:bg-slate-800 rounded-full p-2 shadow-lg dark:shadow-none border-2 border-slate-200 dark:border-slate-700">
             <button
               onClick={() => setBillingCycle('monthly')}
               className={`px-6 py-2 rounded-full font-bold transition-all ${
                 billingCycle === 'monthly'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-800'
+                  ? 'bg-indigo-600 text-white shadow-md dark:shadow-none'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
               }`}
             >
               Monthly
@@ -335,8 +335,8 @@ const PricingView: React.FC = () => {
               onClick={() => setBillingCycle('yearly')}
               className={`px-6 py-2 rounded-full font-bold transition-all relative ${
                 billingCycle === 'yearly'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-600 hover:text-slate-800'
+                  ? 'bg-indigo-600 text-white shadow-md dark:shadow-none'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
               }`}
             >
               Yearly
@@ -359,8 +359,8 @@ const PricingView: React.FC = () => {
                 key={key}
                 className={`relative rounded-3xl overflow-hidden transition-all duration-300 ${
                   'popular' in plan && plan.popular
-                    ? 'scale-105 shadow-2xl border-4 border-indigo-600'
-                    : 'shadow-lg hover:shadow-xl border-2 border-slate-200'
+                    ? 'scale-105 shadow-2xl border-4 border-indigo-600 dark:shadow-none dark:border-indigo-500'
+                    : 'shadow-lg hover:shadow-xl border-2 border-slate-200 dark:border-slate-700 dark:shadow-none dark:hover:shadow-none'
                 }`}
               >
                 {/* Popular badge */}
@@ -371,14 +371,15 @@ const PricingView: React.FC = () => {
                 )}
 
                 {/* Card content */}
-                <div className="bg-white p-8 h-full flex flex-col">
+                <div className="bg-white dark:bg-slate-800 p-8 h-full flex flex-col">
                   {/* Icon and name */}
+
                   <div className={`w-16 h-16 rounded-2xl bg-linear-to-br ${plan.color} flex items-center justify-center mb-6`}>
                     <Icon className="w-8 h-8 text-white" />
                   </div>
 
-                  <h3 className="text-2xl font-black text-slate-800 mb-2">{plan.name}</h3>
-                  <p className="text-sm text-slate-600 mb-6">{plan.description}</p>
+                  <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2">{plan.name}</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{plan.description}</p>
 
                   {/* Price */}
                   <div className="mb-6">
@@ -387,9 +388,9 @@ const PricingView: React.FC = () => {
                     ) : (
                       <>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-black text-slate-800">{plan.currency}</span>
-                          <span className="text-5xl font-black text-slate-800">{displayPrice}</span>
-                          <span className="text-slate-600 font-bold">/{plan.period}</span>
+                          <span className="text-3xl font-black text-slate-800 dark:text-white">{plan.currency}</span>
+                          <span className="text-5xl font-black text-slate-800 dark:text-white">{displayPrice}</span>
+                          <span className="text-slate-600 dark:text-slate-300 font-bold">/{plan.period}</span>
                         </div>
                         {billingCycle === 'yearly' && 'yearlyPrice' in plan && plan.yearlyPrice && 'savings' in plan && (
                           <div className="text-sm text-green-600 font-bold mt-1">{plan.savings}</div>
@@ -402,8 +403,8 @@ const PricingView: React.FC = () => {
                   <ul className="space-y-3 mb-8 grow">
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                        <span className="text-sm text-slate-700">{feature}</span>
+                        <Check className="w-5 h-5 text-green-500 dark:text-green-400 shrink-0 mt-0.5" />
+                        <span className="text-sm text-slate-700 dark:text-slate-200">{feature}</span>
                       </li>
                     ))}
                   </ul>
@@ -416,8 +417,8 @@ const PricingView: React.FC = () => {
                       isCurrentPlan
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'popular' in plan && plan.popular
-                        ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl'
-                        : 'bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl'
+                        ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl dark:shadow-none'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg hover:shadow-xl dark:shadow-none'
                     }`}
                   >
                     {isCurrentPlan ? 'Current Plan' : loading ? 'Processing...' : plan.buttonText}

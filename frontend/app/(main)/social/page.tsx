@@ -22,8 +22,8 @@ export default function SocialPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Loading...</p>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+        <p className="text-lg text-slate-600 dark:text-slate-400 font-semibold">Loading...</p>
       </div>
     );
   }
@@ -33,44 +33,52 @@ export default function SocialPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start py-10 px-4 md:px-8 bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+      <div className="w-full max-w-3xl mb-8 text-center">
+        <h1 className="text-4xl md:text-5xl font-black font-display bg-gradient-to-r from-indigo-500 via-purple-400 to-emerald-500 bg-clip-text text-transparent mb-2 drop-shadow-lg">
           Social Hub
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-lg text-slate-500 dark:text-slate-300 font-medium">
           Connect with friends, join groups, and chat in real-time
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-6">
-          <TabsTrigger value="friends" className="flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            Friends
-          </TabsTrigger>
-          <TabsTrigger value="groups" className="flex items-center gap-2">
-            <UsersRound className="w-4 h-4" />
-            Groups
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="flex items-center gap-2">
-            <MessageCircle className="w-4 h-4" />
-            Chat
-          </TabsTrigger>
-        </TabsList>
+      <div className="w-full max-w-3xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6 bg-white/80 dark:bg-slate-800/80 rounded-2xl border-2 border-slate-200 dark:border-slate-700 shadow-inner backdrop-blur-md">
+            <TabsTrigger value="friends" className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:dark:bg-indigo-600 rounded-xl transition-all">
+              <Users className="w-4 h-4" />
+              Friends
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:dark:bg-indigo-600 rounded-xl transition-all">
+              <UsersRound className="w-4 h-4" />
+              Groups
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-200 data-[state=active]:bg-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:dark:bg-indigo-600 rounded-xl transition-all">
+              <MessageCircle className="w-4 h-4" />
+              Chat
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="friends">
-          <FriendsTab />
-        </TabsContent>
+          <TabsContent value="friends">
+            <div className="rounded-2xl bg-white/90 dark:bg-slate-900/80 border-2 border-slate-200 dark:border-slate-700 shadow-lg p-6 mb-6">
+              <FriendsTab />
+            </div>
+          </TabsContent>
 
-        <TabsContent value="groups">
-          <GroupsTab />
-        </TabsContent>
+          <TabsContent value="groups">
+            <div className="rounded-2xl bg-white/90 dark:bg-slate-900/80 border-2 border-slate-200 dark:border-slate-700 shadow-lg p-6 mb-6">
+              <GroupsTab />
+            </div>
+          </TabsContent>
 
-        <TabsContent value="chat">
-          <ChatTab />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="chat">
+            <div className="rounded-2xl bg-white/90 dark:bg-slate-900/80 border-2 border-slate-200 dark:border-slate-700 shadow-lg p-6 mb-6">
+              <ChatTab />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

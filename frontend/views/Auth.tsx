@@ -173,22 +173,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
             </Button>
           </form>
 
-          <div className="mt-8 flex items-center gap-4 text-slate-300 dark:text-slate-600">
-            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">Or continue with</span>
-            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-8">
-            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-              <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="G" />
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Google</span>
-            </button>
-            <button className="flex items-center justify-center gap-3 py-3 border border-slate-200 dark:border-slate-700 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12c0-5.523-4.477-10-10-10z"/></svg>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Facebook</span>
-            </button>
-          </div>
+          {/* Provider logins removed — local email/password only */}
 
           <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-10">
             {isRegister ? 'Already have an account?' : 'Don\'t have an account?'} 
