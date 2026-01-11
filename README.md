@@ -90,38 +90,32 @@ Recommended Image Hosting Options:
 -->
 
 ### 🖥️ **Dashboard - Your Study Command Center**
-<!-- Add your screenshot URL here -->
-<!-- ![Dashboard Screenshot](https://your-image-url.com/dashboard.png) -->
 <div align="center">
-  <img src="https://via.placeholder.com/900x500/4F46E5/FFFFFF?text=Dashboard+Screenshot+Coming+Soon" alt="Dashboard" width="800">
+  <img src="https://i.ibb.co/LD1k5Y0H/Screenshot-2026-01-11-105258.png" alt="Dashboard" width="800">
   <p><i>Track XP, streaks, tasks, and study analytics in one place</i></p>
 </div>
 
 ### 📓 **Smart Notebook - AI That Understands YOUR Materials**
-<!-- ![Notebook Screenshot](https://your-image-url.com/notebook.png) -->
 <div align="center">
-  <img src="https://via.placeholder.com/900x500/6366F1/FFFFFF?text=Smart+Notebook+Screenshot" alt="Smart Notebook" width="800">
+  <img src="https://i.ibb.co/fdHykbZM/Screenshot-2026-01-11-105419.png" alt="Smart Notebook" width="800">
   <p><i>Upload PDFs → Ask questions → Generate quizzes, mindmaps, flashcards</i></p>
 </div>
 
 ### 🎨 **Study Board - Real-Time Collaboration**
-<!-- ![Study Board Screenshot](https://your-image-url.com/board.png) -->
 <div align="center">
-  <img src="https://via.placeholder.com/900x500/8B5CF6/FFFFFF?text=Collaborative+Board+Screenshot" alt="Study Board" width="800">
+  <img src="https://i.ibb.co/mFJwXLMy/Screenshot-2026-01-11-105804.png" alt="Study Board" width="800">
   <p><i>Infinite whiteboard with live cursors, shapes, and group chat</i></p>
 </div>
 
 ### 🎮 **Gamification - Motivation That Works**
-<!-- ![Gamification Screenshot](https://your-image-url.com/gamification.png) -->
 <div align="center">
-  <img src="https://via.placeholder.com/900x500/EC4899/FFFFFF?text=Gamification+Screenshot" alt="Gamification" width="800">
+  <img src="https://i.ibb.co/ksmCMd4C/Screenshot-2026-01-11-110409.png" alt="Gamification" width="800">
   <p><i>12+ badges, XP system, streaks, leaderboards, and "You vs You" comparison</i></p>
 </div>
 
 ### 📅 **AI Study Planner - From Chaos to Structure**
-<!-- ![Planner Screenshot](https://your-image-url.com/planner.png) -->
 <div align="center">
-  <img src="https://via.placeholder.com/900x500/10B981/FFFFFF?text=Study+Planner+Screenshot" alt="Study Planner" width="800">
+  <img src="https://i.ibb.co/8g9mfQdc/Screenshot-2026-01-11-113223.png" alt="AI Planner" width="800">
   <p><i>AI generates daily tasks, tracks progress, adapts to your schedule</i></p>
 </div>
 
@@ -915,15 +909,6 @@ python test_memory_mongodb.py    # Memory tests
 
 ---
 
-### Demo Images
-
-[url=https://ibb.co/5XLMFG1w][img]https://i.ibb.co/LD1k5Y0H/Screenshot-2026-01-11-105258.png[/img][/url]
-[url=https://ibb.co/HTqbt0R7][img]https://i.ibb.co/fdHykbZM/Screenshot-2026-01-11-105419.png[/img][/url]
-[url=https://ibb.co/yB01Ywbk][img]https://i.ibb.co/mFJwXLMy/Screenshot-2026-01-11-105804.png[/img][/url]
-[url=https://ibb.co/sdWYtBKY][img]https://i.ibb.co/ksmCMd4C/Screenshot-2026-01-11-110409.png[/img][/url]
-[url=https://ibb.co/RTcgsJBy][img]https://i.ibb.co/8g9mfQdc/Screenshot-2026-01-11-113223.png[/img][/url]
----
-
 ## 🚢 Deployment Guide
 
 ### Option 1: Docker Compose (Recommended)
@@ -1159,61 +1144,28 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 👨‍💻 Team
-
-Built by **students, for students** 🎓
+## 👨‍💻 Authors
 
 - **Aditya Makwana** - *Full Stack Developer + AI Engineer*
-- **Nirmal Darekar** - *Full Stack Developer*
+- **Nirmal Darekar** - *Full Stack Developer *
 - **Rayyan Shaikh** - *Full Stack Developer + AI Engineer*
-
 ---
 
 ## 🙏 Acknowledgments
 
-### Technologies
-- [Next.js](https://nextjs.org/) - React framework for production
-- [Google Gemini](https://ai.google.dev/) - Large language model
-- [LangChain](https://langchain.com/) - AI orchestration framework
-- [FAISS](https://github.com/facebookresearch/faiss) - Vector similarity search
-- [Socket.IO](https://socket.io/) - Real-time bidirectional communication
-- [tldraw](https://tldraw.com/) - Infinite collaborative canvas
-- [MongoDB](https://mongodb.com/) - NoSQL database
-- [Razorpay](https://razorpay.com/) - Payment gateway
-- [TailwindCSS](https://tailwindcss.com/) - Utility-first CSS
-
-### Inspiration
-- [Notion](https://notion.so/) - All-in-one workspace
-- [Figma](https://figma.com/) - Real-time collaboration
-- [Duolingo](https://duolingo.com/) - Gamification done right
-
----
-
-## 📚 Additional Resources
-
-- 📖 **[API Documentation](./docs/API.md)** - Complete API reference
-- 🎨 **[How to Add Images](./docs/HOW_TO_ADD_IMAGES.md)** - Guide for adding screenshots
-- 📋 **[Product Requirements](./PRD_CURRENT_STATE.md)** - Detailed product documentation
-- 🚀 **[Deployment Guide](./DEPLOYMENT_GUIDE.md)** - How to deploy Collabry
+- [Next.js](https://nextjs.org/) - React Framework
+- [Ollama](https://ollama.ai/) - Local LLM Runtime
+- [LangChain](https://langchain.com/) - AI Orchestration
+- [tldraw](https://tldraw.com/) - Collaborative Whiteboard
+- [Razorpay](https://razorpay.com/) - Payment Gateway
+- [Socket.IO](https://socket.io/) - Real-time Communication
 
 ---
 
 <div align="center">
 
-## 🌟 Star This Repo If You Find It Helpful!
+**⭐ Star this repo if you find it helpful!**
 
-### Made with ❤️ for students everywhere
-
-**Collabry** - Stop juggling 10 apps. Start learning in one intelligent workspace.
-
-### 🌐 **[Try It Live →](https://collabry-ai.vercel.app/)**
-
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/collabry?style=social)](https://github.com/yourusername/collabry)
-[![GitHub forks](https://img.shields.io/github/forks/yourusername/collabry?style=social)](https://github.com/yourusername/collabry)
-[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-Visit_Now-brightgreen?style=for-the-badge)](https://collabry-ai.vercel.app/)
-
----
-
-**Building the future of learning, one commit at a time.** 🚀
+Made with ❤️ for students everywhere
 
 </div>
