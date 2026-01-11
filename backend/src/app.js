@@ -29,6 +29,9 @@ const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
 
+// CORS must be FIRST to handle preflight OPTIONS requests
+app.use(cors(config.cors));
+
 // Security: Helmet middleware for security headers
 app.use(helmet({
   contentSecurityPolicy: {
@@ -51,7 +54,7 @@ app.use(helmet({
 // Security: Rate limiting for all routes
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // More lenient in dev
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -60,7 +63,7 @@ const globalLimiter = rateLimit({
 // Security: Stricter rate limiting for authentication routes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Much more lenient in dev
   skipSuccessfulRequests: true, // Don't count successful requests
   message: 'Too many login attempts, please try again after 15 minutes.',
 });
@@ -73,7 +76,6 @@ app.use('/api/', globalLimiter);
 app.use('/api/webhooks', webhookRoutes);
 
 // Middleware
-app.use(cors(config.cors));
 app.use(express.json({ limit: '50mb' })); // Increase limit for large file uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));

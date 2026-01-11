@@ -10,6 +10,7 @@ Usage:
 """
 import uvicorn
 import argparse
+import os
 from pathlib import Path
 import sys
 import platform
@@ -88,8 +89,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Port to bind (default: 8000)"
+        default=int(os.environ.get("PORT", 8000)),
+        help="Port to bind (default: 8000 or PORT env var)"
     )
     parser.add_argument(
         "--reload",

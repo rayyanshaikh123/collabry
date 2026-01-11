@@ -21,7 +21,23 @@ else:
     print(f"   Copy .env.example to .env for local configuration")
 
 CONFIG = {
-    # Ollama configuration (ENV-based for production flexibility)
+    # ==============================================================================
+    # GOOGLE GEMINI CONFIGURATION (Primary AI Engine)
+    # ==============================================================================
+    # Google AI Studio API key (get from: https://aistudio.google.com/app/apikey)
+    "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
+    
+    # Gemini model selection
+    # Options: gemini-2.0-flash-lite (fast, stable), gemini-1.5-pro (more capable)
+    "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite"),
+    
+    # Gemini generation parameters
+    "gemini_max_tokens": int(os.environ.get("GEMINI_MAX_TOKENS", "8192")),
+    "gemini_timeout": int(os.environ.get("GEMINI_TIMEOUT", "120")),
+    
+    # ==============================================================================
+    # LEGACY OLLAMA CONFIGURATION (Deprecated - kept for fallback)
+    # ==============================================================================
     # Model name to use (change to 'mistral' or 'llama3.1' as installed)
     "llm_model": os.environ.get("OLLAMA_MODEL", os.environ.get("COLLABRY_LLM_MODEL", "llama3.1")),
 
@@ -48,7 +64,7 @@ CONFIG = {
     # CORS configuration (comma-separated origins)
     "cors_origins": os.environ.get(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:5000,http://127.0.0.1:3000,http://127.0.0.1:5000"
+        "http://localhost:3000,https://colab-back.onrender.com,http://127.0.0.1:3000,http://127.0.0.1:5000"
     ).split(","),
 
     # External API keys (optional, loaded from ENV only for security)
@@ -60,7 +76,7 @@ CONFIG = {
 
     # Temperature for LLM responses
     "temperature": float(os.environ.get("COLLABRY_TEMPERATURE", "0.2")),
-    # Embedding model name (sentence-transformers)
+    # Embedding model name (sentence-transformers) - PRESERVED for FAISS
     "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
 
     # FAISS index path prefix (two files will be created: {prefix}.index and {prefix}.meta.json)

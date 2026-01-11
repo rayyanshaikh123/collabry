@@ -101,7 +101,7 @@ const ProfileView: React.FC = () => {
       }
       
       if (token) {
-        const subResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/subscriptions/current`, {
+        const subResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://colab-back.onrender.com/api'}/subscriptions/current`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         const subData = await subResponse.json();

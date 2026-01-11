@@ -69,7 +69,7 @@ export default function GroupChat({
   // Load messages function with useCallback to prevent unnecessary re-renders
   const loadMessages = useCallback(async () => {
     try {
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/chat/messages?conversationType=group&groupId=${groupId}&limit=100`;
+      const apiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://colab-back.onrender.com/api'}/chat/messages?conversationType=group&groupId=${groupId}&limit=100`;
       
       console.log('📥 Loading messages from:', apiUrl);
       
