@@ -194,7 +194,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
       const url = new URL(`/ai/sessions/${activeSessionId}/chat/stream`, AI_ENGINE_URL);
       
       // Use fetch with ReadableStream for SSE
@@ -328,7 +328,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
       const url = new URL('/ai/summarize/stream', AI_ENGINE_URL);
       console.log('📝 [streamSummarize] Calling URL:', url.toString());
       
@@ -452,7 +452,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
       let url: string;
       let requestBody: any;
       let headers: any = {
