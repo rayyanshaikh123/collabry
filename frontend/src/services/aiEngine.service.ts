@@ -12,7 +12,7 @@ class AIEngineService {
 
   constructor() {
     this.client = axios.create({
-      baseURL: AI_ENGINE_URL,
+      baseURL: AI_ENGINE_URL.replace(/\/+$/, ''), // Remove trailing slashes
       timeout: 60000, // 60 seconds for AI operations
       headers: {
         'Content-Type': 'application/json',

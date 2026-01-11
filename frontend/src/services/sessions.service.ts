@@ -36,7 +36,7 @@ class SessionsService {
 
   constructor() {
     this.client = axios.create({
-      baseURL: AI_ENGINE_URL,
+      baseURL: AI_ENGINE_URL.replace(/\/+$/, ''), // Remove trailing slashes
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',

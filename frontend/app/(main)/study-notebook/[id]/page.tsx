@@ -23,7 +23,7 @@ import { extractMindMapFromMarkdown } from '../../../../lib/mindmapParser';
 import axios from 'axios';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '../../../../src/lib/alert';
 
-const AI_ENGINE_URL = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
+const AI_ENGINE_URL = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
 export default function StudyNotebookPage() {
   const params = useParams();
