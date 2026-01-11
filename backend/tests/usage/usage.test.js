@@ -75,12 +75,7 @@ describe('AI Usage & Quota API', () => {
     });
 
     it('should reset daily quotas', () => {
-      interface UsageData {
-        dailyCount: number;
-        lastResetDate: Date;
-      }
-
-      const shouldResetDaily = (usage: UsageData, now: Date): boolean => {
+      const shouldResetDaily = (usage, now) => {
         const lastReset = new Date(usage.lastResetDate);
         return (
           lastReset.getFullYear() !== now.getFullYear() ||
@@ -92,7 +87,7 @@ describe('AI Usage & Quota API', () => {
       const yesterday = new Date('2026-01-10');
       const today = new Date('2026-01-11');
 
-      const usage: UsageData = {
+      const usage = {
         dailyCount: 10,
         lastResetDate: yesterday,
       };
@@ -104,7 +99,7 @@ describe('AI Usage & Quota API', () => {
 
   describe('Subscription Tier Features', () => {
     it('should map subscription tier to features correctly', () => {
-      const TIER_FEATURES: Record<string, Record<string, number | boolean>> = {
+      const TIER_FEATURES = {
         free: {
           ai_questions_per_day: 10,
           max_boards: 1,
@@ -136,11 +131,7 @@ describe('AI Usage & Quota API', () => {
     });
 
     it('should check feature access correctly', () => {
-      const checkFeatureAccess = (
-        userTier: string,
-        feature: string,
-        tierFeatures: Record<string, Record<string, unknown>>
-      ): boolean => {
+      const checkFeatureAccess = (userTier, feature, tierFeatures) => {
         const userFeatures = tierFeatures[userTier];
         if (!userFeatures) return false;
         const featureValue = userFeatures[feature];
@@ -174,18 +165,14 @@ describe('AI Usage & Quota API', () => {
     });
 
     it('should track different usage types', () => {
-      interface UsageTracker {
-        [key: string]: number;
-      }
-
-      const usage: UsageTracker = {
+      const usage = {
         ai_chat: 0,
         ai_quiz: 0,
         ai_summary: 0,
         ai_mindmap: 0,
       };
 
-      const trackUsage = (type: string, tracker: UsageTracker) => {
+      const trackUsage = (type, tracker) => {
         if (type in tracker) {
           tracker[type] += 1;
         }

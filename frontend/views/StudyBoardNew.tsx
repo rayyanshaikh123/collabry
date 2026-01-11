@@ -150,6 +150,8 @@ const CollaborativeBoard: React.FC = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const isApplyingRemoteChange = useRef(false);
+  const isDrawingRef = useRef(false);
+  const drawingShapeIdRef = useRef<string | null>(null);
   const [editor, setEditor] = useState<TLEditor | null>(null);
   const [pendingElements, setPendingElements] = useState<PendingElement[]>([]);
   const animationFrameRef = useRef<number | null>(null);
@@ -160,13 +162,27 @@ const CollaborativeBoard: React.FC = () => {
     setEditor(editorInstance);
   }, []);
 
-  // Debounced update element to batch rapid changes
+  // Debounced update element to batch rapid changes (not for draw shapes)
   const debouncedUpdateElement = useMemo(
     () => debounce((boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
       socketClient.updateElement(boardId, elementId, changeSet);
     }, 100),
     []
   );
+
+  // Throttled update for draw shapes - faster updates for real-time drawing
+  const throttledDrawUpdate = useMemo(() => {
+    let lastCall = 0;
+    const throttleMs = 50; // Update every 50ms for smoother drawing
+    
+    return (boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
+      const now = Date.now();
+      if (now - lastCall >= throttleMs) {
+        lastCall = now;
+        socketClient.updateElement(boardId, elementId, changeSet);
+      }
+    };
+  }, []);
 
   // Sync tldraw store changes to other users via editor
   useEffect(() => {
@@ -193,6 +209,28 @@ const CollaborativeBoard: React.FC = () => {
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            // Track if this is a draw/freehand shape being created
+            if (record.type === 'draw') {
+              isDrawingRef.current = true;
+              drawingShapeIdRef.current = record.id;
+              // Broadcast draw shape immediately so others can see it
+              socketClient.createElement(boardId, {
+                id: record.id,
+                type: record.type,
+                typeName: record.typeName || 'shape',
+                x: record.x || 0,
+                y: record.y || 0,
+                props: record.props || {},
+                parentId: record.parentId || 'page:page',
+                index: record.index || 'a1',
+                rotation: record.rotation || 0,
+                isLocked: record.isLocked || false,
+                opacity: record.opacity || 1,
+                meta: record.meta || {},
+              });
+              return;
+            }
+            
             socketClient.createElement(boardId, {
               id: record.id,
               type: record.type,
@@ -215,6 +253,35 @@ const CollaborativeBoard: React.FC = () => {
       if (updated) {
         Object.values(updated).forEach(([from, to]: any) => {
           if (to?.typeName === 'shape') {
+            // For draw shapes, send complete shape data for real-time drawing
+            if (to.type === 'draw') {
+              // Send the full shape with all segments, not just changes
+              const fullShapeData: any = {
+                x: to.x || 0,
+                y: to.y || 0,
+                rotation: to.rotation || 0,
+                opacity: to.opacity || 1,
+                isLocked: to.isLocked || false,
+                props: to.props || {}, // Complete props with all segments
+                type: to.type,
+                typeName: to.typeName || 'shape',
+                parentId: to.parentId || 'page:page',
+                index: to.index || 'a1',
+                meta: to.meta || {}
+              };
+              
+              // Use throttled update for draw shapes (faster than debounce)
+              throttledDrawUpdate(boardId, to.id, fullShapeData);
+              
+              // Check if the draw is complete (isComplete flag)
+              const toProps = to.props as { isComplete?: boolean };
+              if (toProps?.isComplete) {
+                isDrawingRef.current = false;
+                drawingShapeIdRef.current = null;
+              }
+              return;
+            }
+            
             const changeSet: any = {};
             if (from.x !== to.x) changeSet.x = to.x;
             if (from.y !== to.y) changeSet.y = to.y;
@@ -245,7 +312,28 @@ const CollaborativeBoard: React.FC = () => {
     const dispose = editor.store.listen(handleStoreChange);
 
     return () => dispose();
-  }, [editor, boardId, isConnected, debouncedUpdateElement]);
+  }, [editor, boardId, isConnected, debouncedUpdateElement, throttledDrawUpdate]);
+
+  // Handle pointer up to finalize drawing
+  useEffect(() => {
+    if (!editor || !boardId || !isConnected) return;
+
+    const handlePointerUp = () => {
+      // When pointer is released, mark drawing as complete
+      if (isDrawingRef.current && drawingShapeIdRef.current) {
+        isDrawingRef.current = false;
+        drawingShapeIdRef.current = null;
+      }
+    };
+
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('mouseup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('mouseup', handlePointerUp);
+    };
+  }, [editor, boardId, isConnected]);
 
   // Memoized socket event handlers
   const handleElementCreated = useCallback((data: any) => {
@@ -279,17 +367,19 @@ const CollaborativeBoard: React.FC = () => {
     }
   }, [editor]);
 
-  const handleElementUpdated = useCallback((data: ElementData) => {
+  const handleElementUpdated = useCallback((data: any) => {
     if (!editor) return;
     
     isApplyingRemoteChange.current = true;
     
     try {
       const existing = editor.store.get(data.elementId);
-      if (existing && data.changeSet) {
+      const updates = data.changes || data.changeSet; // Support both formats
+      
+      if (existing && updates) {
         editor.store.put([{
           ...existing,
-          ...data.changeSet,
+          ...updates,
         }]);
       }
     } catch (error) {

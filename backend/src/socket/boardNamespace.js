@@ -341,12 +341,35 @@ module.exports = (io) => {
           });
           console.log(`[Board ${boardId}] Broadcasted element:created to room`);
         } else {
-          socket.to(boardId).emit('element:updated', {
+          // Get the full element for broadcasting
+          const elementObj = element.toObject ? element.toObject() : element;
+          
+          // For draw shapes, send complete shape data instead of just changes
+          const broadcastData = elementObj.type === 'draw' ? {
+            elementId,
+            changes: {
+              x: elementObj.x,
+              y: elementObj.y,
+              rotation: elementObj.rotation,
+              opacity: elementObj.opacity,
+              isLocked: elementObj.isLocked,
+              props: elementObj.props, // Complete props with all segments
+              type: elementObj.type,
+              typeName: elementObj.typeName || 'shape',
+              parentId: elementObj.parentId,
+              index: elementObj.index,
+              meta: elementObj.meta
+            },
+            userId: socket.userId,
+            timestamp: new Date()
+          } : {
             elementId,
             changes,
             userId: socket.userId,
             timestamp: new Date()
-          });
+          };
+          
+          socket.to(boardId).emit('element:updated', broadcastData);
           console.log(`[Board ${boardId}] Broadcasted element:updated to room`);
         }
 
