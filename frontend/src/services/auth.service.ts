@@ -31,10 +31,22 @@ export const authService = {
         }
       };
       
-      // Store tokens and user
-      localStorage.setItem('accessToken', authResponse.tokens.accessToken);
-      localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
-      localStorage.setItem('user', JSON.stringify(authResponse.user));
+      // Persist into Zustand `auth-storage` so the app's auth store is the single source of truth.
+      try {
+        const raw = localStorage.getItem('auth-storage');
+        const parsed = raw ? JSON.parse(raw) : { state: {} };
+        if (!parsed.state) parsed.state = {};
+        parsed.state.user = authResponse.user;
+        parsed.state.accessToken = authResponse.tokens.accessToken;
+        parsed.state.refreshToken = authResponse.tokens.refreshToken;
+        parsed.state.isAuthenticated = true;
+        localStorage.setItem('auth-storage', JSON.stringify(parsed));
+      } catch (e) {
+        console.error('[authService] Failed to persist to auth-storage, falling back to flat keys', e);
+        localStorage.setItem('accessToken', authResponse.tokens.accessToken);
+        localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
+        localStorage.setItem('user', JSON.stringify(authResponse.user));
+      }
       return authResponse;
     }
     
@@ -59,10 +71,22 @@ export const authService = {
         }
       };
       
-      // Store tokens and user
-      localStorage.setItem('accessToken', authResponse.tokens.accessToken);
-      localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
-      localStorage.setItem('user', JSON.stringify(authResponse.user));
+      // Persist into Zustand `auth-storage` so the app's auth store is the single source of truth.
+      try {
+        const raw = localStorage.getItem('auth-storage');
+        const parsed = raw ? JSON.parse(raw) : { state: {} };
+        if (!parsed.state) parsed.state = {};
+        parsed.state.user = authResponse.user;
+        parsed.state.accessToken = authResponse.tokens.accessToken;
+        parsed.state.refreshToken = authResponse.tokens.refreshToken;
+        parsed.state.isAuthenticated = true;
+        localStorage.setItem('auth-storage', JSON.stringify(parsed));
+      } catch (e) {
+        console.error('[authService] Failed to persist to auth-storage, falling back to flat keys', e);
+        localStorage.setItem('accessToken', authResponse.tokens.accessToken);
+        localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
+        localStorage.setItem('user', JSON.stringify(authResponse.user));
+      }
       return authResponse;
     }
     
@@ -80,7 +104,12 @@ export const authService = {
       // Silently handle logout errors - still clear local storage
       console.log('Backend logout skipped (not connected)');
     } finally {
-      // Clear local storage regardless of backend response
+      // Clear persisted auth storage and flat keys regardless of backend response
+      try {
+        localStorage.removeItem('auth-storage');
+      } catch (e) {
+        console.error('[authService] Failed to remove auth-storage:', e);
+      }
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
@@ -96,8 +125,28 @@ export const authService = {
     });
     
     if (response.success && response.data) {
-      localStorage.setItem('accessToken', response.data.accessToken);
-      localStorage.setItem('refreshToken', response.data.refreshToken);
+      // Update persisted zustand storage (`auth-storage`) if present so the rest of
+      // the app reads the rotated tokens from the same source as the auth store.
+      try {
+        const raw = localStorage.getItem('auth-storage');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (!parsed.state) parsed.state = {};
+          parsed.state.accessToken = response.data.accessToken;
+          if (response.data.refreshToken) parsed.state.refreshToken = response.data.refreshToken;
+          localStorage.setItem('auth-storage', JSON.stringify(parsed));
+        } else {
+          // Fallback to flat keys for backwards compatibility
+          localStorage.setItem('accessToken', response.data.accessToken);
+          if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+        }
+      } catch (e) {
+        console.error('[authService] Failed to persist refreshed tokens to auth-storage:', e);
+        // still write flat keys as fallback
+        localStorage.setItem('accessToken', response.data.accessToken);
+        if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
+      }
+
       return response.data.accessToken;
     }
     

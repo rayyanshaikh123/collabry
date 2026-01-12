@@ -1,13 +1,13 @@
 # core/local_llm.py
 """
-COLLABRY AI ENGINE - OLLAMA-POWERED LLM
+COLLABRY AI ENGINE - HUGGING FACE LLM
 
-Primary LLM using Ollama for local AI processing.
+Primary LLM using Hugging Face Inference API for cloud AI processing.
 
 ARCHITECTURE:
-- LocalLLM → Ollama API (localhost:11434 or configured host)
-- Configurable model (llama3.1, mistral, etc.)
-- Local processing, no external API dependencies
+- LocalLLM → Hugging Face Inference API
+- Configurable model (Mistral, GPT-2, etc.)
+- Cloud processing via HF API
 
 BACKWARD COMPATIBILITY:
 - LocalLLM class maintains same interface
@@ -16,10 +16,10 @@ BACKWARD COMPATIBILITY:
 - LangChain compatibility maintained
 
 BENEFITS:
-- Full control over AI model
-- No API rate limits or costs
-- Privacy - all processing local
-- Customizable models and parameters
+- Access to state-of-the-art open-source models
+- No local hardware requirements
+- Scalable and reliable
+- Easy model switching
 """
 
 import json
@@ -29,8 +29,8 @@ from typing import Any, List, Mapping, Optional
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Import Ollama service
-from core.ollama_service import OllamaService, create_ollama_service
+# Import Hugging Face service (cloud LLM)
+from core.huggingface_service import HuggingFaceService, create_hf_service
 
 # LangChain compatibility
 from langchain_core.language_models.llms import LLM
@@ -38,19 +38,20 @@ from langchain_core.language_models.llms import LLM
 
 class LocalLLM(LLM):
     """
-    Ollama-powered LLM wrapper.
+    Hugging Face-powered LLM wrapper.
 
-    REPLACES: Old Gemini-based LocalLLM
+    REPLACES: Old Ollama-based LocalLLM (now uses Hugging Face service)
 
-    Uses Ollama as the primary LLM for local AI processing.
+    Uses Hugging Face Inference API as the primary LLM for cloud AI processing.
 
     Features:
-    - Primary: Local Ollama API
+    - Primary: Cloud Hugging Face API
     - Streaming support
     - JSON mode for structured outputs
-    - LangChain compatibility
+    - LangChain compatible
+    - Configurable models (Mistral, GPT-2, etc.)
     """
-    ollama_service: Any  # OllamaService instance
+    hf_service: Any  # Hugging Face service instance
     model_name: str
     temperature: float
     timeout: int = 180
@@ -63,11 +64,11 @@ class LocalLLM(LLM):
 
     @property
     def _llm_type(self) -> str:
-        return "ollama"
+        return "huggingface"
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
         """
-        Generate response from Ollama.
+        Generate response from Hugging Face.
 
         Args:
             prompt: Input prompt
@@ -78,20 +79,20 @@ class LocalLLM(LLM):
             Generated text response
         """
         try:
-            response = self.ollama_service.generate(
+            response = self.hf_service.generate(
                 prompt=prompt,
                 temperature=self.temperature,
                 max_tokens=kwargs.get('max_tokens')
             )
 
             self.last_response = response
-            logger.info("[Ollama] Generation successful")
+            logger.info("[HuggingFace] Generation successful")
             return self.last_response
 
         except Exception as e:
-            logger.error(f"[Ollama] Generation failed: {e}")
+            logger.error(f"[HuggingFace] Generation failed: {e}")
             # Return error in JSON format (for agent compatibility)
-            return json.dumps({"tool": None, "answer": f"LLM error: Ollama failed - {e}"})
+            return json.dumps({"tool": None, "answer": f"LLM error: HuggingFace failed - {e}"})
 
     def _stream(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any):
         """
@@ -107,7 +108,7 @@ class LocalLLM(LLM):
         """
         try:
             full_response = ""
-            for chunk in self.ollama_service.generate_stream(
+            for chunk in self.hf_service.generate_stream(
                 prompt=prompt,
                 temperature=self.temperature,
                 max_tokens=kwargs.get('max_tokens')
@@ -116,12 +117,12 @@ class LocalLLM(LLM):
                 yield chunk
 
             self.last_response = full_response
-            logger.info("[Ollama] Streaming successful")
+            logger.info("[HuggingFace] Streaming successful")
             return
 
         except Exception as e:
-            logger.error(f"[Ollama] Streaming failed: {e}")
-            yield f"[Error] Ollama streaming failed: {e}"
+            logger.error(f"[HuggingFace] Streaming failed: {e}")
+            yield f"[Error] HuggingFace streaming failed: {e}"
 
     @property
     def _identifying_params(self) -> Mapping[str, Any]:
@@ -129,7 +130,7 @@ class LocalLLM(LLM):
         return {
             "model_name": self.model_name,
             "temperature": self.temperature,
-            "llm_type": "ollama"
+            "llm_type": "huggingface"
         }
 
     # Additional helper methods for Ollama-specific features
@@ -166,46 +167,45 @@ class LocalLLM(LLM):
                 return json.loads(response.strip())
             except json.JSONDecodeError:
                 # If JSON parsing fails, return the raw response wrapped in error format
-                logger.warning(f"[Ollama] Failed to parse structured response as JSON: {response[:200]}...")
+                logger.warning(f"[HuggingFace] Failed to parse structured response as JSON: {response[:200]}...")
                 return {"error": "Failed to parse response as JSON", "raw_response": response}
 
         except Exception as e:
-            logger.error(f"[Ollama] Structured generation failed: {e}")
-            return {"error": f"Ollama structured generation failed: {e}"}
+            logger.error(f"[HuggingFace] Structured generation failed: {e}")
+            return {"error": f"HuggingFace structured generation failed: {e}"}
 
 
 def create_llm(config: dict) -> LocalLLM:
     """
     Factory function to create LocalLLM instance.
 
-    Primary: Local Ollama API
+    Primary: Hugging Face Inference API
 
     Supports ENV-based configuration:
-    - OLLAMA_BASE_URL: Ollama API endpoint (default: http://localhost:11434)
-    - OLLAMA_MODEL: Ollama model name (default: llama3.1)
-    - OLLAMA_TIMEOUT: Request timeout in seconds (default: 180)
+    - HUGGINGFACE_MODEL: HF model name (default: mistralai/Mistral-7B-Instruct-v0.1)
+    - HUGGINGFACE_API_KEY: HF API key
+    - LLM_TIMEOUT: Request timeout in seconds (default: 180)
 
     Args:
         config: Configuration dictionary
 
     Returns:
-        LocalLLM instance with Ollama primary
+        LocalLLM instance with Hugging Face primary
     """
-    # Create Ollama service
-    ollama_service = create_ollama_service(
-        base_url=config.get("ollama_host", "http://localhost:11434"),
-        model=config.get("llm_model", "llama3.1"),
-        timeout=config.get("ollama_timeout", 180)
+    # Create Hugging Face service (cloud LLM)
+    hf_service = create_hf_service(
+        model=config.get("llm_model"),
+        timeout=config.get("llm_timeout", 180)
     )
 
-    # Create LocalLLM wrapper
+    # Create LocalLLM wrapper backed by HuggingFaceService
     llm = LocalLLM(
-        ollama_service=ollama_service,
-        model_name=config.get("llm_model", "llama3.1"),
+        hf_service=hf_service,
+        model_name=config.get("llm_model", "openai/gpt-oss-120b:groq"),
         temperature=config.get("temperature", 0.2),
-        timeout=config.get("ollama_timeout", 180),
-        max_retries=config.get("ollama_max_retries", 3)
+        timeout=config.get("llm_timeout", 180),
+        max_retries=config.get("llm_max_retries", 3)
     )
 
-    logger.info(f"✓ [Ollama] Initialized LLM: model={llm.model_name}, temperature={llm.temperature}")
+    logger.info(f"✓ [HuggingFace] Initialized LLM: model={llm.model_name}, temperature={llm.temperature}")
     return llm

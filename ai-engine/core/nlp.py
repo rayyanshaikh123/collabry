@@ -248,64 +248,6 @@ def analyze(text: str) -> Dict[str, Any]:
         }
 
 
-def _analyze_with_gemini(text: str) -> Dict[str, Any]:
-    """
-    Perform NLP analysis using Gemini.
-    
-    Args:
-        text: Input text
-        
-    Returns:
-        Analysis dictionary
-    """
-    gemini = _get_gemini_service()
-    intent_clf = _get_intent_classifier()
-    
-    # -------------------------
-    # 1) SPELL CORRECTION (optional)
-    # -------------------------
-    # For now, skip spell correction to reduce API calls
-    # Can be enabled later if needed
-    corrected = text
-    
-    # -------------------------
-    # 2) INTENT CLASSIFICATION
-    # -------------------------
-    try:
-        intent_result = intent_clf.classify(corrected)
-        
-        # Handle both dict and object responses
-        if isinstance(intent_result, dict):
-            intent = intent_result.get("intent", "unknown")
-            confidence = intent_result.get("confidence", 0.8)
-        else:
-            # IntentResult object
-            intent = intent_result.intent
-            confidence = intent_result.confidence
-        
-        # Convert confidence to probability format
-        proba = {intent: confidence}
-        
-    except Exception as e:
-        logger.error(f"Intent classification failed: {e}")
-        intent = "unknown"
-        proba = {}
-    
-    # -------------------------
-    # 3) NAMED ENTITY RECOGNITION
-    # -------------------------
-    try:
-        entities_dict = gemini.extract_entities(corrected)
-        
-        # Convert dict format {"LABEL": [entities]} to list of tuples [(text, label)]
-        entities = []
-        for label, texts in entities_dict.items():
-            for text in texts:
-                entities.append((text, label))
-    except Exception as e:
-        logger.error(f"Entity extraction failed: {e}")
-        entities = []
-    
 # ---------------------------------------------------------------
 # ADDITIONAL HELPER FUNCTIONS
 # ---------------------------------------------------------------
@@ -335,34 +277,10 @@ def extract_entities(text: str, entity_types: Optional[List[str]] = None) -> Lis
         return []
 
 
-def classify_intent(text: str) -> str:
-    """
-    Classify the intent of the input text.
-
-    Args:
-        text: Input text
-
-    Returns:
-        Intent category string
-    """
-    try:
-        nlp_service = _get_nlp_service()
-        return nlp_service.classify_intent(text)
-    except Exception as e:
-        logger.error(f"Intent classification failed: {e}")
-        return "general chat"
-    
-    # Filter by entity types if specified
-    if entity_types:
-        entities = [(text, label) for text, label in entities if label in entity_types]
-    
-    return entities
-
-
 def classify_intent(text: str, context: Optional[str] = None) -> str:
     """
     Classify user intent.
-    
+
     Args:
         text: User input
         context: Optional conversation context
@@ -370,12 +288,10 @@ def classify_intent(text: str, context: Optional[str] = None) -> str:
     Returns:
         Detected intent string
     """
-    if GEMINI_AVAILABLE:
-        try:
-            intent_clf = _get_intent_classifier()
-            result = intent_clf.classify(text, context)
-            return result.intent
-        except Exception as e:
-            logger.error(f"Intent classification failed: {e}")
-    
-    return "unknown"
+    try:
+        nlp_service = _get_nlp_service()
+        return nlp_service.classify_intent(text)
+    except Exception as e:
+        logger.error(f"Intent classification failed: {e}")
+        return "general chat"
+

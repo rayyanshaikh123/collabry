@@ -60,6 +60,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
 }) => {
   const router = useRouter();
   const hasSelectedSources = sources.some((s) => s.selected);
+  const [activeTab, setActiveTab] = React.useState<'sources' | 'chat' | 'studio'>('chat');
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col relative bg-white dark:bg-slate-950 overflow-hidden -m-4 md:-m-8 box-border">
@@ -80,9 +81,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Main Content - 3 Column Layout */}
-      <div className="flex-1 flex overflow-hidden min-h-0 box-border">{/* Left Panel - Sources */}
+      {/* Main Content - 3 Column Layout for md+ */}
+      <div className="hidden md:flex-1 md:flex overflow-hidden min-h-0 box-border md:block">{/* Left Panel - Sources */}
         <div className="w-80 flex-shrink-0 overflow-hidden border-r border-slate-200 dark:border-slate-800 box-border">
           <SourcesPanel
             sources={sources}
@@ -120,6 +120,75 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             isGenerating={isGenerating}
             hasSelectedSources={hasSelectedSources}
           />
+        </div>
+      </div>
+
+      {/* Small screens: tabbed single-column layout */}
+      <div className="md:hidden flex-1 flex flex-col overflow-hidden min-h-0">
+        <div className="flex items-center justify-around border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2">
+          <button
+            onClick={() => setActiveTab('sources')}
+            className={`flex-1 py-2 mx-1 rounded-lg text-sm font-semibold ${activeTab === 'sources' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'}`}
+          >
+            Sources
+          </button>
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`flex-1 py-2 mx-1 rounded-lg text-sm font-semibold ${activeTab === 'chat' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'}`}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => setActiveTab('studio')}
+            className={`flex-1 py-2 mx-1 rounded-lg text-sm font-semibold ${activeTab === 'studio' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'}`}
+          >
+            Studio
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {activeTab === 'sources' && (
+            <div className="p-2">
+              <SourcesPanel
+                sources={sources}
+                onToggleSource={onToggleSource}
+                onAddSource={onAddSource}
+                onRemoveSource={onRemoveSource}
+              />
+            </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <div className="p-2">
+              <ChatPanel
+                messages={messages}
+                onSendMessage={onSendMessage}
+                onClearChat={onClearChat}
+                onRegenerateResponse={onRegenerateResponse}
+                isLoading={isChatLoading}
+                hasSelectedSources={hasSelectedSources}
+                onSaveQuizToStudio={onSaveQuizToStudio}
+                onSaveMindMapToStudio={onSaveMindMapToStudio}
+                onSaveInfographicToStudio={onSaveInfographicToStudio}
+                onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
+              />
+            </div>
+          )}
+
+          {activeTab === 'studio' && (
+            <div className="p-2">
+              <StudioPanel
+                artifacts={artifacts}
+                onGenerateArtifact={onGenerateArtifact}
+                onSelectArtifact={onSelectArtifact}
+                onDeleteArtifact={onDeleteArtifact}
+                onEditArtifact={onEditArtifact}
+                selectedArtifact={selectedArtifact}
+                isGenerating={isGenerating}
+                hasSelectedSources={hasSelectedSources}
+              />
+            </div>
+          )}
         </div>
       </div>
 

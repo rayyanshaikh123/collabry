@@ -35,6 +35,18 @@ class ApiClient {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // Debug: log when calling AI engine endpoints to verify header attachment
+        try {
+          const url = String(config.url || '');
+          if (url.includes('/ai/')) {
+            const masked = token ? `${String(token).slice(0, 8)}...${String(token).slice(-8)}` : 'no-token';
+            // eslint-disable-next-line no-console
+            console.debug('[apiClient] AI request:', url, 'Auth present?', !!token, 'tokenMask=', masked);
+          }
+        } catch (e) {
+          // ignore logging errors
+        }
         
         // If data is FormData, remove Content-Type to let browser set it
         if (config.data instanceof FormData) {
@@ -116,13 +128,29 @@ class ApiClient {
   }
 
   private getAccessToken(): string | null {
-    // TODO: Get from Zustand auth store
-    return localStorage.getItem('accessToken');
+    // Read from Zustand-persisted auth store in localStorage
+    try {
+      const authStorage = localStorage.getItem('auth-storage');
+      if (!authStorage) return null;
+      const parsed = JSON.parse(authStorage);
+      return parsed.state?.accessToken || null;
+    } catch (e) {
+      console.error('[apiClient] Failed to parse auth-storage for accessToken:', e);
+      return null;
+    }
   }
 
   private getRefreshToken(): string | null {
-    // TODO: Get from Zustand auth store
-    return localStorage.getItem('refreshToken');
+    // Read from Zustand-persisted auth store in localStorage
+    try {
+      const authStorage = localStorage.getItem('auth-storage');
+      if (!authStorage) return null;
+      const parsed = JSON.parse(authStorage);
+      return parsed.state?.refreshToken || null;
+    } catch (e) {
+      console.error('[apiClient] Failed to parse auth-storage for refreshToken:', e);
+      return null;
+    }
   }
 
   private async refreshAccessToken(): Promise<string> {
@@ -141,12 +169,28 @@ class ApiClient {
       // Backend returns: { success: true, data: { accessToken, refreshToken } }
       const { accessToken, refreshToken: newRefreshToken } = response.data.data;
       
-      // Update both tokens in localStorage
-      localStorage.setItem('accessToken', accessToken);
-      if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken);
+      // Update persisted zustand storage (`auth-storage`) if present so
+      // `getAccessToken` / `getRefreshToken` keep returning the latest values.
+      try {
+        const authStorageRaw = localStorage.getItem('auth-storage');
+        if (authStorageRaw) {
+          const parsed = JSON.parse(authStorageRaw);
+          if (!parsed.state) parsed.state = {};
+          parsed.state.accessToken = accessToken;
+          if (newRefreshToken) parsed.state.refreshToken = newRefreshToken;
+          localStorage.setItem('auth-storage', JSON.stringify(parsed));
+        } else {
+          // Fallback to flat keys for backwards compatibility
+          localStorage.setItem('accessToken', accessToken);
+          if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
+        }
+      } catch (e) {
+        console.error('[apiClient] Failed to persist refreshed tokens to auth-storage:', e);
+        // still write flat keys as fallback
+        localStorage.setItem('accessToken', accessToken);
+        if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken);
       }
-      
+
       return accessToken;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -155,11 +199,17 @@ class ApiClient {
   }
 
   private handleAuthError() {
-    // Clear tokens and redirect to login
+    // Clear persisted auth storage and flat token keys, then redirect to login
+    try {
+      localStorage.removeItem('auth-storage');
+    } catch (e) {
+      console.error('[apiClient] Failed to remove auth-storage:', e);
+    }
+
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    
-    // TODO: Dispatch to auth store logout action
+
+    // TODO: Dispatch to auth store logout action if needed
     window.location.href = '/login';
   }
 

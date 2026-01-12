@@ -22,20 +22,24 @@ else:
 
 CONFIG = {
     # ==============================================================================
-    # OLLAMA CONFIGURATION (Primary AI Engine)
+    # HUGGING FACE CONFIGURATION (Primary AI Engine)
     # ==============================================================================
-    # Model name to use (change to 'mistral' or 'llama3.1' as installed)
-    "llm_model": os.environ.get("OLLAMA_MODEL", os.environ.get("COLLABRY_LLM_MODEL", "llama3.1")),
+    # Model name to use (Hugging Face model id, e.g. 'mistralai/Mistral-7B-Instruct-v0.1')
+    "llm_model": os.environ.get("HUGGINGFACE_MODEL", os.environ.get("COLLABRY_LLM_MODEL", "openai/gpt-oss-120b:groq")),
+    # LLM backend selection: 'huggingface' | 'local'
+    "llm_backend": os.environ.get("LLM_BACKEND", "huggingface"),
 
-    # Ollama base URL (standardized ENV variable)
-    "ollama_host": os.environ.get("OLLAMA_BASE_URL", os.environ.get("OLLAMA_HOST", "http://localhost:11434")),
-    
-    # Ollama request timeout in seconds (default: 180s for artifact generation)
-    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),
-    
-    # Ollama retry configuration
-    "ollama_max_retries": int(os.environ.get("OLLAMA_MAX_RETRIES", "3")),
-    "ollama_retry_delay": float(os.environ.get("OLLAMA_RETRY_DELAY", "1.0")),
+    # Hugging Face API settings
+    "huggingface_api_key": os.environ.get("HUGGINGFACE_API_KEY"),
+
+    # LLM request timeout in seconds (default: 180s for artifact generation)
+    "llm_timeout": int(os.environ.get("LLM_TIMEOUT", "180")),
+    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),  # deprecated
+
+    # LLM retry configuration
+    "llm_max_retries": int(os.environ.get("LLM_MAX_RETRIES", "3")),
+    "ollama_max_retries": int(os.environ.get("OLLAMA_MAX_RETRIES", "3")),  # deprecated
+    "ollama_retry_delay": float(os.environ.get("OLLAMA_RETRY_DELAY", "1.0")),  # deprecated
 
     # MongoDB settings (REQUIRED for memory persistence)
     "mongo_uri": os.environ.get("MONGO_URI", "mongodb://localhost:27017"),
