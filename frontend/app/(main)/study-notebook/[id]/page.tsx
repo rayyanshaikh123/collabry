@@ -76,252 +76,207 @@ export default function StudyNotebookPage() {
   const [editPrompt, setEditPrompt] = useState('');
   const [editNumber, setEditNumber] = useState<number>(5);
   const [editDifficulty, setEditDifficulty] = useState<string>('medium');
-  const DEFAULT_QUIZ_PROMPT = 'Create a practice quiz with multiple choice questions about:';
+  // Studio Handlers
+  const handleGenerateArtifact = async (type: ArtifactType) => {
+    if (!notebook) return;
 
-  // Source modals state
-  const [addTextModalOpen, setAddTextModalOpen] = useState(false);
-  const [addNotesModalOpen, setAddNotesModalOpen] = useState(false);
-  const [addWebsiteModalOpen, setAddWebsiteModalOpen] = useState(false);
-  const [textContent, setTextContent] = useState('');
-  const [textTitle, setTextTitle] = useState('');
-  const [notesContent, setNotesContent] = useState('');
-  const [notesTitle, setNotesTitle] = useState('New Note');
-  const [websiteUrl, setWebsiteUrl] = useState('');
-
-  // Auto-create notebook on mount if needed (only for 'default' route)
-  useEffect(() => {
-    if (notebookId === 'default' && !isLoadingNotebook && !creationAttempted.current && !createNotebook.isPending) {
-      creationAttempted.current = true;
-      createNotebook.mutate({ title: 'My Study Notebook' }, {
-        onSuccess: (response) => {
-          // Handle both wrapped and unwrapped responses
-          const newNotebookId = (response as any)?.data?._id || (response as any)?._id;
-          if (newNotebookId) {
-            // Small delay to ensure cache is updated
-            setTimeout(() => {
-              router.replace(`/study-notebook/${newNotebookId}`);
-            }, 100);
-          }
-        },
-        onError: (error) => {
-          console.error('Failed to create notebook:', error);
-          creationAttempted.current = false;
-        }
-      });
-    }
-  }, [notebookId, isLoadingNotebook, createNotebook.isPending]);
-
-  // Load messages from AI session (only on initial mount)
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
-  useEffect(() => {
-    if (sessionMessagesData && !isStreaming && !messagesLoaded) {
-      console.log('Loading messages from server:', sessionMessagesData);
-      const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => ({
-        id: msg.timestamp,
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content,
-        timestamp: msg.timestamp,
-      }));
-      setLocalMessages(formattedMessages);
-      setMessagesLoaded(true);
-    }
-  }, [sessionMessagesData, isStreaming, messagesLoaded]);
-
-  // Source Handlers
-  const handleToggleSource = (id: string) => {
-    toggleSource.mutate(id);
-  };
-
-  const handleAddSource = async (type: Source['type']) => {
-    if (type === 'pdf') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf,application/pdf';
-      input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const formData = new FormData();
-          formData.append('type', type);
-          formData.append('file', file);
-          formData.append('name', file.name);
-          try {
-            await addSource.mutateAsync(formData);
-            showSuccess('PDF uploaded successfully!');
-          } catch (error) {
-            console.error('Failed to add PDF:', error);
-            showError('Failed to upload PDF. Please try again.');
-          }
-        }
-      };
-      input.click();
-    } else if (type === 'text') {
-      setTextContent('');
-      setTextTitle('');
-      setAddTextModalOpen(true);
-    } else if (type === 'notes') {
-      setNotesContent('');
-      setNotesTitle('New Note');
-      setAddNotesModalOpen(true);
-    } else if (type === 'website') {
-      setWebsiteUrl('');
-      setAddWebsiteModalOpen(true);
-    }
-  };
-
-  const handleSubmitText = async () => {
-    if (!textContent.trim()) {
-      showWarning('Please enter some text content.');
-      return;
-    }
-    if (!textTitle.trim()) {
-      showWarning('Please enter a title.');
-      return;
-    }
-    const formData = new FormData();
-    formData.append('type', 'text');
-    formData.append('content', textContent);
-    formData.append('name', textTitle);
-    try {
-      await addSource.mutateAsync(formData);
-      setAddTextModalOpen(false);
-      setTextContent('');
-      setTextTitle('');
-      showSuccess('Text source added successfully!');
-    } catch (error) {
-      console.error('Failed to add text:', error);
-      showError('Failed to add text source. Please try again.');
-    }
-  };
-
-  const handleSubmitNotes = async () => {
-    if (!notesContent.trim()) {
-      showWarning('Please enter some note content.');
-      return;
-    }
-    const formData = new FormData();
-    formData.append('type', 'notes');
-    formData.append('content', notesContent);
-    formData.append('name', notesTitle || 'New Note');
-    try {
-      await addSource.mutateAsync(formData);
-      setAddNotesModalOpen(false);
-      setNotesContent('');
-      setNotesTitle('New Note');
-      showSuccess('Note added successfully!');
-    } catch (error) {
-      console.error('Failed to add note:', error);
-      showError('Failed to add note. Please try again.');
-    }
-  };
-
-  const handleSubmitWebsite = async () => {
-    if (!websiteUrl.trim()) {
-      showWarning('Please enter a website URL.');
-      return;
-    }
-    try {
-      // Validate URL
-      const url = new URL(websiteUrl);
-      const formData = new FormData();
-      formData.append('type', 'website');
-      formData.append('url', url.toString());
-      formData.append('name', url.hostname);
-      await addSource.mutateAsync(formData);
-      setAddWebsiteModalOpen(false);
-      setWebsiteUrl('');
-      showSuccess('Website added successfully!');
-    } catch (error) {
-      if (error instanceof TypeError) {
-        showError('Please enter a valid URL (e.g., https://example.com)');
-      } else {
-        console.error('Failed to add website:', error);
-        showError('Failed to add website. Please try again.');
-      }
-    }
-  };
-
-  const handleRemoveSource = (id: string) => {
-    showConfirm(
-      'Are you sure you want to remove this source?',
-      () => removeSource.mutate(id),
-      'Remove Source',
-      'Remove',
-      'Cancel'
-    );
-  };
-
-  // Chat Handlers
-  const handleSendMessage = async (message: string) => {
-    if (!notebook?.aiSessionId) {
-      showError('Chat session not initialized. Please refresh the page.');
+    const selectedSources = notebook.sources.filter(s => s.selected);
+    if (selectedSources.length === 0) {
+      showWarning('Please select at least one source to generate artifacts.');
       return;
     }
 
-    // Add user message locally
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString(),
-    };
-    
-    console.log('Adding user message:', userMessage);
-    setLocalMessages((prev) => {
-      const updated = [...prev, userMessage];
-      console.log('LocalMessages after user:', updated);
-      return updated;
-    });
-    setIsChatLoading(true);
-    setIsStreaming(true);
-
-    // Add loading message
-    const loadingId = (Date.now() + 1).toString();
-    const loadingMessage: ChatMessage = {
-      id: loadingId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      isLoading: true,
-    };
-    setLocalMessages((prev) => {
-      const updated = [...prev, loadingMessage];
-      console.log('LocalMessages after loading:', updated);
-      return updated;
-    });
+    setIsGenerating(true);
 
     try {
-      // Get auth token
-      const authStorage = localStorage.getItem('auth-storage');
-      let token = '';
-      if (authStorage) {
-        const { state } = JSON.parse(authStorage);
-        token = state?.accessToken || '';
+      const topics = selectedSources
+        .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
+        .join(', ');
+
+      if (type === 'course-finder') {
+        const message = `###COURSE_FINDER###
+
+Search public course listings and web resources to find online courses about: ${topics}
+
+Search queries to consider: "best ${topics} courses online" or "${topics} tutorial course"
+
+Output format - each course on one line:
+[Course Name](URL) - Platform: X | Rating: X/5 | Price: $X
+
+Example:
+[Data Structures Course](https://coursera.org/ds) - Platform: Coursera | Rating: 4.7/5 | Price: Free
+
+Find 5-8 courses. Output ONLY the course list, nothing else.
+
+Do not use conversation history for this task; rely only on the selected source material and public web knowledge.
+###END_INSTRUCTION###`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
       }
 
-      // Get selected sources context
-      const selectedSources = notebook.sources.filter((s) => s.selected);
-      const useRag = selectedSources.length > 0;
-      const selectedSourceIds = selectedSources.map((s) => s._id);
-      
-      console.log('💬 Chat request:', {
-        selectedSources: selectedSources.length,
-        sourceIds: selectedSourceIds,
-        useRag
-      });
+      if (type === 'flashcards') {
+        const message = `Create flashcards for studying: ${topics}
 
-      // Stream response using POST
-      const response = await fetch(
-        `${AI_ENGINE_URL}/ai/sessions/${notebook.aiSessionId}/chat/stream`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            message: message,
-            use_rag: useRag,
-            session_id: notebook.aiSessionId,
+Use the content from the selected sources to create study flashcards.
+
+Output ONLY a JSON object with this exact structure (no markdown, no code blocks):
+{
+  "title": "Flashcards: ${topics}",
+  "cards": [
+    {
+      "id": "card-1",
+      "front": "What is...",
+      "back": "The answer is...",
+      "category": "Basics"
+    }
+  ]
+}
+
+Requirements:
+- Generate 15-20 flashcards based on source content
+- Front: Clear question or concept to test
+- Back: Concise answer or explanation (2-3 sentences max)
+- Category: Group related cards (Basics, Definitions, Applications, etc.)
+- Cover key concepts, definitions, processes, and applications
+- Make questions specific and answers clear
+Output ONLY the JSON object, nothing else.`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      }
+
+      if (type === 'quiz') {
+        // Get user settings
+        const persistedEdits = artifactEdits['action-quiz'] || {};
+        const liveEdits = (editModalOpen && editingArtifactId === 'action-quiz')
+          ? { prompt: editPrompt, numberOfQuestions: editNumber, difficulty: editDifficulty }
+          : {};
+        const actionEdits = { ...persistedEdits, ...liveEdits };
+        const numQuestions = actionEdits.numberOfQuestions ?? 5;
+        const difficulty = actionEdits.difficulty || 'medium';
+        const original = (actionEdits.prompt && actionEdits.prompt.trim().length > 0)
+          ? actionEdits.prompt
+          : DEFAULT_QUIZ_PROMPT;
+
+        const message = `###QUIZ_GENERATOR###
+
+${original} ${topics}
+
+Settings:
+- Number of questions: ${numQuestions}
+- Difficulty: ${difficulty}
+
+Format each question exactly like this:
+
+Question 1: [question text]?
+A) [option]
+B) [option]
+C) [option]
+D) [option]
+Answer: A
+Explanation: [why A is correct]
+
+Rules:
+- Strictly follow the format above
+- Questions must be relevant to the source material
+- Options should be plausible to ensure challenge
+- Generate exactly ${numQuestions} questions
+- Answer must be single letter (A, B, C, or D)
+- Base questions on the selected source material
+Output ONLY the questions, no extra text
+###END_INSTRUCTION###`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      }
+
+      if (type === 'mindmap') {
+        const message = `Create a mind map about: ${topics}
+
+Use the content from the selected sources to build the mind map structure.
+
+Output ONLY a JSON object with this exact structure (no markdown, no code blocks, no extra text):
+{
+  "nodes": [
+    {"id": "root", "label": "${topics}", "level": 0}
+  ],
+  "edges": []
+}
+
+Requirements:
+- 10-20 nodes total based on the source content
+- 2-3 levels deep showing concept hierarchy
+- Labels should be 2-5 words extracted from source material
+- Connect related concepts with edges (parent-child relationships)
+- Each node id must be unique (use "node-" prefix with numbers)
+Output ONLY the JSON object, nothing else.`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      }
+
+      if (type === 'reports') {
+        const message = `Generate a comprehensive study report for: ${topics}
+
+Analyze the selected source materials and create a structured report with the following sections:
+
+1. Executive Summary (2-3 paragraphs)
+2. Key Concepts (5-10 main concepts with explanations)
+3. Learning Objectives (What should be mastered)
+4. Detailed Analysis (Deep dive into important topics)
+5. Practical Applications (Real-world use cases)
+6. Study Recommendations (How to learn this effectively)
+7. Assessment Criteria (What to focus on for testing)
+8. Additional Resources (Recommended readings/videos)
+
+Format the report in clear markdown with headers, bullet points, and emphasis.
+Base all content on the actual source material provided.
+Make it comprehensive but readable (aim for 800-1200 words).
+Output ONLY the markdown report, nothing else.`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      }
+
+      if (type === 'infographic') {
+        const message = `Create an infographic data structure for: ${topics}
+
+Analyze the selected sources and extract key visual elements.
+
+Output ONLY a JSON object with this structure (no markdown, no code blocks):
+{
+  "title": "Main topic title",
+  "subtitle": "Brief description",
+  "sections": []
+}
+
+Requirements:
+- Extract 3-5 sections from source content
+- Include real data/statistics when available
+- Use relevant emojis for icons
+- Timeline events should be chronological if source has historical context
+- Comparisons should highlight key differences
+Output ONLY the JSON object.`;
+
+        handleSendMessage(message);
+        setIsGenerating(false);
+        return;
+      }
+
+      showInfo(`${type} generation coming soon!`);
+    } catch (error) {
+      console.error('Failed to generate artifact:', error);
+      showError('Failed to generate artifact. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
             source_ids: selectedSourceIds
           })
         }
@@ -594,268 +549,6 @@ export default function StudyNotebookPage() {
     }
   };
 
-  // Studio Handlers
-  const handleGenerateArtifact = async (type: ArtifactType) => {
-    if (!notebook) return;
-
-    const selectedSources = notebook.sources.filter(s => s.selected);
-    if (selectedSources.length === 0) {
-      showWarning('Please select at least one source to generate artifacts.');
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      if (type === 'course-finder') {
-        // Extract topics from selected sources
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        // Simplified prompt with clear output marker
-        const message = `###COURSE_FINDER###
-
-Use web_search tool to find online courses about: ${topics}
-
-Search for "best ${topics} courses online" or "${topics} tutorial course"
-
-Output format - each course on one line:
-[Course Name](URL) - Platform: X | Rating: X/5 | Price: $X
-
-Example:
-[Data Structures Course](https://coursera.org/ds) - Platform: Coursera | Rating: 4.7/5 | Price: Free
-
-Find 5-8 courses. Output ONLY the course list, nothing else.
-
-###END_INSTRUCTION###`;
-        
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else if (type === 'flashcards') {
-        // Generate flashcards from selected sources
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        const message = `Create flashcards for studying: ${topics}
-
-Use the content from the selected sources to create study flashcards.
-
-Output ONLY a JSON object with this exact structure (no markdown, no code blocks):
-{
-  "title": "Flashcards: ${topics}",
-  "cards": [
-    {
-      "id": "card-1",
-      "front": "What is...?",
-      "back": "The answer is...",
-      "category": "Basics"
-    },
-    {
-      "id": "card-2",
-      "front": "Explain...",
-      "back": "Detailed explanation...",
-      "category": "Advanced"
-    }
-  ]
-}
-
-Requirements:
-- Generate 15-20 flashcards based on source content
-- Front: Clear question or concept to test
-- Back: Concise answer or explanation (2-3 sentences max)
-- Category: Group related cards (Basics, Definitions, Applications, etc.)
-- Cover key concepts, definitions, processes, and applications
-- Make questions specific and answers clear
-- Output ONLY the JSON object, nothing else`;
-
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else if (type === 'quiz') {
-        // Extract topics from selected sources
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        // Get user settings
-        const persistedEdits = artifactEdits['action-quiz'] || {};
-        const liveEdits = (editModalOpen && editingArtifactId === 'action-quiz')
-          ? { prompt: editPrompt, numberOfQuestions: editNumber, difficulty: editDifficulty }
-          : {};
-        const actionEdits = { ...persistedEdits, ...liveEdits };
-        const numQuestions = actionEdits.numberOfQuestions ?? 5;
-        const difficulty = actionEdits.difficulty || 'medium';
-        const original = (actionEdits.prompt && actionEdits.prompt.trim().length > 0)
-          ? actionEdits.prompt
-          : DEFAULT_QUIZ_PROMPT;
-
-        // Simplified prompt with clear markers
-        const message = `###QUIZ_GENERATOR###
-
-${original} ${topics}
-
-Settings:
-- Number of questions: ${numQuestions}
-- Difficulty: ${difficulty}
-
-Format each question exactly like this:
-
-Question 1: [question text]?
-A) [option]
-B) [option]
-C) [option]
-D) [option]
-Answer: A
-Explanation: [why A is correct]
-
-Question 2: [question text]?
-A) [option]
-B) [option]
-C) [option]
-D) [option]
-Answer: B
-Explanation: [why B is correct]
-
-Rules:
-- Generate exactly ${numQuestions} questions
-- Answer must be single letter (A, B, C, or D)
-- Base questions on the selected source material
-- Output ONLY the questions, no extra text
-
-###END_INSTRUCTION###`;
-
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else if (type === 'mindmap') {
-        // Extract topics from selected sources
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        // Simplified prompt with clear JSON output
-        const message = `Create a mind map about: ${topics}
-
-Use the content from the selected sources to build the mind map structure.
-
-Output ONLY a JSON object with this exact structure (no markdown, no code blocks, no extra text):
-{
-  "nodes": [
-    {"id": "root", "label": "${topics}", "level": 0},
-    {"id": "node-1", "label": "Subtopic 1", "level": 1},
-    {"id": "node-2", "label": "Subtopic 2", "level": 1},
-    {"id": "node-1a", "label": "Detail 1.1", "level": 2}
-  ],
-  "edges": [
-    {"from": "root", "to": "node-1"},
-    {"from": "root", "to": "node-2"},
-    {"from": "node-1", "to": "node-1a"}
-  ]
-}
-
-Requirements:
-- 10-20 nodes total based on the source content
-- 2-3 levels deep showing concept hierarchy
-- Labels should be 2-5 words extracted from source material
-- Connect related concepts with edges (parent-child relationships)
-- Each node id must be unique (use "node-" prefix with numbers)
-- Output ONLY the JSON object, nothing else`;
-
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else if (type === 'reports') {
-        // Generate comprehensive study report
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        const message = `Generate a comprehensive study report for: ${topics}
-
-Analyze the selected source materials and create a structured report with the following sections:
-
-1. **Executive Summary** (2-3 paragraphs)
-2. **Key Concepts** (5-10 main concepts with explanations)
-3. **Learning Objectives** (What should be mastered)
-4. **Detailed Analysis** (Deep dive into important topics)
-5. **Practical Applications** (Real-world use cases)
-6. **Study Recommendations** (How to learn this effectively)
-7. **Assessment Criteria** (What to focus on for testing)
-8. **Additional Resources** (Recommended readings/videos)
-
-Format the report in clear markdown with headers, bullet points, and emphasis.
-Base all content on the actual source material provided.
-Make it comprehensive but readable (aim for 800-1200 words).`;
-
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else if (type === 'infographic') {
-        // Generate infographic data structure
-        const topics = selectedSources
-          .map((s) => s.name.replace(/\.(pdf|txt|md)$/i, ''))
-          .join(', ');
-
-        const message = `Create an infographic data structure for: ${topics}
-
-Analyze the selected sources and extract key visual elements.
-
-Output ONLY a JSON object with this structure (no markdown, no code blocks):
-{
-  "title": "Main topic title",
-  "subtitle": "Brief description",
-  "sections": [
-    {
-      "id": "section-1",
-      "title": "Section Title",
-      "icon": "📚",
-      "stats": [
-        {"label": "Key Stat 1", "value": "70%", "color": "blue"},
-        {"label": "Key Stat 2", "value": "30%", "color": "green"}
-      ],
-      "keyPoints": [
-        "Important point 1",
-        "Important point 2",
-        "Important point 3"
-      ]
-    }
-  ],
-  "timeline": [
-    {"year": "2020", "event": "Key milestone", "description": "Brief desc"},
-    {"year": "2021", "event": "Another event", "description": "Brief desc"}
-  ],
-  "comparisons": [
-    {"category": "Aspect 1", "optionA": "Value A", "optionB": "Value B"},
-    {"category": "Aspect 2", "optionA": "Value A", "optionB": "Value B"}
-  ],
-  "conclusion": "Final takeaway message"
-}
-
-Requirements:
-- Extract 3-5 sections from source content
-- Include real data/statistics when available
-- Use relevant emojis for icons
-- Timeline events should be chronological if source has historical context
-- Comparisons should highlight key differences
-- Base everything on actual source material
-- Output ONLY the JSON object`;
-
-        handleSendMessage(message);
-        setIsGenerating(false);
-        return;
-      } else {
-        showInfo(`${type} generation coming soon!`);
-      }
-    } catch (error) {
-      console.error('Failed to generate artifact:', error);
-      showError('Failed to generate artifact. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleSaveQuizToStudio = async (questions: any[]) => {
     if (!notebook) return;
