@@ -12,7 +12,8 @@ Configuration:
  - model name passed in factory or via config (e.g. 'openai/gpt-oss-120b:groq', etc.)
 """
 import logging
-from typing import Iterator, Optional
+import json
+from typing import Iterator, Optional, List, Dict, Any
 from openai import OpenAI
 
 from config import CONFIG  # project-level config
@@ -34,23 +35,97 @@ class HuggingFaceService:
             api_key=self.api_key
         )
 
-    def generate(self, prompt: str, temperature: float = 0.2, max_tokens: Optional[int] = None) -> str:
-        """Generate text using Hugging Face Router API."""
+    def generate(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = None,
+        functions: Optional[List[Dict[str, Any]]] = None,
+        function_call: Optional[str] = None,
+    ) -> str:
+        """Generate text using Hugging Face Router API.
+
+        Supports optional function-calling by passing `functions` metadata and
+        `function_call` (e.g. 'auto'|'none'|{'name':...}). If the model returns a
+        function call, this method will translate it into the agent's expected
+        JSON decision format: {"tool": "<name>", "args": { ... }}.
+        """
         try:
-            completion = self.client.chat.completions.create(
+            req = dict(
                 model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=temperature,
                 max_tokens=max_tokens or 1000,
             )
-            
-            return completion.choices[0].message.content
-            
+
+            if functions:
+                req["functions"] = functions
+            if function_call is not None:
+                req["function_call"] = function_call
+
+            completion = self.client.chat.completions.create(**req)
+
+            # Access message (be defensive: may be attr or dict)
+            choice = completion.choices[0]
+            message = getattr(choice, "message", None) or (choice.get("message") if isinstance(choice, dict) else None)
+
+            # Helper to read nested fields with compatibility for both object/dict
+            def _get(obj, key):
+                if obj is None:
+                    return None
+                try:
+                    return getattr(obj, key)
+                except Exception:
+                    try:
+                        return obj.get(key)
+                    except Exception:
+                        return None
+
+            # If model returned a function call, translate to agent tool JSON
+            func_call = None
+            if message:
+                func_call = _get(message, "function_call")
+
+            if func_call:
+                # func_call may be an object with name/arguments or a dict-like
+                name = None
+                args_raw = None
+                try:
+                    name = func_call.name
+                except Exception:
+                    name = func_call.get("name") if isinstance(func_call, dict) else None
+
+                try:
+                    args_raw = func_call.arguments
+                except Exception:
+                    args_raw = func_call.get("arguments") if isinstance(func_call, dict) else None
+
+                # arguments are often a JSON string - try to parse
+                args = {}
+                if args_raw:
+                    if isinstance(args_raw, str):
+                        try:
+                            args = json.loads(args_raw)
+                        except Exception:
+                            # Fallback: try to replace single quotes
+                            try:
+                                args = json.loads(args_raw.replace("'", '"'))
+                            except Exception:
+                                args = {"raw": args_raw}
+                    elif isinstance(args_raw, dict):
+                        args = args_raw
+
+                decision = {"tool": name, "args": args}
+                return json.dumps(decision)
+
+            # Otherwise return normal content text
+            content = _get(message, "content") if message else None
+            if content:
+                return content
+
+            # As fallback, try to stringify the choice
+            return str(choice)
+
         except Exception as e:
             logger.error(f"HuggingFace Router generation failed: {e}")
             raise

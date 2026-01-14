@@ -24,13 +24,15 @@ BENEFITS:
 
 import json
 import logging
-from typing import Any, List, Mapping, Optional
+import inspect
+from typing import Any, List, Mapping, Optional, Dict
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Import Hugging Face service (cloud LLM)
 from core.huggingface_service import HuggingFaceService, create_hf_service
+from tools import load_tools
 
 # LangChain compatibility
 from langchain_core.language_models.llms import LLM
@@ -79,10 +81,50 @@ class LocalLLM(LLM):
             Generated text response
         """
         try:
+            # Build functions metadata from available tools so the model can call tools
+            functions = []
+            function_call = "auto"
+            
+            # Disable function calling for synthesis prompts that expect JSON output
+            if "Return ONLY this JSON" in prompt or "Output only:" in prompt:
+                function_call = "none"
+            else:
+                try:
+                    tools = load_tools()
+                    for tname, tdef in tools.items():
+                        func = tdef.get('func') if isinstance(tdef, dict) else tdef
+                        desc = tdef.get('description', '') if isinstance(tdef, dict) else (func.__doc__ or '')
+                        properties = {}
+                        required = []
+                        try:
+                            sig = inspect.signature(func)
+                            for p in sig.parameters.values():
+                                if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY):
+                                    properties[p.name] = {"type": "string"}
+                                    if p.default is p.empty:
+                                        required.append(p.name)
+                        except Exception:
+                            # ignore signature parsing errors
+                            pass
+
+                        functions.append({
+                            "name": tname,
+                            "description": desc,
+                            "parameters": {
+                                "type": "object",
+                                "properties": properties,
+                                "required": required,
+                            },
+                        })
+                except Exception:
+                    functions = []
+
             response = self.hf_service.generate(
                 prompt=prompt,
                 temperature=self.temperature,
-                max_tokens=kwargs.get('max_tokens')
+                max_tokens=kwargs.get('max_tokens'),
+                functions=functions if function_call != "none" else None,
+                function_call=function_call,
             )
 
             self.last_response = response
