@@ -29,7 +29,7 @@ class HuggingFaceCloudEmbeddings(Embeddings):
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", api_key: Optional[str] = None):
         self.model_name = model_name
         self.api_key = api_key
-        self._model = EmbeddingModel(model_name=model_name, api_key=api_key)
+        self._model = EmbeddingModel(model_name=model_name)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed documents."""
