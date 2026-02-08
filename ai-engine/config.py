@@ -49,11 +49,6 @@ CONFIG = {
     "mongo_db": os.environ.get("MONGO_DB", "collabry"),
     "memory_collection": os.environ.get("MEMORY_COLLECTION", "conversations"),
 
-    # MongoDB Atlas Vector Search settings
-    "vector_db_name": os.environ.get("VECTOR_DB_NAME", "collabry"),
-    "vector_collection": os.environ.get("VECTOR_COLLECTION", "vectors"),
-    "vector_search_index": os.environ.get("VECTOR_SEARCH_INDEX", "vector_index"),
-
     # Security settings (JWT authentication for production)
     "jwt_secret_key": os.environ.get("JWT_SECRET_KEY", "dev-secret-key-change-in-production"),
     "jwt_algorithm": os.environ.get("JWT_ALGORITHM", "HS256"),
@@ -71,8 +66,15 @@ CONFIG = {
     # Agent options
     "max_tool_calls": 5,  # Max iterations for agent decision loop
 
+<<<<<<< HEAD
     # Embedding model name (Sentence Transformers) - for local RAG processing
     "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
+=======
+    # Temperature for LLM responses
+    "temperature": float(os.environ.get("COLLABRY_TEMPERATURE", "0.2")),
+    # Embedding model name (Hugging Face) - UPDATED for cloud API
+    "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"),
+>>>>>>> parent of 5a0908a (HS)
 
     # FAISS index path prefix (two files will be created: {prefix}.index and {prefix}.meta.json)
     "faiss_index_path": str(ROOT / "memory" / "faiss_index"),

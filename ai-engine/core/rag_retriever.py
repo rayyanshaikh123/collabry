@@ -18,6 +18,42 @@ import os
 from pathlib import Path
 import logging
 from typing import List, Optional
+<<<<<<< HEAD
+=======
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from core.embeddings import EmbeddingModel
+from langchain_core.embeddings import Embeddings
+
+
+class HuggingFaceCloudEmbeddings(Embeddings):
+    """LangChain-compatible wrapper for Hugging Face Inference API embeddings."""
+
+    def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5", api_key: Optional[str] = None):
+        self.model_name = model_name
+        self.api_key = api_key
+        self._model = EmbeddingModel(model_name=model_name, api_key=api_key)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed documents."""
+        return self._model.embed(texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a single query."""
+        result = self._model.embed([text])
+        return result[0] if result else []
+
+    async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Async embed documents."""
+        return self.embed_documents(texts)
+
+    async def aembed_query(self, text: str) -> List[float]:
+        """Async embed query."""
+        return self.embed_query(text)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+>>>>>>> parent of 5a0908a (HS)
 import shutil
 import tarfile
 import io
