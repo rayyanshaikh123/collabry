@@ -5,6 +5,7 @@ export enum AppRoute {
   DASHBOARD = 'dashboard',
   STUDY_BOARD = 'study-board',
   STUDY_NOTEBOOK = 'study-notebook',
+  VOICE_TUTOR = 'voice-tutor',
   PLANNER = 'planner',
   FOCUS = 'focus',
   FLASHCARDS = 'flashcards',

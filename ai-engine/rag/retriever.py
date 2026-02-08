@@ -58,3 +58,51 @@ def get_retriever(
         notebook_id=notebook_id,
         k=k
     )
+
+
+async def get_notebook_context(notebook_id: str, user_id: Optional[str] = None, k: int = 5) -> str:
+    """
+    Load notebook content for voice tutor context.
+    
+    Args:
+        notebook_id: The notebook ID to load
+        user_id: Optional user filter
+        k: Number of chunks to retrieve
+        
+    Returns:
+        Combined context string from notebook chunks
+    """
+    try:
+        # Get relevant chunks from the notebook
+        docs = similarity_search(
+            query="Study content and key concepts",  # Generic query to get overview
+            user_id=user_id or "system",
+            notebook_id=notebook_id,
+            k=k
+        )
+        
+        if not docs:
+            return ""
+        
+        # Combine document contents with metadata
+        context_parts = []
+        for i, doc in enumerate(docs, 1):
+            metadata = doc.metadata
+            chunk_text = doc.page_content
+            
+            # Add section header if available
+            if 'section' in metadata:
+                context_parts.append(f"## {metadata['section']}")
+            elif 'page' in metadata:
+                context_parts.append(f"## Page {metadata['page']}")
+            
+            context_parts.append(chunk_text)
+            context_parts.append("")  # Empty line between chunks
+        
+        return "\n".join(context_parts)
+        
+    except Exception as e:
+        # Log error but don't fail the whole session
+        import logging
+        logging.getLogger(__name__).error(f"Error loading notebook context: {e}")
+        return ""

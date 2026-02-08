@@ -26,6 +26,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/dashboard': 'dashboard',
     '/study-board': 'study-board',
     '/study-notebook': 'study-notebook',
+    '/voice-tutor': 'voice-tutor',
     '/planner': 'planner',
     '/focus': 'focus',
     '/flashcards': 'flashcards',
@@ -40,6 +41,7 @@ const getAppRouteFromPath = (path: string): string => {
   // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
   if (path.startsWith('/study-board')) return 'study-board';
+  if (path.startsWith('/voice-tutor')) return 'voice-tutor';
   return routeMap[path] || 'dashboard';
 };
 
@@ -91,6 +93,7 @@ export default function MainLayout({
       'dashboard': '/dashboard',
       'study-board': '/study-board',
       'study-notebook': '/study-notebook',
+      'voice-tutor': '/voice-tutor',
       'planner': '/planner',
       'focus': '/focus',
       'flashcards': '/flashcards',
