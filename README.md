@@ -1,9 +1,5 @@
 # 🎓 Collabry - One Platform, All Your Study Needs
 
-<div align="center">
-
-![Collabry Banner](https://via.placeholder.com/800x200/4F46E5/FFFFFF?text=Collabry+-+Study+Smarter+Together)
-
 ### **Stop Juggling 10 Apps. Start Learning in One Intelligent Workspace.**
 
 *AI that understands YOUR materials • Real-time collaboration • Gamified learning • Career-ready skills*
@@ -14,8 +10,9 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-green?logo=mongodb)](https://mongodb.com/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--time-black?logo=socket.io)](https://socket.io/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-Visit_Now-brightgreen?style=for-the-badge)](https://collabry-ai.vercel.app/)
 
-[🚀 Quick Start](#-quick-start) • [✨ Features](#-features) • [🏗️ Architecture](#️-architecture) • [📖 Documentation](#-api-endpoints)
+### 🚀 **[Try It Live →](https://collabry-ai.vercel.app/)** | [Quick Start](#-quick-start) • [Features](#-features) • [Architecture](#️-architecture) • [API Docs](#-documentation--api-reference)
 
 </div>
 
@@ -52,6 +49,71 @@
 | Slack/Discord for collaboration | **Real-time study boards** synced via Socket.IO (think Figma meets Notion for studying) |
 | Manual planning + no motivation tracking | **AI Planner + Gamification** (XP, 12 badges, streaks, leaderboards) |
 | Study alone, find courses randomly | **Integrated SkillBridge** detects topics and surfaces relevant courses |
+
+---
+
+## 📸 Screenshots & Demo
+
+<div align="center">
+
+### 🎥 **[Watch Live Demo →](https://collabry-ai.vercel.app/)**
+
+</div>
+
+<!-- 
+📌 HOW TO ADD IMAGES TO THIS README:
+
+Method 1: Using Markdown (Simple)
+![Alt Text Description](https://your-image-url.com/image.png)
+
+Method 2: Using HTML (More Control)
+<img src="https://your-image-url.com/image.png" alt="Description" width="600">
+
+Method 3: Local Images (Store in /docs/images/ folder)
+![Dashboard Screenshot](./docs/images/dashboard.png)
+
+Method 4: Side-by-side Images
+<div align="center">
+  <img src="image1.png" alt="Before" width="45%">
+  <img src="image2.png" alt="After" width="45%">
+</div>
+
+Recommended Image Hosting Options:
+1. GitHub: Upload to /docs/images/ in your repo
+2. Imgur: https://imgur.com/upload
+3. Cloudinary: https://cloudinary.com/
+4. Direct URLs from your deployment (Vercel, etc.)
+-->
+
+### 🖥️ **Dashboard - Your Study Command Center**
+<div align="center">
+  <img src="https://i.ibb.co/LD1k5Y0H/Screenshot-2026-01-11-105258.png" alt="Dashboard" width="800">
+  <p><i>Track XP, streaks, tasks, and study analytics in one place</i></p>
+</div>
+
+### 📓 **Smart Notebook - AI That Understands YOUR Materials**
+<div align="center">
+  <img src="https://i.ibb.co/fdHykbZM/Screenshot-2026-01-11-105419.png" alt="Smart Notebook" width="800">
+  <p><i>Upload PDFs → Ask questions → Generate quizzes, mindmaps, flashcards</i></p>
+</div>
+
+### 🎨 **Study Board - Real-Time Collaboration**
+<div align="center">
+  <img src="https://i.ibb.co/mFJwXLMy/Screenshot-2026-01-11-105804.png" alt="Study Board" width="800">
+  <p><i>Infinite whiteboard with live cursors, shapes, and group chat</i></p>
+</div>
+
+### 🎮 **Gamification - Motivation That Works**
+<div align="center">
+  <img src="https://i.ibb.co/ksmCMd4C/Screenshot-2026-01-11-110409.png" alt="Gamification" width="800">
+  <p><i>12+ badges, XP system, streaks, leaderboards, and "You vs You" comparison</i></p>
+</div>
+
+### 📅 **AI Study Planner - From Chaos to Structure**
+<div align="center">
+  <img src="https://i.ibb.co/8g9mfQdc/Screenshot-2026-01-11-113223.png" alt="AI Planner" width="800">
+  <p><i>AI generates daily tasks, tracks progress, adapts to your schedule</i></p>
+</div>
 
 ---
 
