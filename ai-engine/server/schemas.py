@@ -2,7 +2,7 @@
 Pydantic schemas for FastAPI request/response models.
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, Literal
 from datetime import datetime
 
 
@@ -19,8 +19,46 @@ class ChatRequest(BaseModel):
     source_ids: Optional[List[str]] = Field(None, description="Filter RAG by specific source IDs (when multiple sources in notebook)")
 
 
-class ChatResponse(BaseModel):
-    """Response from chat endpoint."""
+class ChatTextResponse(BaseModel):
+    """
+    Chat mode response - conversational text response.
+
+    Returned when intent router determines this is a chat/conversation request.
+    """
+    type: Literal["chat"] = Field(default="chat", description="Response type discriminator")
+    message: str = Field(..., description="AI conversational response")
+    session_id: str = Field(..., description="Session ID for conversation continuity")
+    user_id: str = Field(..., description="User ID from JWT")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ArtifactJobCreatedResponse(BaseModel):
+    """
+    Artifact mode response - async job created.
+
+    Returned when intent router detects artifact generation request (quiz, flashcards, mindmap).
+    Client should poll /ai/artifact/status/{job_id} or listen to SSE /ai/artifact/events.
+    """
+    type: Literal["artifact_job"] = Field(default="artifact_job", description="Response type discriminator")
+    job_id: str = Field(..., description="Unique job identifier for status polling")
+    artifact_type: str = Field(..., description="Type of artifact: quiz, flashcards, mindmap")
+    status: str = Field(default="pending", description="Initial job status (always 'pending')")
+    session_id: str = Field(..., description="Session ID for conversation continuity")
+    user_id: str = Field(..., description="User ID from JWT")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+# Discriminated union for chat endpoint response
+# FastAPI will automatically select the correct schema based on 'type' field
+ChatResponse = Union[ChatTextResponse, ArtifactJobCreatedResponse]
+
+
+# Legacy response model (deprecated - kept for backward compatibility)
+class ChatResponseLegacy(BaseModel):
+    """
+    DEPRECATED: Legacy chat response format.
+    Use ChatTextResponse or ArtifactJobCreatedResponse instead.
+    """
     response: str = Field(..., description="AI response")
     session_id: str = Field(..., description="Session ID for this conversation")
     user_id: str = Field(..., description="User ID from JWT")

@@ -12,7 +12,11 @@ from datetime import datetime
 from pymongo import MongoClient, DESCENDING
 from bson import ObjectId
 from config import CONFIG
-from core.agent import create_agent
+from llm import create_llm_provider, Message
+from core.memory import MemoryManager
+from core.rag_retriever import RAGRetriever
+from intent import IntentRouter
+from jobs import ArtifactJobService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,6 +27,12 @@ mongo_client = MongoClient(CONFIG["mongo_uri"])
 db = mongo_client[CONFIG["mongo_db"]]
 sessions_collection = db["chat_sessions"]
 messages_collection = db["chat_messages"]
+
+# Initialize job service
+job_service = ArtifactJobService(
+    mongo_uri=CONFIG.get("mongo_uri"),
+    database=CONFIG.get("mongo_db", "collabry")
+)
 
 # Create indexes
 sessions_collection.create_index([("user_id", 1), ("created_at", DESCENDING)])
@@ -402,51 +412,83 @@ async def session_chat_stream(
             raise HTTPException(status_code=404, detail="Session not found")
         
         logger.info(f"Streaming chat request for session={session_id}, user={user_id}")
-        
-        # Create user-isolated agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=session_id,
-            config=CONFIG
+
+        # Create LLM provider
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
         )
-        
+
+        # Create memory manager
+        memory = MemoryManager(
+            user_id=user_id,
+            session_id=session_id
+        )
+
+        # Create RAG retriever
+        rag_retriever = RAGRetriever(
+            config=CONFIG,
+            user_id=user_id,
+            session_id=session_id
+        )
+
+        # Create intent router
+        router_instance = IntentRouter(
+            llm_provider=llm_provider,
+            memory=memory,
+            rag_retriever=rag_retriever,
+            notebook_service=None,
+            job_service=job_service
+        )
+
         async def event_generator():
-            """Generate SSE events that stream in real-time from agent."""
+            """Generate SSE events that stream in real-time."""
             full_response = ""
-            
+
             try:
-                # Execute agent with streaming callback
-                def stream_chunk(chunk: str):
-                    """Callback for each chunk from agent."""
-                    nonlocal full_response
-                    if chunk.strip():
-                        full_response += chunk
-                        return chunk
-                    return None
-                
-                # Execute agent - this will call stream_chunk for each piece of output
-                # Pass source_ids to filter RAG by selected sources only
-                agent.handle_user_input_stream(
-                    request.message, 
-                    stream_chunk,
-                    source_ids=request.source_ids
+                # Execute with intent routing to determine mode
+                result = router_instance.execute(
+                    user_input=request.message,
+                    source_ids=request.source_ids,
+                    session_id=session_id,
+                    user_id=user_id,
+                    notebook_id=session_id
                 )
-                
-                # Now stream the collected response character by character to preserve markdown
-                if full_response:
-                    import asyncio
-                    # Stream character by character to preserve newlines and markdown
-                    for char in full_response:
-                        # Escape special characters for SSE
-                        if char == '\n':
-                            # Send newline as literal \n for markdown to process
-                            yield f"data: \\n\n\n"
-                        else:
-                            yield f"data: {char}\n\n"
-                        await asyncio.sleep(0.008)  # 8ms delay for smooth streaming
-                
-                # Send completion event
-                yield f"event: done\ndata: \n\n"
+
+                if result["mode"] == "artifact":
+                    # Artifact mode: Send single event and close
+                    import json
+                    job_data = {
+                        "type": "artifact_job",
+                        "job_id": result["job_id"],
+                        "artifact_type": result["artifact_type"],
+                        "status": result.get("status", "pending"),
+                        "session_id": session_id,
+                        "user_id": user_id
+                    }
+
+                    yield f"event: artifact_job\n"
+                    yield f"data: {json.dumps(job_data)}\n\n"
+                    yield f"event: done\ndata: \n\n"
+
+                else:
+                    # Chat mode: Stream tokens
+                    for token in router_instance.execute_stream(
+                        user_input=request.message,
+                        source_ids=request.source_ids,
+                        session_id=session_id,
+                        user_id=user_id,
+                        notebook_id=session_id
+                    ):
+                        if token:
+                            full_response += token
+                            yield f"data: {token}\n\n"
+
+                    yield f"event: done\ndata: \n\n"
                 
                 # Save messages after streaming completes
                 try:

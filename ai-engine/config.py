@@ -22,24 +22,27 @@ else:
 
 CONFIG = {
     # ==============================================================================
-    # HUGGING FACE CONFIGURATION (Primary AI Engine)
+    # LLM PROVIDER CONFIGURATION (Provider-Agnostic Architecture)
     # ==============================================================================
-    # Model name to use (Hugging Face model id, e.g. 'mistralai/Mistral-7B-Instruct-v0.1')
-    "llm_model": os.environ.get("HUGGINGFACE_MODEL", os.environ.get("COLLABRY_LLM_MODEL", "openai/gpt-oss-120b:groq")),
-    # LLM backend selection: 'huggingface' | 'local'
-    "llm_backend": os.environ.get("LLM_BACKEND", "huggingface"),
+    # Provider selection: 'ollama' (local) | 'openai' (cloud)
+    # Switch providers by changing only this environment variable
+    "llm_provider": os.environ.get("LLM_PROVIDER", "ollama"),
 
-    # Hugging Face API settings
-    "huggingface_api_key": os.environ.get("HUGGINGFACE_API_KEY"),
+    # Model name (provider-specific)
+    # Ollama: "llama3.2:3b", "llama3.2:8b", "llama3.3:70b"
+    # OpenAI: "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"
+    "llm_model": os.environ.get("LLM_MODEL", "llama3.2:3b"),
 
-    # LLM request timeout in seconds (default: 180s for artifact generation)
+    # Generation parameters
+    "temperature": float(os.environ.get("TEMPERATURE", "0.7")),
+    "max_tokens": int(os.environ.get("MAX_TOKENS", "2000")),
+
+    # Provider-specific settings
+    "ollama_base_url": os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+    "openai_api_key": os.environ.get("OPENAI_API_KEY"),
+
+    # LLM request timeout in seconds
     "llm_timeout": int(os.environ.get("LLM_TIMEOUT", "180")),
-    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),  # deprecated
-
-    # LLM retry configuration
-    "llm_max_retries": int(os.environ.get("LLM_MAX_RETRIES", "3")),
-    "ollama_max_retries": int(os.environ.get("OLLAMA_MAX_RETRIES", "3")),  # deprecated
-    "ollama_retry_delay": float(os.environ.get("OLLAMA_RETRY_DELAY", "1.0")),  # deprecated
 
     # MongoDB settings (REQUIRED for memory persistence)
     "mongo_uri": os.environ.get("MONGO_URI", "mongodb://localhost:27017"),
@@ -64,15 +67,11 @@ CONFIG = {
 
     # External API keys (optional, loaded from ENV only for security)
     "serper_api_key": os.environ.get("SERPER_API_KEY"),
-    "huggingface_api_key": os.environ.get("HUGGINGFACE_API_KEY"),
-    "stable_diffusion_api": os.environ.get("STABLE_DIFFUSION_API", "http://127.0.0.1:7860"),
 
     # Agent options
-    "max_tool_calls": 3,
+    "max_tool_calls": 5,  # Max iterations for agent decision loop
 
-    # Temperature for LLM responses
-    "temperature": float(os.environ.get("COLLABRY_TEMPERATURE", "0.2")),
-    # Embedding model name (Sentence Transformers) - UPDATED for local processing
+    # Embedding model name (Sentence Transformers) - for local RAG processing
     "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "all-MiniLM-L6-v2"),
 
     # FAISS index path prefix (two files will be created: {prefix}.index and {prefix}.meta.json)

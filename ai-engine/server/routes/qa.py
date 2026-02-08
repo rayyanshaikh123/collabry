@@ -7,13 +7,18 @@ Handles:
 - Streaming responses
 - Configurable retrieval parameters
 - Source document tracking
-- Quiz question generation from content
+- Quiz question generation from content (using ArtifactAgent)
+
+Refactored to use new agent architecture with ArtifactAgent for quiz generation.
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import QARequest, QAResponse, QAGenerateRequest, QAGenerateResponse, QuizQuestion, ErrorResponse
-from core.agent import create_agent
+from llm import create_llm_provider
+from agents.planner_agent import PlannerAgent
+from agents.artifact_agent import ArtifactAgent
+from core.memory import MemoryManager
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging
@@ -23,8 +28,6 @@ from typing import Optional, List
 import PyPDF2
 import io
 import json
-import ast
-import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["qa"])
@@ -50,7 +53,7 @@ async def question_answering(
 ) -> QAResponse:
     """
     Answer questions using RAG over user documents.
-    
+
     - Extracts user_id from JWT token
     - Retrieves relevant documents from user's RAG index
     - Generates answer using retrieved context
@@ -58,44 +61,58 @@ async def question_answering(
     """
     try:
         logger.info(f"QA request from user={user_id}, question={request.question[:50]}...")
-        
+
         sources = []
         context_text = ""
-        
+
         # Retrieve relevant documents if RAG enabled
         if request.use_rag:
             rag = RAGRetriever(CONFIG, user_id=user_id)
-            
+
             # Retrieve documents
             docs = rag.get_relevant_documents(
                 request.question,
-                user_id=user_id
+                user_id=user_id,
+                k=request.top_k
             )
-            
+
             # Build context from retrieved documents
             context_parts = []
-            for i, doc in enumerate(docs[:request.top_k]):
+            for i, doc in enumerate(docs):
                 context_parts.append(f"[Document {i+1}]:\n{doc.page_content}")
                 sources.append({
                     "source": doc.metadata.get("source", "unknown"),
                     "content": doc.page_content[:200] + "...",
                     "metadata": doc.metadata
                 })
-            
+
             context_text = "\n\n".join(context_parts)
             logger.info(f"Retrieved {len(docs)} documents for QA")
-        
+
         # Use provided context if not using RAG
         elif request.context:
             context_text = request.context
-        
-        # Create agent for QA
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),  # Temporary session
-            config=CONFIG
+
+        # Create LLM provider
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
         )
-        
+
+        # Create memory manager
+        memory = MemoryManager(user_id=user_id, session_id=str(uuid4()))
+
+        # Create planner agent for QA
+        agent = PlannerAgent(
+            llm_provider=llm_provider,
+            memory=memory,
+            rag_retriever=None  # Already retrieved docs above
+        )
+
         # Build QA prompt
         if context_text:
             prompt = f"""Answer the following question using the provided context.
@@ -112,20 +129,16 @@ Answer (be specific and cite sources if available):"""
 Question: {request.question}
 
 Answer:"""
-        
-        # Collect response
+
+        # Execute agent (collect all chunks)
         response_chunks = []
-        
-        def collect_chunk(chunk: str):
+        for chunk in agent.execute_stream(user_input=prompt, source_ids=None, session_id=None):
             response_chunks.append(chunk)
-        
-        # Execute agent
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
+
         answer = "".join(response_chunks).strip()
-        
+
         logger.info(f"QA answer generated: {len(answer)} chars, sources={len(sources)}")
-        
+
         return QAResponse(
             question=request.question,
             answer=answer,
@@ -133,7 +146,7 @@ Answer:"""
             user_id=user_id,
             timestamp=datetime.utcnow()
         )
-        
+
     except Exception as e:
         logger.exception(f"QA error: {e}")
         raise HTTPException(
@@ -522,124 +535,52 @@ async def generate_qa(
             except Exception as e:
                 logger.warning(f"RAG retrieval failed, continuing with provided text only: {e}")
         
-        # Create agent for generation (using generic session for quiz generation)
-        agent, _, _, _ = create_agent(user_id, session_id="quiz_generation")
-        
-        # Build generation prompt
-        difficulty_instruction = ""
-        if request.difficulty and request.difficulty != "mixed":
-            difficulty_instruction = f"Make all questions {request.difficulty} difficulty. "
-        elif request.difficulty == "mixed":
-            difficulty_instruction = "Vary the difficulty from easy to hard. "
-            
-        options_instruction = ""
-        if request.include_options:
-            options_instruction = "For each question, provide 4 multiple choice options (A, B, C, D). "
-        
-        # Truncate very long texts for prompt (keep first 10k chars for better context)
-        content_for_prompt = context_text
+        # Truncate very long texts (keep first 10k chars for better context)
         if len(context_text) > 10000:
-            content_for_prompt = context_text[:10000]
-            logger.info(f"Truncated content from {len(context_text)} to {len(content_for_prompt)} chars for prompt")
-        
-        logger.info(f"Content preview (first 500 chars): {content_for_prompt[:500]}")
-        
-        prompt = f"""Read this content carefully and generate {request.num_questions} quiz questions based ONLY on the information provided below.
+            context_text = context_text[:10000]
+            logger.info(f"Truncated content to 10000 chars for prompt")
 
-CONTENT:
-{content_for_prompt}
+        # Create LLM provider
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
+        )
 
-INSTRUCTIONS:
-- Create questions about specific facts, names, dates, or concepts from the content above
-- Each question must be answerable using ONLY the content provided
-- Provide 4 different answer options for each question
-- One option must be the correct answer from the content
-- The other 3 options should be plausible but incorrect
+        # Create artifact agent for quiz generation
+        artifact_agent = ArtifactAgent(llm_provider=llm_provider)
 
-{difficulty_instruction}
+        # Generate quiz using ArtifactAgent
+        options = {
+            "num_questions": request.num_questions,
+            "difficulty": request.difficulty or "medium"
+        }
 
-CRITICAL: Return ONLY a valid JSON array. Use DOUBLE QUOTES for all strings, not single quotes.
-Return this exact format:
-[
-  {{
-    "question": "What specific detail from the content?",
-    "answer": "Correct answer from content",
-    "options": ["Correct answer", "Wrong option 1", "Wrong option 2", "Wrong option 3"],
-    "explanation": "Why this is correct based on the content",
-    "difficulty": "medium"
-  }}
-]
+        result = artifact_agent.generate(
+            artifact_type="quiz",
+            content=context_text,
+            options=options
+        )
 
-Generate exactly {request.num_questions} questions. Return ONLY valid JSON with double quotes, no extra text, no markdown code blocks."""
-
-        # Generate response using streaming collection
-        response_text = ""
-        def collect_chunk(chunk: str):
-            nonlocal response_text
-            response_text += chunk
-        
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
-        logger.info(f"Generated response length: {len(response_text)} chars")
-        logger.debug(f"Response preview: {response_text[:500]}...")
-        
-        # Parse questions from response
+        # Parse questions from ArtifactAgent result
         questions = []
-        try:
-            # Try to extract JSON from response
-            json_start = response_text.find('[')
-            json_end = response_text.rfind(']') + 1
-            if json_start != -1 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                logger.info(f"Attempting to parse JSON array of {len(json_str)} chars")
-                
-                try:
-                    # First try: parse as valid JSON
-                    questions_data = json.loads(json_str)
-                except json.JSONDecodeError:
-                    # Second try: handle Python dict syntax (single quotes)
-                    logger.info("JSON parsing failed, trying Python literal_eval")
-                    try:
-                        questions_data = ast.literal_eval(json_str)
-                    except (ValueError, SyntaxError):
-                        # Third try: simple quote replacement (risky but last resort)
-                        logger.info("literal_eval failed, trying quote replacement")
-                        json_str = json_str.replace("'", '"')
-                        questions_data = json.loads(json_str)
-                
-                for q_data in questions_data:
-                    questions.append(QuizQuestion(
-                        question=str(q_data.get('question', '')),
-                        answer=str(q_data.get('answer', '')),
-                        options=q_data.get('options'),
-                        explanation=str(q_data.get('explanation', '')) if q_data.get('explanation') else None,
-                        difficulty=str(q_data.get('difficulty', 'medium'))
-                    ))
-                logger.info(f"Successfully parsed {len(questions)} questions from JSON")
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning(f"Failed to parse structured response: {e}, falling back to text parsing")
-            # Fallback: parse text format
-            lines = response_text.split('\n')
-            current_q = {}
-            for line in lines:
-                line = line.strip()
-                if line.startswith('Question:') or line.startswith('Q:') or line.startswith('**Question'):
-                    if current_q.get('question') and current_q.get('answer'):
-                        questions.append(QuizQuestion(**current_q))
-                    current_q = {'question': line.split(':', 1)[1].strip() if ':' in line else line}
-                elif line.startswith('Answer:') or line.startswith('A:') or line.startswith('**Answer'):
-                    current_q['answer'] = line.split(':', 1)[1].strip() if ':' in line else line
-                elif line.startswith('Explanation:') or line.startswith('**Explanation'):
-                    current_q['explanation'] = line.split(':', 1)[1].strip() if ':' in line else line
-            
-            if current_q.get('question') and current_q.get('answer'):
-                questions.append(QuizQuestion(**current_q))
-            
-            logger.info(f"Parsed {len(questions)} questions from text format")
-        
+        if "questions" in result:
+            for q_data in result["questions"]:
+                questions.append(QuizQuestion(
+                    question=str(q_data.get('question', '')),
+                    answer=str(q_data.get('correct_answer', q_data.get('answer', ''))),
+                    options=q_data.get('options'),
+                    explanation=str(q_data.get('explanation', '')) if q_data.get('explanation') else None,
+                    difficulty=str(q_data.get('difficulty', 'medium'))
+                ))
+            logger.info(f"Successfully generated {len(questions)} questions via ArtifactAgent")
+
         if not questions:
-            logger.error(f"No questions generated. Response text: {response_text[:1000]}")
-            raise HTTPException(status_code=500, detail="Failed to generate valid questions from AI response")
+            logger.error(f"No questions generated from ArtifactAgent. Result: {result}")
+            raise HTTPException(status_code=500, detail="Failed to generate valid questions")
         
         return QAGenerateResponse(
             questions=questions[:request.num_questions],  # Ensure we don't exceed requested amount

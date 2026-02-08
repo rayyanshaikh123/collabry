@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from server.deps import get_current_user
 from server.schemas import ErrorResponse
-from core.local_llm import create_llm
+from llm import create_llm_provider, Message
 from config import CONFIG
 import logging
 import json
@@ -303,16 +303,24 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
 
 Generate the JSON now:"""
 
-        # Initialize LLM with CONFIG
-        llm = create_llm(CONFIG)
-        
+        # Initialize LLM provider
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
+        )
+
         # Generate plan with AI
         logger.info("Calling LLM for study plan generation...")
-        response = llm.invoke(prompt)
-        logger.info(f"LLM response length: {len(response)} chars")
-        
+        messages = [Message(role="user", content=prompt)]
+        response = llm_provider.generate(messages=messages)
+        logger.info(f"LLM response length: {len(response.content)} chars")
+
         # Extract and parse JSON with multiple strategies
-        response_text = response.strip()
+        response_text = response.content.strip()
         ai_plan = None
         
         # Strategy 1: Direct JSON parse

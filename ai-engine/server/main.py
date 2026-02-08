@@ -7,6 +7,7 @@ Features:
 - JWT-based authentication
 - User-isolated conversations (multi-session support)
 - RAG document ingestion with background processing
+- Asynchronous artifact generation with job system
 - Summarization, Q&A, and mind map generation
 - Streaming and non-streaming endpoints
 """
@@ -16,7 +17,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan
+from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan, artifact  # NEW: artifact routes
 from server.deps import get_current_user
 from server.middleware import UsageTrackingMiddleware
 from server.limit_middleware import UsageLimitMiddleware
@@ -25,6 +26,7 @@ from config import CONFIG
 import logging
 from datetime import datetime
 from contextlib import asynccontextmanager
+import asyncio
 
 # Configure logging
 logging.basicConfig(
@@ -43,9 +45,9 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Collabry AI Core Server")
     logger.info(f"MongoDB: {CONFIG['mongo_uri']}")
     logger.info(f"LLM Model: {CONFIG['llm_model']}")
-    logger.info(f"LLM Backend: {CONFIG['llm_backend']}")
+    logger.info(f"LLM Provider: {CONFIG['llm_provider']}")
     logger.info(f"JWT Algorithm: {CONFIG['jwt_algorithm']}")
-    
+
     # Verify critical services
     try:
         from pymongo import MongoClient
@@ -56,11 +58,57 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"✗ MongoDB connection failed: {e}")
         logger.warning("Server will start but database operations may fail")
-    
+
+    # Start artifact worker
+    worker_task = None
+    try:
+        from jobs import ArtifactJobService, ArtifactWorker
+        from llm import create_llm_provider
+
+        # Create job service
+        job_service = ArtifactJobService(
+            mongo_uri=CONFIG["mongo_uri"],
+            database=CONFIG.get("mongo_db", "collabry")
+        )
+
+        # Create LLM provider for worker
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
+        )
+
+        # Create and start worker
+        worker = ArtifactWorker(
+            job_service=job_service,
+            llm_provider=llm_provider,
+            poll_interval=2.0
+        )
+
+        # Start worker in background task
+        worker_task = asyncio.create_task(worker.start())
+        logger.info("✓ Artifact worker started")
+
+    except Exception as e:
+        logger.error(f"✗ Failed to start artifact worker: {e}")
+        logger.warning("Artifact generation will not work")
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Collabry AI Core Server")
+
+    # Stop worker
+    if worker_task:
+        try:
+            await worker.stop()
+            worker_task.cancel()
+            logger.info("✓ Artifact worker stopped")
+        except Exception as e:
+            logger.error(f"Error stopping worker: {e}")
 
 
 # Create FastAPI app

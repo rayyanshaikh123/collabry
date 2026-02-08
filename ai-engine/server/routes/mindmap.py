@@ -5,11 +5,14 @@ Handles:
 - Hierarchical concept mapping
 - Document-informed topic expansion
 - Structured graph output
+
+Refactored to use ArtifactAgent for mindmap generation.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from server.deps import get_current_user
 from server.schemas import MindMapRequest, MindMapResponse, MindMapNode, ErrorResponse
-from core.agent import create_agent
+from llm import create_llm_provider
+from agents.artifact_agent import ArtifactAgent
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging
@@ -97,88 +100,77 @@ async def generate_mindmap(
     user_id: str = Depends(get_current_user)
 ) -> MindMapResponse:
     """
-    Generate mind map for a topic.
-    
+    Generate mind map for a topic using ArtifactAgent.
+
     - Extracts user_id from JWT token
     - Retrieves relevant documents if requested
-    - Generates hierarchical concept map
+    - Generates hierarchical concept map using ArtifactAgent
     - Returns structured graph data
     """
     try:
         logger.info(f"Mind map request from user={user_id}, topic={request.topic}")
-        
-        context_text = ""
-        
+
+        context_text = request.topic
+
         # Retrieve relevant documents if enabled
         if request.use_documents:
             rag = RAGRetriever(CONFIG, user_id=user_id)
-            docs = rag.get_relevant_documents(request.topic, user_id=user_id)
-            
+            docs = rag.get_relevant_documents(request.topic, user_id=user_id, k=3)
+
             if docs:
-                context_parts = []
-                for doc in docs[:3]:  # Use top 3 documents
+                context_parts = [request.topic]
+                for doc in docs:
                     context_parts.append(doc.page_content[:500])
                 context_text = "\n\n".join(context_parts)
                 logger.info(f"Retrieved {len(docs)} documents for mind map context")
-        
-        # Create agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),
-            config=CONFIG
+
+        # Create LLM provider
+        llm_provider = create_llm_provider(
+            provider_type=CONFIG.get("llm_provider", "ollama"),
+            model=CONFIG.get("llm_model", "llama3.2:3b"),
+            temperature=CONFIG.get("temperature", 0.7),
+            max_tokens=CONFIG.get("max_tokens", 2000),
+            base_url=CONFIG.get("ollama_base_url"),
+            api_key=CONFIG.get("openai_api_key")
         )
-        
-        # Build mind map prompt
-        prompt = f"""Create a hierarchical mind map for the topic: "{request.topic}"
 
-Requirements:
-- Generate {request.depth} levels of depth
-- Use bullet points with indentation to show hierarchy
-- Start with main topic, then subtopics, then details
-- Be concise (5-10 items per level)
-"""
-        
-        if context_text:
-            prompt += f"""
-Context from user documents:
-{context_text}
+        # Create artifact agent
+        artifact_agent = ArtifactAgent(llm_provider=llm_provider)
 
-Use this context to inform your mind map structure.
-"""
-        
-        prompt += """
-Output format (use bullet points with indentation):
-- Main Topic
-  - Subtopic 1
-    - Detail 1.1
-    - Detail 1.2
-  - Subtopic 2
-    - Detail 2.1
+        # Generate mindmap using ArtifactAgent
+        options = {
+            "depth": request.depth or 3
+        }
 
-Mind map:"""
-        
-        # Collect response
-        response_chunks = []
-        
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        # Execute agent
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
-        mindmap_text = "".join(response_chunks).strip()
-        
-        # Parse mind map structure
-        root = parse_mindmap_from_text(mindmap_text, request.topic)
-        
+        result = artifact_agent.generate(
+            artifact_type="mindmap",
+            content=context_text,
+            options=options
+        )
+
+        # Parse result from ArtifactAgent
+        if "root" in result:
+            # ArtifactAgent returns structured mindmap directly
+            root_data = result["root"]
+            root = MindMapNode(
+                id="root",
+                label=root_data.get("label", request.topic),
+                level=0,
+                children=_parse_children(root_data.get("children", []))
+            )
+        else:
+            # Fallback to empty root
+            logger.warning("ArtifactAgent did not return valid mindmap structure")
+            root = MindMapNode(id="root", label=request.topic, level=0, children=[])
+
         # Count total nodes
         def count_nodes(node: MindMapNode) -> int:
             return 1 + sum(count_nodes(child) for child in node.children)
-        
+
         total_nodes = count_nodes(root)
-        
-        logger.info(f"Mind map generated: {total_nodes} nodes")
-        
+
+        logger.info(f"Mind map generated: {total_nodes} nodes via ArtifactAgent")
+
         return MindMapResponse(
             topic=request.topic,
             root=root,
@@ -186,13 +178,28 @@ Mind map:"""
             user_id=user_id,
             timestamp=datetime.utcnow()
         )
-        
+
     except Exception as e:
         logger.exception(f"Mind map generation error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate mind map: {str(e)}"
         )
+
+
+def _parse_children(children_data: list) -> list:
+    """Recursively parse children nodes from ArtifactAgent output."""
+    children = []
+    for i, child_data in enumerate(children_data):
+        if isinstance(child_data, dict):
+            child = MindMapNode(
+                id=child_data.get("id", f"node_{i}"),
+                label=child_data.get("label", ""),
+                level=child_data.get("level", 1),
+                children=_parse_children(child_data.get("children", []))
+            )
+            children.append(child)
+    return children
 
 
 
