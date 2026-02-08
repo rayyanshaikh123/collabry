@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import SummarizeRequest, SummarizeResponse, ErrorResponse
-from core.agent import create_agent
+from core.agent_compat import create_agent
 from config import CONFIG
+import json
 import logging
 from datetime import datetime
 from uuid import uuid4

@@ -70,3 +70,14 @@ export function useDeleteSession() {
     },
   });
 }
+
+export function useClearSessionMessages() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (sessionId: string) => sessionsService.clearSessionMessages(sessionId),
+    onSuccess: (_, sessionId) => {
+      queryClient.invalidateQueries({ queryKey: ['session-messages', sessionId] });
+    },
+  });
+}

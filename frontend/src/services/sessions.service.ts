@@ -78,6 +78,14 @@ class SessionsService {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}`;
     return apiClient.delete(url);
   }
+
+  /**
+   * Clear all messages from a session
+   */
+  async clearSessionMessages(sessionId: string): Promise<{ message: string; deleted_count: number }> {
+    const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
+    return apiClient.delete(url);
+  }
 }
 
 export const sessionsService = new SessionsService();

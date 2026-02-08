@@ -17,7 +17,7 @@ import {
   useUnlinkArtifact,
   useCreateNotebook
 } from '../../../../src/hooks/useNotebook';
-import { useSessionMessages, useSaveMessage } from '../../../../src/hooks/useSessions';
+import { useSessionMessages, useSaveMessage, useClearSessionMessages } from '../../../../src/hooks/useSessions';
 import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '../../../../src/hooks/useVisualAids';
 import { extractMindMapFromMarkdown } from '../../../../lib/mindmapParser';
 import axios from 'axios';
@@ -65,9 +65,23 @@ export default function StudyNotebookPage() {
   // Chat state - Hook already handles enabled check internally
   const { data: sessionMessagesData } = useSessionMessages(notebook?.aiSessionId || '');
   const saveMessage = useSaveMessage();
+  const clearSessionMessages = useClearSessionMessages();
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+
+  // Sync backend messages to local state on mount/update
+  useEffect(() => {
+    if (sessionMessagesData && Array.isArray(sessionMessagesData)) {
+      const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => ({
+        id: msg._id || `msg-${Date.now()}-${Math.random()}`,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp || msg.created_at || new Date().toISOString()
+      }));
+      setLocalMessages(formattedMessages);
+    }
+  }, [sessionMessagesData]);
 
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
@@ -654,10 +668,24 @@ Output ONLY the JSON object.`;
     }
   };
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
+    if (!notebook?.aiSessionId) return;
+    
     showConfirm(
       'Are you sure you want to clear the chat history?',
-      () => setLocalMessages([]),
+      async () => {
+        try {
+          // Clear messages from backend using React Query hook
+          await clearSessionMessages.mutateAsync(notebook.aiSessionId);
+          
+          // Clear local state
+          setLocalMessages([]);
+          showSuccess('Chat history cleared');
+        } catch (error) {
+          console.error('Failed to clear chat:', error);
+          showError('Failed to clear chat history');
+        }
+      },
       'Clear Chat History',
       'Clear',
       'Cancel'

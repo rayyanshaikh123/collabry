@@ -12,8 +12,9 @@ from datetime import datetime
 from pymongo import MongoClient, DESCENDING
 from bson import ObjectId
 from config import CONFIG
-from core.agent import create_agent
+from core.agent_new import run_agent
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai/sessions", tags=["sessions"])
@@ -315,6 +316,47 @@ async def delete_session(
         raise HTTPException(status_code=500, detail="Failed to delete session")
 
 
+@router.delete(
+    "/{session_id}/messages",
+    summary="Clear session messages",
+    description="Delete all messages in a session without deleting the session itself",
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse}
+    }
+)
+async def clear_session_messages(
+    session_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Clear all messages in a session.
+    """
+    try:
+        # Verify session exists and belongs to user
+        try:
+            session_obj_id = ObjectId(session_id)
+        except:
+            raise HTTPException(status_code=404, detail="Invalid session ID")
+            
+        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Delete all messages in this session
+        result = messages_collection.delete_many({"session_id": session_id})
+        
+        logger.info(f"Cleared {result.deleted_count} messages from session {session_id} for user {user_id}")
+        
+        return {"message": "Messages cleared successfully", "deleted_count": result.deleted_count}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to clear messages: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear messages")
+
+
 @router.get(
     "/{session_id}/chat/stream",
     summary="Streaming chat for session (GET)",
@@ -385,47 +427,23 @@ async def session_chat_stream(
         
         logger.info(f"Streaming chat request for session={session_id}, user={user_id}")
         
-        # Create user-isolated agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=session_id,
-            config=CONFIG
-        )
-        
         async def event_generator():
             """Generate SSE events that stream in real-time from agent."""
             full_response = ""
             
             try:
-                # Execute agent with streaming callback
-                def stream_chunk(chunk: str):
-                    """Callback for each chunk from agent."""
-                    nonlocal full_response
-                    if chunk.strip():
+                # Stream from new agent architecture
+                async for chunk in run_agent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    message=request.message,
+                    notebook_id=session_id,  # Use session_id as notebook_id for now
+                    stream=True
+                ):
+                    if chunk:
                         full_response += chunk
-                        return chunk
-                    return None
-                
-                # Execute agent - this will call stream_chunk for each piece of output
-                # Pass source_ids to filter RAG by selected sources only
-                agent.handle_user_input_stream(
-                    request.message, 
-                    stream_chunk,
-                    source_ids=request.source_ids
-                )
-                
-                # Now stream the collected response character by character to preserve markdown
-                if full_response:
-                    import asyncio
-                    # Stream character by character to preserve newlines and markdown
-                    for char in full_response:
-                        # Escape special characters for SSE
-                        if char == '\n':
-                            # Send newline as literal \n for markdown to process
-                            yield f"data: \\n\n\n"
-                        else:
-                            yield f"data: {char}\n\n"
-                        await asyncio.sleep(0.008)  # 8ms delay for smooth streaming
+                        # Send chunk as plain SSE (no JSON wrapping)
+                        yield f"data: {chunk}\n\n"
                 
                 # Send completion event
                 yield f"event: done\ndata: \n\n"

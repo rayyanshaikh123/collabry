@@ -7,7 +7,8 @@ import { Artifact } from './StudioPanel';
 import FlashcardViewer from './FlashcardViewer';
 import QuizCard from './QuizCard';
 import MindMapViewer from './MindMapViewer';
-import CourseCard from './CourseCard';
+import CourseCard, { CourseInfo } from './CourseCard';
+import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 
 interface ArtifactViewerProps {
   artifact: Artifact;
@@ -144,28 +145,30 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
         );
 
       case 'course-finder':
-        // Parse course data from markdown or stored data
-        const parseCourses = (data: any) => {
-          if (typeof data === 'string') {
-            // Parse markdown format: [Course Name](URL) - Platform: X | Rating: X/5 | Price: $X
-            const courseRegex = /\[([^\]]+)\]\(([^)]+)\)\s*-\s*Platform:\s*([^|]+)\|\s*Rating:\s*([^|]+)\|\s*Price:\s*(.+?)(?=\n|$)/g;
-            const courses = [];
-            let match;
-            while ((match = courseRegex.exec(data)) !== null) {
-              courses.push({
-                title: match[1].trim(),
-                url: match[2].trim(),
-                platform: match[3].trim(),
-                rating: match[4].trim(),
-                price: match[5].trim(),
-              });
-            }
+        // Parse course data from artifact data
+        const getCourses = (): CourseInfo[] => {
+          if (!artifact.data) return [];
+          
+          // If data is already an array of courses
+          if (Array.isArray(artifact.data)) {
+            return artifact.data;
+          }
+          
+          // If data is a string (markdown or plain text), parse it
+          if (typeof artifact.data === 'string') {
+            const { courses } = extractCoursesFromMarkdown(artifact.data);
             return courses;
           }
-          return Array.isArray(data) ? data : [];
+          
+          // If data is an object with a courses property
+          if (artifact.data.courses && Array.isArray(artifact.data.courses)) {
+            return artifact.data.courses;
+          }
+          
+          return [];
         };
 
-        const courses = parseCourses(artifact.data);
+        const courses = getCourses();
 
         return (
           <div className="space-y-6">
@@ -180,42 +183,13 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             </div>
             {courses.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {courses.map((course: any, index: number) => (
-                  <a
-                    key={index}
-                    href={course.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all hover:shadow-lg"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <h4 className="text-lg font-black text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {course.title}
-                      </h4>
-                      <ICONS.externalLink className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex-shrink-0 ml-2" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="px-3 py-1 bg-white dark:bg-slate-800 rounded-full font-bold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                          {course.platform}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-                        <div className="flex items-center gap-1">
-                          <ICONS.star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                          <span className="font-bold">{course.rating}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="font-bold text-green-600 dark:text-green-400">{course.price}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </a>
+                {courses.map((course, index) => (
+                  <CourseCard key={index} course={course} />
                 ))}
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-slate-500 dark:text-slate-400">No courses found</p>
+                <p className="text-slate-500 dark:text-slate-400">No courses available</p>
               </div>
             )}
           </div>

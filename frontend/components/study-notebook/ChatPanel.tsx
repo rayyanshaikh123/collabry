@@ -223,16 +223,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         }
 
                         // Only parse courses if the message contains properly formatted course links
-                        // Must have markdown links with Platform info (not just mentions of "course")
+                        // OR contains plain text course format with Platform: ... | Rating: ... | Price: ...
                         const hasFormattedCourseLinks = message.content.includes('[') && 
                                                        message.content.includes('](') && 
-                                                       /\[.*\]\(https?:\/\/.*\)\s*-\s*Platform:/i.test(message.content);
+                                                       /\[.*\]\(https?:\/\/.*\)\s*-?\s*Platform:/i.test(message.content);
+                        
+                        const hasPlainTextCourses = /Platform:\s*[A-Za-z\s]+\s*\|\s*Rating:/i.test(message.content);
                         
                         let courses: any[] = [];
                         let cleanMarkdownAfterCourses = message.content;
                         
-                        // Only parse if we have properly formatted course links
-                        if (hasFormattedCourseLinks) {
+                        // Parse if we have either format
+                        if (hasFormattedCourseLinks || hasPlainTextCourses) {
                           const result = extractCoursesFromMarkdown(message.content);
                           courses = result.courses;
                           cleanMarkdownAfterCourses = result.cleanMarkdown;

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import QARequest, QAResponse, QAGenerateRequest, QAGenerateResponse, QuizQuestion, ErrorResponse
-from core.agent import create_agent
+from core.agent_compat import create_agent
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging

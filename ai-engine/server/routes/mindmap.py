@@ -9,7 +9,7 @@ Handles:
 from fastapi import APIRouter, Depends, HTTPException
 from server.deps import get_current_user
 from server.schemas import MindMapRequest, MindMapResponse, MindMapNode, ErrorResponse
-from core.agent import create_agent
+from core.agent_compat import create_agent
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging

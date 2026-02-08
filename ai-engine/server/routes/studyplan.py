@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from server.deps import get_current_user
 from server.schemas import ErrorResponse
-from core.local_llm import create_llm
+from core.llm import get_langchain_llm
 from config import CONFIG
 import logging
 import json
@@ -303,8 +303,8 @@ OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
 
 Generate the JSON now:"""
 
-        # Initialize LLM with CONFIG
-        llm = create_llm(CONFIG)
+        # Initialize LLM
+        llm = get_langchain_llm()
         
         # Generate plan with AI
         logger.info("Calling LLM for study plan generation...")

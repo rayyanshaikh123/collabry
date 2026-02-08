@@ -1,6 +1,161 @@
 import { QuizQuestion } from '../components/study-notebook/QuizCard';
 
 /**
+ * Converts legacy text format to JSON if needed
+ */
+function convertLegacyToJSON(text: string): string | null {
+  // Check if it's already JSON
+  if (text.trim().startsWith('[')) {
+    return null; // Already JSON, no conversion needed
+  }
+  
+  console.log('🔄 Attempting legacy text to JSON conversion...');
+  
+  // Try to extract questions in "Question N:" or "N." format
+  const questions: any[] = [];
+  
+  // Split by question number patterns - handle both formats
+  // Use positive lookahead to keep the delimiter
+  const parts = text.split(/(?=\d+\.\s+[A-Z])/gm);
+  
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed.length < 20) continue;
+    
+    console.log('Processing block:', trimmed.substring(0, 100) + '...');
+    
+    // Extract question (everything before first "A)")
+    const questionMatch = trimmed.match(/^\d+\.\s+(.+?)(?=\nA\))/s);
+    if (!questionMatch) {
+      console.log('No question found in block');
+      continue;
+    }
+    
+    const question = questionMatch[1].trim();
+    
+    // Extract options (lines with A), B), C), D)) - but NOT from Answer: line
+    const options: string[] = [];
+    // Split by "Answer:" to avoid matching the answer line as an option
+    const beforeAnswer = trimmed.split(/\nAnswer:/)[0];
+    const optionRegex = /([A-D])\)\s*(.+?)(?=\n[A-D]\)|$)/gs;
+    let match;
+    
+    while ((match = optionRegex.exec(beforeAnswer)) !== null) {
+      const optionText = match[2].trim();
+      if (optionText) {
+        options.push(optionText);
+      }
+    }
+    
+    // Extract answer
+    const answerMatch = trimmed.match(/Answer:\s*([A-D])\)/i);
+    if (!answerMatch) {
+      console.log('No answer found in block');
+      continue;
+    }
+    
+    const correctAnswer = answerMatch[1].toUpperCase().charCodeAt(0) - 65;
+    
+    // Extract explanation
+    const explanationMatch = trimmed.match(/Explanation:\s*(.+?)(?=\n\d+\.|$)/s);
+    const explanation = explanationMatch ? explanationMatch[1].trim() : '';
+    
+    if (question && options.length === 4) {
+      questions.push({
+        question,
+        options,
+        correctAnswer,
+        explanation: explanation || `The correct answer is ${answerMatch[1]}.`
+      });
+      
+      console.log('✅ Converted question:', {
+        question: question.substring(0, 50) + '...',
+        optionCount: options.length,
+        correctAnswer
+      });
+    } else {
+      console.log('❌ Invalid question structure:', {
+        hasQuestion: !!question,
+        optionCount: options.length
+      });
+    }
+  }
+  
+  if (questions.length > 0) {
+    console.log('🎉 Successfully converted legacy format to JSON:', {
+      questionCount: questions.length
+    });
+    return JSON.stringify(questions);
+  }
+  
+  console.log('❌ No questions could be converted from legacy format');
+  return null;
+}
+
+/**
+ * Extracts quiz JSON from AI response
+ * Expects JSON array: [{"question": "", "options": [], "correctAnswer": 0, "explanation": ""}]
+ */
+export function extractQuizJSON(text: string): QuizQuestion[] | null {
+  try {
+    // Try legacy conversion first
+    const converted = convertLegacyToJSON(text);
+    if (converted) {
+      text = converted;
+    }
+    
+    // Remove markdown code blocks if present
+    let cleaned = text.trim();
+    cleaned = cleaned.replace(/^```json?\s*/i, '');
+    cleaned = cleaned.replace(/^```\s*/i, '');
+    cleaned = cleaned.replace(/```\s*$/i, '');
+    
+    // Find the first [ and match balanced brackets
+    const firstBracket = cleaned.indexOf('[');
+    if (firstBracket === -1) return null;
+    
+    let bracketCount = 0;
+    let jsonEnd = -1;
+    
+    for (let i = firstBracket; i < cleaned.length; i++) {
+      if (cleaned[i] === '[') bracketCount++;
+      if (cleaned[i] === ']') {
+        bracketCount--;
+        if (bracketCount === 0) {
+          jsonEnd = i + 1;
+          break;
+        }
+      }
+    }
+    
+    if (jsonEnd === -1) return null;
+    
+    const jsonText = cleaned.substring(firstBracket, jsonEnd);
+    const parsed = JSON.parse(jsonText);
+    
+    // Validate structure
+    if (!Array.isArray(parsed)) return null;
+    if (parsed.length === 0) return null;
+    
+    // Validate first item has required fields
+    const first = parsed[0];
+    if (!first.question || !Array.isArray(first.options) || typeof first.correctAnswer !== 'number') {
+      return null;
+    }
+    
+    console.log('✅ Quiz JSON parsed successfully:', {
+      questionCount: parsed.length,
+      firstQuestion: first.question.substring(0, 50) + '...'
+    });
+    
+    return parsed as QuizQuestion[];
+  } catch (e) {
+    console.log('Failed to parse quiz JSON:', e);
+    return null;
+  }
+}
+
+/**
  * Parses markdown/text to extract quiz questions
  * Supports multiple formats:
  * 
@@ -13,12 +168,23 @@ export function parseQuizFromText(text: string): QuizQuestion[] {
   const questions: QuizQuestion[] = [];
   
   // Normalize text - remove markdown headers and intro text
-  let normalizedText = text;
+  let normalizedText = text.trim();
+  
+  // Remove quiz titles/headers (e.g., "Arrays and Data Structures Quiz")
+  normalizedText = normalizedText.replace(/^.*?\bQuiz\b\s*\n+/i, '');
+  normalizedText = normalizedText.replace(/^#+.*?\bQuiz\b.*?\n+/gim, '');
+  
+  // Remove subtitle/description lines (e.g., "Test your knowledge on...")
+  normalizedText = normalizedText.replace(/^Test your knowledge.*?\n+/i, '');
+  normalizedText = normalizedText.replace(/^This quiz.*?\n+/i, '');
+  normalizedText = normalizedText.replace(/^Answer (?:the following|these).*?\n+/i, '');
   
   // Remove common intro phrases
   normalizedText = normalizedText.replace(/^(?:Here (?:is|are) (?:the )?\d+ (?:multiple-?choice )?questions? (?:about|on).*?:?\s*)/i, '');
   normalizedText = normalizedText.replace(/^(?:I['']ll create.*?:?\s*)/i, '');
   normalizedText = normalizedText.replace(/^(?:I hope these.*?\.\s*)/i, '');
+  
+  normalizedText = normalizedText.trim();
   
   // Try multiple parsing strategies
   let blocks: string[] = [];
@@ -37,14 +203,26 @@ export function parseQuizFromText(text: string): QuizQuestion[] {
   if (blocks.length === 0) {
     const numberedPattern = /(?:^|\n)(\d+)\.\s+/g;
     const numberedMatches = [...normalizedText.matchAll(numberedPattern)];
-    if (numberedMatches.length > 0) {
+    if (numberedMatches.length >= 2) {  // Need at least 2 questions
       // Split by numbered pattern
       const splits = normalizedText.split(/(?:^|\n)\d+\.\s+/);
       blocks = splits.filter(b => b.trim().length > 0);
-      // Skip first block if it's intro text
-      if (blocks.length > 0 && !blocks[0].match(/^[A-D]\)/i)) {
-        blocks = blocks.slice(1);
+      
+      // Skip first block if it doesn't look like a question (no options or answer)
+      if (blocks.length > 0) {
+        const firstBlock = blocks[0];
+        const hasOptions = /[A-D][\)\.]\s+/i.test(firstBlock);
+        const hasAnswer = /Answer:\s*[A-D]/i.test(firstBlock);
+        if (!hasOptions && !hasAnswer) {
+          blocks = blocks.slice(1);
+        }
       }
+      
+      console.log('Strategy 2 - Numbered questions:', {
+        matchCount: numberedMatches.length,
+        blocksFound: blocks.length,
+        firstBlockPreview: blocks[0]?.substring(0, 100)
+      });
     }
   }
   
@@ -172,15 +350,21 @@ export function parseQuizFromText(text: string): QuizQuestion[] {
 
       // Match answer - supports multiple formats
       // "Answer: A", "Answer: A)", "Answer: A) Full text", "Answer: B) They are efficient..."
-      const answerMatch = line.match(/^Answer:\s*([A-D])[\)\.]?\s*(.*)/i);
+      // Also handle "Correct Answer: A", "Answer is A", etc.
+      const answerMatch = line.match(/^(?:Correct\s+)?Answer(?:\s+is)?:\s*([A-D])[\)\.,]?\s*(.*)/i);
       if (answerMatch) {
         const answerLetter = answerMatch[1].toUpperCase();
         correctAnswer = answerLetter.charCodeAt(0) - 65; // Convert A-D to 0-3
         foundAnswer = true;
         collectingExplanation = false;
-        // If answer line has explanation text, use it
+        // If answer line has explanation text after the letter, use it
         if (answerMatch[2] && answerMatch[2].trim()) {
-          explanation = answerMatch[2].trim();
+          const explanationText = answerMatch[2].trim();
+          // Remove the option text if it's repeated (e.g., "Answer: C) O(log n)")
+          // Only keep it if it's actual explanation, not just repeating the option
+          if (!options.includes(explanationText)) {
+            explanation = explanationText;
+          }
         }
         continue;
       }
@@ -201,14 +385,35 @@ export function parseQuizFromText(text: string): QuizQuestion[] {
 
     // Only add if we have valid question, at least 2 options, and found answer
     if (question && options.length >= 2 && foundAnswer) {
-      questions.push({
+      const quizQuestion = {
         question: question.replace(/^[?？\s]+|[?？\s]+$/g, ''), // Clean up question marks
         options,
         correctAnswer,
         explanation: explanation.trim() || undefined,
+      };
+      questions.push(quizQuestion);
+      console.log('✅ Added quiz question:', {
+        questionNum: questions.length,
+        question: quizQuestion.question.substring(0, 50) + '...',
+        optionCount: options.length,
+        correctAnswer: correctAnswer,
+        hasExplanation: !!quizQuestion.explanation
+      });
+    } else {
+      console.log('❌ Skipped invalid question:', {
+        hasQuestion: !!question,
+        optionCount: options.length,
+        foundAnswer,
+        questionPreview: question?.substring(0, 50)
       });
     }
   }
+
+  console.log('📊 Quiz parsing complete:', {
+    totalQuestions: questions.length,
+    strategies: blocks.length > 0 ? 'found' : 'none',
+    inputLength: text.length
+  });
 
   return questions;
 }
@@ -220,24 +425,85 @@ export function extractQuizFromMarkdown(markdownText: string): {
   cleanMarkdown: string;
   quiz: QuizQuestion[] | null;
 } {
+  // PRIORITY 1: Try JSON format first (structured output from AI)
+  // Look for JSON array pattern with quiz structure OR numbered text format
+  const hasJSONKeywords = markdownText.includes('"question"') && 
+                          markdownText.includes('"options"') && 
+                          markdownText.includes('"correctAnswer"');
+  
+  const hasNumberedFormat = /\d+\.\s+[A-Z]/.test(markdownText) && 
+                           /[A-D]\)\s+/.test(markdownText) && 
+                           /Answer:\s*[A-D]\)/.test(markdownText);
+  
+  if (hasJSONKeywords || hasNumberedFormat) {
+    console.log('🎯 Detected quiz format (JSON or numbered text), attempting to parse...');
+    const quizJSON = extractQuizJSON(markdownText);
+    
+    if (quizJSON && quizJSON.length > 0) {
+      // Remove JSON/quiz content from markdown
+      let cleanMarkdown = markdownText;
+      
+      // Remove the JSON array if present
+      const jsonStart = cleanMarkdown.indexOf('[');
+      const jsonEnd = cleanMarkdown.lastIndexOf(']') + 1;
+      if (jsonStart !== -1 && jsonEnd > jsonStart) {
+        cleanMarkdown = cleanMarkdown.substring(0, jsonStart) + cleanMarkdown.substring(jsonEnd);
+      } else {
+        // For text format, remove from first question to end
+        const firstQuestion = cleanMarkdown.match(/\d+\.\s+[A-Z]/);
+        if (firstQuestion && firstQuestion.index !== undefined) {
+          cleanMarkdown = cleanMarkdown.substring(0, firstQuestion.index);
+        }
+      }
+      
+      // Remove code blocks that might wrap it
+      cleanMarkdown = cleanMarkdown.replace(/```json?\s*\n?\s*```/gi, '');
+      cleanMarkdown = cleanMarkdown.replace(/```\s*\n?\s*```/g, '');
+      
+      // Remove quiz title/markers if present
+      cleanMarkdown = cleanMarkdown.replace(/###QUIZ_GENERATOR###/g, '');
+      cleanMarkdown = cleanMarkdown.replace(/###END_INSTRUCTION###/g, '');
+      
+      cleanMarkdown = cleanMarkdown.trim();
+      
+      console.log('✅ Quiz parsed and extracted:', {
+        questionCount: quizJSON.length,
+        cleanMarkdownLength: cleanMarkdown.length
+      });
+      
+      return { cleanMarkdown, quiz: quizJSON };
+    }
+  }
+  
+  // PRIORITY 2: Fall back to text parsing (for legacy format or LLM errors)
+  console.log('📝 JSON parsing failed or not detected, trying text parsing...');
+  
   // Check if text contains quiz-like content
   // Look for multiple indicators:
   // 1. "Question N:" pattern
   // 2. Numbered questions (1. 2. 3.)
   // 3. Question ending with ? followed by A) B) C) D) options
   // 4. "Answer:" and "Explanation:" patterns
-  const hasQuestionPattern = /(?:Question\s+\d+:|^\d+\.\s+[^?]*[?？]|(?:What|Which|How|When|Where|Why|Who)[^?]*[?？])/i.test(markdownText);
+  const hasQuestionPattern = /(?:Question\s+\d+:|^\d+\.\s+[^?]*[?？]|(?:What|Which|How|When|Where|Why|Who)[^?]*[?？])/im.test(markdownText);
   const hasOptionsPattern = /[A-D][\)\.]\s+/i.test(markdownText);
   const hasAnswerPattern = /Answer:\s*[A-D]/i.test(markdownText);
   
-  const hasQuizPattern = hasQuestionPattern && hasOptionsPattern && hasAnswerPattern;
+  // Also check for quiz title patterns as a strong indicator
+  const hasQuizTitle = /Quiz|Practice Questions?|Test Your Knowledge/i.test(markdownText);
+  
+  // More lenient detection - just need questions with options, or quiz title + questions
+  const hasQuizPattern = (hasQuestionPattern && hasOptionsPattern) || 
+                         (hasQuizTitle && hasQuestionPattern) ||
+                         (hasAnswerPattern && hasOptionsPattern && hasQuestionPattern);
   
   console.log('Quiz detection:', { 
     hasQuestionPattern, 
     hasOptionsPattern, 
     hasAnswerPattern,
+    hasQuizTitle,
     hasQuizPattern,
-    textLength: markdownText.length 
+    textLength: markdownText.length,
+    preview: markdownText.substring(0, 200)
   });
   
   if (!hasQuizPattern) {
@@ -256,28 +522,44 @@ export function extractQuizFromMarkdown(markdownText: string): {
   let cleanMarkdown = markdownText;
   
   // Try to find and remove the quiz section
-  // Look for common intro phrases that indicate quiz start
+  // Look for common patterns that indicate quiz start
   const quizStartPatterns = [
-    /(?:^|\n)(?:##?\s*(?:Quiz|Practice Questions?|Test Your Knowledge))/i,
+    // Quiz title (with or without markdown header)
+    /(?:^|\n)#+\s*.*?\bQuiz\b.*?(?=\n)/i,
+    /(?:^|\n).*?\bQuiz\b\s*\n/i,
+    // Test/Practice header
+    /(?:^|\n)#+\s*(?:Practice Questions?|Test Your Knowledge)/i,
+    // Common intro phrases
     /(?:^|\n)Here (?:is|are)(?: the)? \d+ (?:multiple-?choice )?questions?/i,
-    /(?:^|\n)Question\s+1:/i,
-    /(?:^|\n)1\.\s+[^?]*[?？]/i, // First numbered question
-    /(?:^|\n)(?:What|Which|How|When|Where|Why|Who)[^?]*[?？]\s*\n\s*[A-D][\)\.]/i, // First question with options
+    /(?:^|\n)Test your knowledge/i,
+    /(?:^|\n)Answer (?:the following|these) questions/i,
+    // First numbered question
+    /(?:^|\n)(?:Question\s+)?1[\.\)]\s+[A-Z]/i,
   ];
   
+  let quizStartIndex = -1;
   for (const pattern of quizStartPatterns) {
     const match = cleanMarkdown.match(pattern);
     if (match && match.index !== undefined) {
-      cleanMarkdown = cleanMarkdown.substring(0, match.index).trim();
+      quizStartIndex = match.index;
+      console.log('Found quiz start with pattern:', pattern, 'at index:', quizStartIndex);
       break;
     }
   }
   
-  // If still no match, try to find first question pattern and remove from there
-  if (cleanMarkdown === markdownText) {
-    const firstQuestionMatch = cleanMarkdown.match(/(?:Question\s+\d+:|^\d+\.\s+[^?]*[?？]|(?:What|Which|How|When|Where|Why|Who)[^?]*[?？]\s*\n\s*[A-D][\)\.])/i);
+  if (quizStartIndex >= 0) {
+    cleanMarkdown = cleanMarkdown.substring(0, quizStartIndex).trim();
+    console.log('Removed quiz section. Clean markdown length:', cleanMarkdown.length);
+  } else {
+    // If no clear start found, try to find first question and remove from there
+    const firstQuestionPattern = /(?:^|\n)(?:Question\s+1:|1\.\s+(?:What|Which|How|When|Where|Why|Who))/i;
+    const firstQuestionMatch = cleanMarkdown.match(firstQuestionPattern);
     if (firstQuestionMatch && firstQuestionMatch.index !== undefined) {
-      cleanMarkdown = cleanMarkdown.substring(0, firstQuestionMatch.index).trim();
+      quizStartIndex = firstQuestionMatch.index;
+      cleanMarkdown = cleanMarkdown.substring(0, quizStartIndex).trim();
+      console.log('Removed quiz from first question. Clean markdown length:', cleanMarkdown.length);
+    } else {
+      console.warn('Could not find quiz start position, keeping full markdown');
     }
   }
 
