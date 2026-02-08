@@ -39,7 +39,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course }) => {
           </div>
         )}
       </div>
-
+d
       {/* Title */}
       <h4 className="font-black text-slate-900 dark:text-slate-200 text-base mb-2 line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-tight">
         {course.title}
