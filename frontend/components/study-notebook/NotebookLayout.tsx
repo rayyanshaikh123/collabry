@@ -18,6 +18,8 @@ interface NotebookLayoutProps {
   // Chat
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
+  onRegeneratePrompt?: (messageId: string) => void;
+  onEditPrompt?: (messageId: string, newText: string) => void;
   onClearChat: () => void;
   onRegenerateResponse: () => void;
   isChatLoading?: boolean;
@@ -43,6 +45,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   onRemoveSource,
   messages,
   onSendMessage,
+  onRegeneratePrompt,
+  onEditPrompt,
   onClearChat,
   onRegenerateResponse,
   isChatLoading = false,
@@ -97,6 +101,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
           <ChatPanel
             messages={messages}
             onSendMessage={onSendMessage}
+            onRegeneratePrompt={onRegeneratePrompt}
+            onEditPrompt={onEditPrompt}
             onClearChat={onClearChat}
             onRegenerateResponse={onRegenerateResponse}
             isLoading={isChatLoading}
@@ -163,6 +169,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
               <ChatPanel
                 messages={messages}
                 onSendMessage={onSendMessage}
+                onRegeneratePrompt={onRegeneratePrompt}
+                onEditPrompt={onEditPrompt}
                 onClearChat={onClearChat}
                 onRegenerateResponse={onRegenerateResponse}
                 isLoading={isChatLoading}

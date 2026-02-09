@@ -3,11 +3,13 @@ Usage limit checking middleware.
 
 Enforces subscription tier limits for AI operations.
 """
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from core.usage_tracker import usage_tracker
 from datetime import datetime, timedelta
 import logging
+from config import CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +33,28 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         "/ai/mindmap",
         "/ai/sessions"
     ]
+
+    # POST endpoints that should never count towards token limits
+    # (they don't call the LLM; e.g. rendering/conversion endpoints)
+    NON_CONSUMING_POST_PATHS = {
+        "/ai/mindmap/render",
+    }
     
     async def dispatch(self, request: Request, call_next):
         """Check usage limits before processing request."""
+
+        # Allow disabling in local dev (RATE_LIMIT_ENABLED=false)
+        try:
+            if not bool(CONFIG["rate_limit_enabled"]):
+                return await call_next(request)
+        except Exception:
+            # If config lookup fails for any reason, don't block requests
+            return await call_next(request)
         
+        # Skip non-consuming POST endpoints
+        if request.method != "GET" and request.url.path in self.NON_CONSUMING_POST_PATHS:
+            return await call_next(request)
+
         # Only check for token-consuming endpoints
         if not any(request.url.path.startswith(endpoint) for endpoint in self.TOKEN_CONSUMING_ENDPOINTS):
             return await call_next(request)
@@ -51,7 +71,6 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
             auth_header = request.headers.get("authorization", "")
             if auth_header.startswith("Bearer "):
                 from jose import jwt
-                from config import CONFIG
                 
                 token = auth_header.replace("Bearer ", "")
                 payload = jwt.decode(
@@ -76,15 +95,16 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
                 # Check if user has exceeded daily limit
                 if current_tokens >= tier_limit:
                     logger.warning(f"User {user_id} exceeded usage limit: {current_tokens}/{tier_limit}")
-                    raise HTTPException(
+                    return JSONResponse(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail={
+                        content={
                             "message": f"Daily token limit exceeded ({tier_limit:,} tokens). Resets in 24 hours.",
                             "current_usage": current_tokens,
                             "limit": tier_limit,
                             "tier": subscription_tier,
-                            "suggestion": "Upgrade your plan for higher daily limits or wait for daily reset"
-                        }
+                            "suggestion": "Upgrade your plan for higher daily limits or wait for daily reset",
+                        },
+                        headers={"Retry-After": "86400"},
                     )
 
                 # Warn if approaching limit (>90%)
@@ -92,8 +112,6 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
                 if usage_percentage > 90:
                     logger.info(f"User {user_id} approaching limit: {usage_percentage:.1f}%")
 
-            except HTTPException:
-                raise
             except Exception as e:
                 logger.error(f"Error checking usage limits: {e}")
                 # Don't block request if limit check fails

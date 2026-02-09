@@ -71,7 +71,7 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
       .catch((err) => {
         if (!mounted) return;
         console.error('MindMapViewer: Render error:', err);
-        setError(String(err));
+        setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         if (mounted) setLoading(false);

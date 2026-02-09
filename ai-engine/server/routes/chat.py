@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import ChatRequest, ChatResponse, ErrorResponse
-from core.agent_new import run_agent, chat as agent_chat
+from core.agent import run_agent, chat as agent_chat
 from config import CONFIG
 import logging
 from uuid import uuid4

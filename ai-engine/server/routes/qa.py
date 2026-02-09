@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import QARequest, QAResponse, QAGenerateRequest, QAGenerateResponse, QuizQuestion, ErrorResponse
-from core.agent_compat import create_agent
+from core.agent import chat, run_agent
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging
@@ -89,13 +89,6 @@ async def question_answering(
         elif request.context:
             context_text = request.context
         
-        # Create agent for QA
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),  # Temporary session
-            config=CONFIG
-        )
-        
         # Build QA prompt
         if context_text:
             prompt = f"""Answer the following question using the provided context.
@@ -109,20 +102,20 @@ Answer (be specific and cite sources if available):"""
         else:
             prompt = f"""Answer the following question to the best of your knowledge.
 
-Question: {request.question}
+Question:{request.question}
 
 Answer:"""
         
-        # Collect response
-        response_chunks = []
+        # Execute agent directly with new API
+        session_id = str(uuid4())  # Temporary session
+        answer = await chat(
+            user_id=user_id,
+            session_id=session_id,
+            message=prompt,
+            notebook_id=None
+        )
         
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        # Execute agent
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
-        answer = "".join(response_chunks).strip()
+        answer = answer.strip()
         
         logger.info(f"QA answer generated: {len(answer)} chars, sources={len(sources)}")
         
@@ -194,13 +187,6 @@ async def question_answering_stream(
         elif request.context:
             context_text = request.context
         
-        # Create agent for QA
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),
-            config=CONFIG
-        )
-        
         # Build QA prompt
         if context_text:
             prompt = f"""Answer the following question using the provided context.
@@ -226,15 +212,15 @@ Answer:"""
             if sources:
                 yield f"event: sources\ndata: {len(sources)}\n\n"
             
-            # Execute agent with streaming
-            chunks_buffer = []
-            def collect_chunk(chunk: str):
-                chunks_buffer.append(chunk)
-            
-            agent.handle_user_input_stream(prompt, collect_chunk)
-            
-            # Stream the answer chunks
-            for chunk in chunks_buffer:
+            # Execute agent with streaming using new API
+            session_id = str(uuid4())
+            async for chunk in run_agent(
+                user_id=user_id,
+                session_id=session_id,
+                message=prompt,
+                notebook_id=None,
+                stream=True
+            ):
                 if chunk.strip():
                     has_data = True
                     yield f"data: {chunk}\n\n"
@@ -327,9 +313,6 @@ async def question_answering_with_file(
             except Exception as e:
                 logger.warning(f"RAG retrieval failed: {e}")
         
-        # Create agent
-        agent, _, _, _ = create_agent(user_id=user_id, session_id=str(uuid4()), config=CONFIG)
-        
         # Build prompt
         prompt = f"""Answer the following question based on the uploaded file content.
 
@@ -344,12 +327,14 @@ Question: {question}
 
 Answer (be specific and reference the file content):"""
         
-        response_chunks = []
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        answer = "".join(response_chunks).strip()
+        # Execute agent directly with new API
+        session_id = str(uuid4())
+        answer = await chat(
+            user_id=user_id,
+            session_id=session_id,
+            message=prompt,
+            notebook_id=None
+        )
         
         logger.info(f"File QA answer generated: {len(answer)} chars")
         
@@ -421,8 +406,6 @@ async def question_answering_with_file_stream(
             except:
                 pass
         
-        agent, _, _, _ = create_agent(user_id=user_id, session_id=str(uuid4()), config=CONFIG)
-        
         prompt = f"""Answer based on the uploaded file.
 
 File: {file.filename}
@@ -440,13 +423,15 @@ Answer:"""
             if sources_count > 0:
                 yield f"event: sources\ndata: {sources_count}\n\n"
             
-            chunks_buffer = []
-            def collect_chunk(chunk: str):
-                chunks_buffer.append(chunk)
-            
-            agent.handle_user_input_stream(prompt, collect_chunk)
-            
-            for chunk in chunks_buffer:
+            # Stream response using new agent API
+            session_id = str(uuid4())
+            async for chunk in run_agent(
+                user_id=user_id,
+                session_id=session_id,
+                message=prompt,
+                notebook_id=None,
+                stream=True
+            ):
                 if chunk.strip():
                     yield f"data: {chunk}\n\n"
             
@@ -522,9 +507,6 @@ async def generate_qa(
             except Exception as e:
                 logger.warning(f"RAG retrieval failed, continuing with provided text only: {e}")
         
-        # Create agent for generation (using generic session for quiz generation)
-        agent, _, _, _ = create_agent(user_id, session_id="quiz_generation")
-        
         # Build generation prompt
         difficulty_instruction = ""
         if request.difficulty and request.difficulty != "mixed":
@@ -572,13 +554,14 @@ Return this exact format:
 
 Generate exactly {request.num_questions} questions. Return ONLY valid JSON with double quotes, no extra text, no markdown code blocks."""
 
-        # Generate response using streaming collection
-        response_text = ""
-        def collect_chunk(chunk: str):
-            nonlocal response_text
-            response_text += chunk
-        
-        agent.handle_user_input_stream(prompt, collect_chunk)
+        # Generate response using new agent API
+        session_id = str(uuid4())
+        response_text = await chat(
+            user_id=user_id,
+            session_id=session_id,
+            message=prompt,
+            notebook_id=None
+        )
         
         logger.info(f"Generated response length: {len(response_text)} chars")
         logger.debug(f"Response preview: {response_text[:500]}...")
@@ -676,9 +659,6 @@ async def generate_qa_stream(
     try:
         logger.info(f"Streaming generation of {request.num_questions} questions for user {user_id}")
         
-        # Create agent for generation (using generic session for quiz generation)
-        agent, _, _, _ = create_agent(user_id, session_id="quiz_generation")
-        
         # Build generation prompt
         difficulty_instruction = ""
         if request.difficulty and request.difficulty != "mixed":
@@ -716,13 +696,18 @@ Generate exactly {request.num_questions} questions."""
 
         async def event_generator():
             try:
-                # Generate response using streaming collection
+                # Generate response using new agent API with streaming
                 response_text = ""
-                def collect_chunk(chunk: str):
-                    nonlocal response_text
-                    response_text += chunk
+                session_id = str(uuid4())
                 
-                agent.handle_user_input_stream(prompt, collect_chunk)
+                async for chunk in run_agent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    message=prompt,
+                    notebook_id=None,
+                    stream=True
+                ):
+                    response_text += chunk
                 
                 # Parse and stream questions one by one
                 questions_sent = 0

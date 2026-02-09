@@ -14,7 +14,7 @@ import os
 from typing import Optional, List, Dict, Any
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
-from core.embeddings_new import get_embedding_client
+from core.embeddings import get_embedding_client
 
 
 class VectorStoreConfig:

@@ -33,24 +33,71 @@ class SocketClient {
     return this.socket;
   }
 
-  connectBoards(token: string) {
-    if (this.boardSocket?.connected) {
-      return this.boardSocket;
-    }
+  connectBoards(token: string): Promise<Socket> {
+    return new Promise((resolve, reject) => {
+      // If already connected, resolve immediately
+      if (this.boardSocket?.connected) {
+        console.log('[Board Socket] Already connected:', this.boardSocket.id);
+        resolve(this.boardSocket);
+        return;
+      }
 
-    this.boardSocket = io(`${SOCKET_URL}/boards`, {
-      auth: {
-        token,
-      },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: this.maxReconnectAttempts,
+      // If socket exists but not connected, disconnect and recreate
+      if (this.boardSocket) {
+        console.log('[Board Socket] Cleaning up existing disconnected socket');
+        this.boardSocket.removeAllListeners();
+        this.boardSocket.close();
+        this.boardSocket = null;
+      }
+
+      console.log('[Board Socket] Creating new connection to:', `${SOCKET_URL}/boards`);
+      console.log('[Board Socket] Token length:', token?.length);
+      
+      this.boardSocket = io(`${SOCKET_URL}/boards`, {
+        auth: {
+          token,
+        },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: this.maxReconnectAttempts,
+      });
+
+      const timeout = setTimeout(() => {
+        console.error('[Board Socket] Connection timeout after 5s');
+        if (this.boardSocket) {
+          this.boardSocket.removeAllListeners();
+          this.boardSocket.close();
+          this.boardSocket = null;
+        }
+        reject(new Error('Board socket connection timeout'));
+      }, 5000);
+
+      this.boardSocket.on('connect', () => {
+        console.log('[Board Socket] Connection established:', this.boardSocket?.id);
+        clearTimeout(timeout);
+        resolve(this.boardSocket!);
+      });
+
+      this.boardSocket.on('connect_error', (error) => {
+        console.error('[Board Socket] Connection error:', error.message);
+        console.error('[Board Socket] Error details:', error);
+        clearTimeout(timeout);
+        if (this.boardSocket) {
+          this.boardSocket.removeAllListeners();
+          this.boardSocket.close();
+          this.boardSocket = null;
+        }
+        reject(error);
+      });
+
+      this.boardSocket.on('error', (error) => {
+        console.error('[Board Socket] Socket error:', error);
+      });
+
+      this.setupBoardEventHandlers();
     });
-
-    this.setupBoardEventHandlers();
-    return this.boardSocket;
   }
 
   private setupEventHandlers() {
@@ -98,18 +145,40 @@ class SocketClient {
 
   disconnect() {
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
     if (this.boardSocket) {
+      this.boardSocket.removeAllListeners();
       this.boardSocket.disconnect();
       this.boardSocket = null;
     }
   }
 
+  disconnectBoards() {
+    if (this.boardSocket) {
+      this.boardSocket.removeAllListeners();
+      this.boardSocket.disconnect();
+      this.boardSocket = null;
+      console.log('[Board Socket] Disconnected and cleaned up');
+    }
+  }
+
   // Board collaboration events
   joinBoard(boardId: string, callback?: (response: any) => void) {
-    this.boardSocket?.emit('board:join', { boardId }, callback);
+    if (!this.boardSocket) {
+      console.error('[Board Socket] Cannot join board - socket not initialized');
+      callback?.({ error: 'Socket not connected' });
+      return;
+    }
+    if (!this.boardSocket.connected) {
+      console.error('[Board Socket] Cannot join board - socket not connected');
+      callback?.({ error: 'Socket not connected' });
+      return;
+    }
+    console.log('[Board Socket] Emitting board:join for:', boardId);
+    this.boardSocket.emit('board:join', { boardId }, callback);
   }
 
   leaveBoard(boardId: string) {
@@ -176,9 +245,17 @@ class SocketClient {
     return this.socket?.connected ?? false;
   }
 
+  isBoardConnected(): boolean {
+    return this.boardSocket?.connected ?? false;
+  }
+
   // Get socket instance for advanced usage
   getSocket(): Socket | null {
     return this.socket;
+  }
+
+  getBoardSocket(): Socket | null {
+    return this.boardSocket;
   }
 }
 

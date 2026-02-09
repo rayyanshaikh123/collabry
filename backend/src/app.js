@@ -24,6 +24,7 @@ const invoiceRoutes = require('./routes/invoice.routes');
 const usageRoutes = require('./routes/usage.routes');
 const couponRoutes = require('./routes/coupon.routes');
 const gamificationRoutes = require('./routes/gamification.routes');
+const focusRoutes = require('./routes/focus.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
@@ -100,6 +101,7 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/gamification', gamificationRoutes);
+app.use('/api/focus', focusRoutes);
 
 
 // Root route

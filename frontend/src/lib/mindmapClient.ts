@@ -196,19 +196,61 @@ export async function renderMindmap(mindmap: any, format: 'svg' | 'mermaid' | 'b
     format
   });
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(hierarchicalMindmap),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(hierarchicalMindmap),
+    });
+  } catch (e) {
+    // Network/CORS errors show up here as a TypeError in browsers
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(`Mindmap render request failed: ${message}`);
+  }
 
   if (!res.ok) {
-    const text = await res.text();
-    console.error('renderMindmap: Backend error:', { status: res.status, text });
-    throw new Error(`Mindmap render failed: ${res.status} ${text}`);
+    const contentType = res.headers.get('content-type') || '';
+    let payload: any = null;
+    let text: string | null = null;
+
+    if (contentType.includes('application/json')) {
+      try {
+        payload = await res.json();
+      } catch {
+        // fall through
+      }
+    }
+    if (payload === null) {
+      try {
+        text = await res.text();
+      } catch {
+        // ignore
+      }
+    }
+
+    const detail = payload?.detail ?? payload?.message ?? payload?.error ?? text ?? '';
+    const detailString = typeof detail === 'string' ? detail : JSON.stringify(detail);
+
+    console.error('renderMindmap: Backend error:', { status: res.status, detail: payload ?? text });
+
+    if (res.status === 429) {
+      // Friendly rate-limit message for UI
+      const msg =
+        (payload && typeof payload?.message === 'string' && payload.message) ||
+        (payload && typeof payload?.detail?.message === 'string' && payload.detail.message) ||
+        'Daily limit exceeded. Try again later.';
+      const suggestion =
+        (payload && typeof payload?.suggestion === 'string' && payload.suggestion) ||
+        (payload && typeof payload?.detail?.suggestion === 'string' && payload.detail.suggestion) ||
+        '';
+      throw new Error(`Rate limit exceeded (429): ${msg}${suggestion ? ` — ${suggestion}` : ''}`);
+    }
+
+    throw new Error(`Mindmap render failed (HTTP ${res.status}): ${detailString}`);
   }
 
   const data = await res.json();

@@ -14,7 +14,6 @@ import type {
 export const focusService = {
   /**
    * Get all focus sessions for current user
-   * TODO: Connect to backend /api/focus/sessions
    */
   async getSessions(filters?: {
     startDate?: string;
@@ -34,7 +33,6 @@ export const focusService = {
 
   /**
    * Get single focus session by ID
-   * TODO: Connect to backend /api/focus/sessions/:id
    */
   async getSession(sessionId: string): Promise<FocusSession> {
     const response = await apiClient.get<FocusSession>(`/focus/sessions/${sessionId}`);
@@ -48,7 +46,6 @@ export const focusService = {
 
   /**
    * Start new focus session
-   * TODO: Connect to backend /api/focus/sessions
    */
   async startSession(data: Partial<FocusSession>): Promise<FocusSession> {
     const response = await apiClient.post<FocusSession>('/focus/sessions', data);
@@ -62,7 +59,6 @@ export const focusService = {
 
   /**
    * Update focus session
-   * TODO: Connect to backend /api/focus/sessions/:id
    */
   async updateSession(sessionId: string, data: Partial<FocusSession>): Promise<FocusSession> {
     const response = await apiClient.patch<FocusSession>(
@@ -79,7 +75,6 @@ export const focusService = {
 
   /**
    * Pause focus session
-   * TODO: Connect to backend /api/focus/sessions/:id/pause
    */
   async pauseSession(sessionId: string): Promise<FocusSession> {
     const response = await apiClient.post<FocusSession>(`/focus/sessions/${sessionId}/pause`);
@@ -93,7 +88,6 @@ export const focusService = {
 
   /**
    * Resume focus session
-   * TODO: Connect to backend /api/focus/sessions/:id/resume
    */
   async resumeSession(sessionId: string): Promise<FocusSession> {
     const response = await apiClient.post<FocusSession>(`/focus/sessions/${sessionId}/resume`);
@@ -107,16 +101,18 @@ export const focusService = {
 
   /**
    * Complete focus session
-   * TODO: Connect to backend /api/focus/sessions/:id/complete
+   * @param sessionId - Session ID
+   * @param distractions - Number of distractions during session
+   * @param notes - Optional notes about the session
    */
   async completeSession(
     sessionId: string,
-    productivity?: number,
+    distractions?: number,
     notes?: string
-  ): Promise<FocusSession> {
-    const response = await apiClient.post<FocusSession>(
+  ): Promise<any> { // Returns session + xpAwarded + achievements
+    const response = await apiClient.post<any>(
       `/focus/sessions/${sessionId}/complete`,
-      { productivity, notes }
+      { distractions, notes }
     );
     
     if (response.success && response.data) {
@@ -128,7 +124,6 @@ export const focusService = {
 
   /**
    * Cancel focus session
-   * TODO: Connect to backend /api/focus/sessions/:id/cancel
    */
   async cancelSession(sessionId: string): Promise<void> {
     const response = await apiClient.post(`/focus/sessions/${sessionId}/cancel`);
@@ -140,7 +135,6 @@ export const focusService = {
 
   /**
    * Get focus settings
-   * TODO: Connect to backend /api/focus/settings
    */
   async getSettings(): Promise<FocusSettings> {
     const response = await apiClient.get<FocusSettings>('/focus/settings');
@@ -154,7 +148,6 @@ export const focusService = {
 
   /**
    * Update focus settings
-   * TODO: Connect to backend /api/focus/settings
    */
   async updateSettings(data: Partial<FocusSettings>): Promise<FocusSettings> {
     const response = await apiClient.patch<FocusSettings>('/focus/settings', data);
@@ -168,9 +161,8 @@ export const focusService = {
 
   /**
    * Get focus statistics
-   * TODO: Connect to backend /api/focus/stats
    */
-  async getStats(period?: 'day' | 'week' | 'month' | 'year'): Promise<FocusStats> {
+  async getStats(period?: 'today' | 'week' | 'month' | 'year' | 'all'): Promise<FocusStats> {
     const response = await apiClient.get<FocusStats>('/focus/stats', {
       params: { period },
     });

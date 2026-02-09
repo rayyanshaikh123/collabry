@@ -9,7 +9,7 @@ Handles:
 from fastapi import APIRouter, Depends, HTTPException
 from server.deps import get_current_user
 from server.schemas import MindMapRequest, MindMapResponse, MindMapNode, ErrorResponse
-from core.agent_compat import create_agent
+from core.agent import chat
 from core.rag_retriever import RAGRetriever
 from config import CONFIG
 import logging
@@ -19,7 +19,7 @@ import json
 from fastapi import Body, Query
 from fastapi.responses import JSONResponse
 from typing import Optional
-import tools
+from tools.tool_loader import load_tools
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["mindmap"])
@@ -121,13 +121,6 @@ async def generate_mindmap(
                 context_text = "\n\n".join(context_parts)
                 logger.info(f"Retrieved {len(docs)} documents for mind map context")
         
-        # Create agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),
-            config=CONFIG
-        )
-        
         # Build mind map prompt
         prompt = f"""Create a hierarchical mind map for the topic: "{request.topic}"
 
@@ -157,16 +150,16 @@ Output format (use bullet points with indentation):
 
 Mind map:"""
         
-        # Collect response
-        response_chunks = []
+        # Execute agent directly with new API
+        session_id = str(uuid4())
+        mindmap_text = await chat(
+            user_id=user_id,
+            session_id=session_id,
+            message=prompt,
+            notebook_id=None
+        )
         
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        # Execute agent
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
-        mindmap_text = "".join(response_chunks).strip()
+        mindmap_text = mindmap_text.strip()
         
         # Parse mind map structure
         root = parse_mindmap_from_text(mindmap_text, request.topic)
@@ -214,7 +207,7 @@ async def render_mindmap(
         logger.info(f"Mindmap render request from user={user_id}, format={format}")
 
         # Load tools and locate mindmap_generator
-        tools_registry = tools.load_tools()
+        tools_registry = load_tools()
         mg_tool = tools_registry.get('mindmap_generator')
         if not mg_tool:
             return JSONResponse({"error": "mindmap_generator tool not available"}, status_code=500)

@@ -66,13 +66,14 @@ class NotebookService {
     return response.data;
   }
 
-  async addSource(notebookId: string, formData: FormData) {
+  async addSource(notebookId: string, payload: FormData | Record<string, any>) {
+    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
     const response = await api.post(
       `/notebook/notebooks/${notebookId}/sources`,
-      formData,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      }
+      payload,
+      isFormData
+        ? { headers: { 'Content-Type': 'multipart/form-data' } }
+        : undefined
     );
     return response.data;
   }

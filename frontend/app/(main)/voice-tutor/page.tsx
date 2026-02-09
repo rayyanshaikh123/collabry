@@ -50,7 +50,7 @@ function LiveKitRoomContent({
       onConnectionStatus('Connected to AI tutor - listening for audio')
       
       // Check for audio tracks
-      const audioTracks = Array.from(agentParticipant.audioTrackPublications.values())
+      const audioTracks = Array.from(agentParticipant.audioTrackPublications.values() as Iterable<any>)
       console.log('Agent audio tracks:', audioTracks.length)
       
       if (audioTracks.length > 0) {
@@ -399,7 +399,6 @@ export default function VoiceTutorPage() {
           video={false}
           options={{
             publishDefaults: {
-              audioBitrate: 32000,
               dtx: true,
               red: false,
               simulcast: false,
@@ -425,7 +424,7 @@ export default function VoiceTutorPage() {
           }}
           onMediaDeviceFailure={(error) => {
             console.error('Media device error:', error)
-            setError(`Microphone error: ${error?.message || 'Could not access microphone'}`)
+            setError(`Microphone error: ${String(error) || 'Could not access microphone'}`)
           }}
           style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
         >

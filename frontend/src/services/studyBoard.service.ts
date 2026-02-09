@@ -54,7 +54,6 @@ export const studyBoardService = {
 
   /**
    * Update board
-   * TODO: Connect to backend /api/boards/:id
    */
   async updateBoard(boardId: string, data: Partial<StudyBoard>): Promise<StudyBoard> {
     const response = await apiClient.patch<StudyBoard>(`/boards/${boardId}`, data);
@@ -68,7 +67,6 @@ export const studyBoardService = {
 
   /**
    * Delete board
-   * TODO: Connect to backend /api/boards/:id
    */
   async deleteBoard(boardId: string): Promise<void> {
     const response = await apiClient.delete(`/boards/${boardId}`);
@@ -80,57 +78,40 @@ export const studyBoardService = {
 
   /**
    * Add element to board
-   * TODO: Connect to backend /api/boards/:id/elements
+   * NOTE: Use Socket.IO 'element:create' event instead for real-time collaboration.
+   * This REST endpoint is not implemented - elements are managed via WebSocket.
+   * @deprecated Use Socket.IO boardNamespace.emit('element:create', { boardId, element })
    */
   async addElement(boardId: string, element: Partial<BoardElement>): Promise<BoardElement> {
-    const response = await apiClient.post<BoardElement>(
-      `/boards/${boardId}/elements`,
-      element
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
-    throw new Error('Failed to add element');
+    throw new Error('Use Socket.IO element:create event instead of REST API');
   },
 
   /**
    * Update board element
-   * TODO: Connect to backend /api/boards/:id/elements/:elementId
+   * NOTE: Use Socket.IO 'element:update' event instead for real-time collaboration.
+   * This REST endpoint is not implemented - elements are managed via WebSocket.
+   * @deprecated Use Socket.IO boardNamespace.emit('element:update', { boardId, elementId, changes })
    */
   async updateElement(
     boardId: string,
     elementId: string,
     data: Partial<BoardElement>
   ): Promise<BoardElement> {
-    const response = await apiClient.patch<BoardElement>(
-      `/boards/${boardId}/elements/${elementId}`,
-      data
-    );
-    
-    if (response.success && response.data) {
-      return response.data;
-    }
-    
-    throw new Error('Failed to update element');
+    throw new Error('Use Socket.IO element:update event instead of REST API');
   },
 
   /**
    * Delete board element
-   * TODO: Connect to backend /api/boards/:id/elements/:elementId
+   * NOTE: Use Socket.IO 'element:delete' event instead for real-time collaboration.
+   * This REST endpoint is not implemented - elements are managed via WebSocket.
+   * @deprecated Use Socket.IO boardNamespace.emit('element:delete', { boardId, elementId })
    */
   async deleteElement(boardId: string, elementId: string): Promise<void> {
-    const response = await apiClient.delete(`/boards/${boardId}/elements/${elementId}`);
-    
-    if (!response.success) {
-      throw new Error('Failed to delete element');
-    }
+    throw new Error('Use Socket.IO element:delete event instead of REST API');
   },
 
   /**
-   * Invite user to board
-   * TODO: Connect to backend /api/boards/:id/invite
+   * Invite user to board by email
    */
   async inviteUser(boardId: string, email: string, role: 'editor' | 'viewer'): Promise<void> {
     const response = await apiClient.post(`/boards/${boardId}/invite`, {
@@ -144,29 +125,46 @@ export const studyBoardService = {
   },
 
   /**
-   * Remove user from board
-   * TODO: Connect to backend /api/boards/:id/participants/:userId
+   * Remove member from board
+   * Backend uses 'members' terminology, not 'participants'
    */
-  async removeParticipant(boardId: string, userId: string): Promise<void> {
-    const response = await apiClient.delete(`/boards/${boardId}/participants/${userId}`);
+  async removeMember(boardId: string, userId: string): Promise<void> {
+    const response = await apiClient.delete(`/boards/${boardId}/members/${userId}`);
     
     if (!response.success) {
-      throw new Error('Failed to remove participant');
+      throw new Error('Failed to remove member');
     }
   },
 
   /**
-   * Get board participants
-   * TODO: Connect to backend /api/boards/:id/participants
+   * Get board members/participants
+   * Note: Members are included in the board object from getBoard().
+   * This is a convenience method that fetches the board and returns just the members.
    */
-  async getParticipants(boardId: string): Promise<any[]> {
-    const response = await apiClient.get<any[]>(`/boards/${boardId}/participants`);
+  async getMembers(boardId: string): Promise<any[]> {
+    const board = await this.getBoard(boardId);
     
-    if (response.success && response.data) {
-      return response.data;
+    // Combine owner and members into a single array
+    const members = board.members || [];
+    
+    // Add owner to the list if not already present
+    if (board.owner) {
+      const ownerInMembers = members.some((m: any) => 
+        m.userId === board.owner._id || m.userId === board.owner
+      );
+      
+      if (!ownerInMembers) {
+        members.unshift({
+          userId: board.owner._id || board.owner,
+          role: 'owner',
+          email: board.owner.email,
+          name: board.owner.name,
+          addedAt: board.createdAt
+        });
+      }
     }
     
-    throw new Error('Failed to fetch participants');
+    return members;
   },
 
   /**

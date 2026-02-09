@@ -16,9 +16,11 @@ module.exports = (io) => {
 
   // Authentication middleware for board namespace
   boardNamespace.use((socket, next) => {
+    console.log('[Board NS] Auth attempt from:', socket.handshake.address);
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
     
     if (!token) {
+      console.error('[Board NS] No token provided');
       return next(new Error('Authentication required'));
     }
 
@@ -27,9 +29,11 @@ module.exports = (io) => {
       socket.userId = decoded.id;
       socket.userEmail = decoded.email;
       socket.userRole = decoded.role;
+      console.log('[Board NS] Auth success:', decoded.email);
       next();
     } catch (error) {
-      next(new Error('Invalid token'));
+      console.error('[Board NS] Token verification failed:', error.message);
+      return next(new Error('Invalid token'));
     }
   });
 

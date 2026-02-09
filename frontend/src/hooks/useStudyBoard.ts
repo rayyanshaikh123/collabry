@@ -218,12 +218,12 @@ export const useInviteUser = () => {
 };
 
 /**
- * Hook to fetch board participants
+ * Hook to fetch board members (participants)
  */
 export const useBoardParticipants = (boardId: string | undefined) => {
   return useQuery({
-    queryKey: ['boards', boardId, 'participants'],
-    queryFn: () => studyBoardService.getParticipants(boardId!),
+    queryKey: ['boards', boardId, 'members'],
+    queryFn: () => studyBoardService.getMembers(boardId!),
     enabled: !!boardId,
   });
 };

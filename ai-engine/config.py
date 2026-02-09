@@ -1,183 +1,186 @@
-"""Configuration for COLLABRY.
-
-All sensitive configuration should be in .env file (never committed to git).
-Copy .env.example to .env and fill in your values.
 """
-from pathlib import Path
+Configuration - Environment-based configuration loader.
+
+All configuration is loaded from environment variables.
+No hardcoded values, no complex logic.
+
+Provider switching happens via environment variables only.
+"""
+
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Base project directory (assumes this file lives in project root)
-ROOT = Path(__file__).parent
+# Load environment variables from .env file
+env_file = Path(__file__).parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
 
-# Load environment variables from .env file if it exists
-# This allows local development with .env while production uses system ENV
-dotenv_path = ROOT / '.env'
-if dotenv_path.exists():
-    load_dotenv(dotenv_path)
-    print(f"✓ Loaded environment from: {dotenv_path}")
-else:
-    print(f"⚠️  No .env file found at {dotenv_path}, using system environment variables")
-    print(f"   Copy .env.example to .env for local configuration")
 
-CONFIG = {
-    # ==============================================================================
-    # GOOGLE GEMINI CONFIGURATION (Primary AI Engine)
-    # ==============================================================================
-    # Google AI Studio API key (get from: https://aistudio.google.com/app/apikey)
-    "gemini_api_key": os.environ.get("GEMINI_API_KEY", ""),
+class Config:
+    """Application configuration from environment variables."""
     
-    # Gemini model selection
-    # Options: gemini-2.0-flash-lite (fast, stable), gemini-1.5-pro (more capable)
-    "gemini_model": os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite"),
+    # ========== Server Configuration ==========
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = int(os.getenv("PORT", "8000"))
+    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+    RELOAD = os.getenv("RELOAD", "false").lower() == "true"
     
-    # Gemini generation parameters
-    "gemini_max_tokens": int(os.environ.get("GEMINI_MAX_TOKENS", "8192")),
-    "gemini_timeout": int(os.environ.get("GEMINI_TIMEOUT", "120")),
+    # ========== LLM Configuration (OpenAI-compatible) ==========
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy")
+    OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+    OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
+    OPENAI_STREAMING = os.getenv("OPENAI_STREAMING", "true").lower() == "true"
     
-    # ==============================================================================
-    # LEGACY OLLAMA CONFIGURATION (Deprecated - kept for fallback)
-    # ==============================================================================
-    # Model name to use (change to 'mistral' or 'llama3.1' as installed)
-    "llm_model": os.environ.get("OLLAMA_MODEL", os.environ.get("COLLABRY_LLM_MODEL", "llama3.1")),
-
-    # Ollama base URL (standardized ENV variable)
-    "ollama_host": os.environ.get("OLLAMA_BASE_URL", os.environ.get("OLLAMA_HOST", "http://localhost:11434")),
+    # ========== Embeddings Configuration ==========
+    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1536"))
     
-    # Ollama request timeout in seconds (default: 180s for artifact generation)
-    "ollama_timeout": int(os.environ.get("OLLAMA_TIMEOUT", "180")),
+    # Provider-specific
+    HF_API_KEY = os.getenv("HF_API_KEY")  # HuggingFace API key
     
-    # Ollama retry configuration
-    "ollama_max_retries": int(os.environ.get("OLLAMA_MAX_RETRIES", "3")),
-    "ollama_retry_delay": float(os.environ.get("OLLAMA_RETRY_DELAY", "1.0")),
-
-    # MongoDB settings (REQUIRED for memory persistence)
-    "mongo_uri": os.environ.get("MONGO_URI", "mongodb://localhost:27017"),
-    "mongo_db": os.environ.get("MONGO_DB", "collabry"),
-    "memory_collection": os.environ.get("MEMORY_COLLECTION", "conversations"),
-
-    # Security settings (JWT authentication for production)
-    "jwt_secret_key": os.environ.get("JWT_SECRET_KEY", "dev-secret-key-change-in-production"),
-    "jwt_algorithm": os.environ.get("JWT_ALGORITHM", "HS256"),
-    # jwt_expiration": int(os.environ.get("JWT_EXPIRATION", "86400")),  # 24 hours
+    # ========== Vector Store Configuration ==========
+    VECTOR_STORE = os.getenv("VECTOR_STORE", "faiss").lower()
     
-    # CORS configuration (comma-separated origins)
-    "cors_origins": os.environ.get(
-        "CORS_ORIGINS",
-        "http://localhost:3000,https://colab-back.onrender.com,http://127.0.0.1:3000,http://127.0.0.1:5000"
-    ).split(","),
-
-    # External API keys (optional, loaded from ENV only for security)
-    "serper_api_key": os.environ.get("SERPER_API_KEY"),
-    "huggingface_api_key": os.environ.get("HUGGINGFACE_API_KEY"),
-    "stable_diffusion_api": os.environ.get("STABLE_DIFFUSION_API", "http://127.0.0.1:7860"),
-
-    # Agent options
-    "max_tool_calls": 3,
-
-    # Temperature for LLM responses
-    "temperature": float(os.environ.get("COLLABRY_TEMPERATURE", "0.2")),
-    # Embedding model name (Hugging Face) - UPDATED for cloud API
-    "embedding_model": os.environ.get("COLLABRY_EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"),
-
-    # FAISS index path prefix (two files will be created: {prefix}.index and {prefix}.meta.json)
-    "faiss_index_path": str(ROOT / "memory" / "faiss_index"),
-
-    # Path to the directory containing documents for RAG
-    "documents_path": str(ROOT / "documents"),
-
-    # Retrieval options
-    "retrieval_top_k": int(os.environ.get("COLLABRY_RETRIEVAL_TOP_K", "3")),
-    # How often (in seconds) to checkpoint the vector store to disk. Set 0 to disable.
-    "faiss_checkpoint_interval": int(os.environ.get("COLLABRY_FAISS_CHECKPOINT_INTERVAL", "60")),
-    # Memory cache size for recent query/result caching
-    "memory_cache_size": int(os.environ.get("COLLABRY_MEMORY_CACHE_SIZE", "128")),
-    # Memory eviction / retention settings
-    # Time-to-live for memory entries (seconds). Default 7 days.
-    "memory_ttl_seconds": int(os.environ.get("COLLABRY_MEMORY_TTL_SECONDS", str(7 * 24 * 3600))),
-    # Maximum number of persisted memory entries to keep (approx).
-    "memory_max_items": int(os.environ.get("COLLABRY_MEMORY_MAX_ITEMS", "5000")),
-    # Eviction policy: 'ttl', 'size', or 'hybrid' (both ttl and size)
-    "memory_eviction_policy": os.environ.get("COLLABRY_MEMORY_EVICTION_POLICY", "hybrid"),
-    # Background pruning interval (seconds). Set 0 to disable background pruning.
-    "memory_prune_interval_seconds": int(os.environ.get("COLLABRY_MEMORY_PRUNE_INTERVAL_SECONDS", "3600")),
-}
-
-# =====================================================================
-# LEGACY CLI SETTINGS (disabled for backend-only mode)
-# These settings are preserved for backward compatibility with CLI mode
-# but are not used in the FastAPI backend architecture
-# =====================================================================
-
-# Wake word detection settings (DISABLED for backend API mode)
-# Legacy CLI feature - not used in FastAPI backend
-CONFIG["wake_word_enabled"] = os.environ.get("COLLABRY_WAKE_WORD_ENABLED", "false").lower() == "true"
-CONFIG["wake_words"] = []  # Empty for backend mode
-CONFIG["wake_session_timeout"] = 0  # Not applicable in stateless API
-CONFIG["wake_word_strict"] = False  # Deprecated
-
-# Optional mapping of tool name synonyms. The agent will normalize model
-# requested tool names using this dict before attempting execution. Add any
-# extra aliases here (e.g. 'curl' -> 'web_scrape'). Keys are the variant
-# names the model might emit; values are canonical tool names present in the
-# tools registry.
-CONFIG["tool_synonyms"] = {
-    "curl": "web_scrape",
-    "curl_get": "web_scrape",
-    # Scraper variants
-    "web-scraper": "web_scrape",
-    "webscraper": "web_scrape",
-    "web-scrape": "web_scrape",
-    "web_scraper": "web_scrape",
-    "scrape": "web_scrape",
-    "scraper": "web_scrape",
-    # Generic search synonyms to improve dynamic routing
-    "search": "web_search",
-    "websearch": "web_search",
-    "web-search": "web_search",
-    "lookup": "web_search",
-    "google": "web_search",
-    # File operation synonyms
-    "save": "write_file",
-    "save_file": "write_file",
-    "note_down": "write_file",
-    "create_file": "write_file",
-    "write": "write_file",
-    "store": "write_file",
-    "read": "read_file",
-    "load": "read_file",
-    # Document generation synonyms
-    "create_doc": "doc_generator",
-    "make_doc": "doc_generator",
-    "generate_doc": "doc_generator",
-    "create_ppt": "ppt_generator",
-    "make_ppt": "ppt_generator",
-    "generate_ppt": "ppt_generator",
-    "presentation": "ppt_generator",
-}
-
-# Preferred site mappings for web_search context (study-platform relevant)
-CONFIG["preferred_sites"] = {
-    "wikipedia": "https://wikipedia.org",
-    "github": "https://github.com",
-    "stackoverflow": "https://stackoverflow.com",
-    "arxiv": "https://arxiv.org",
-    "scholar": "https://scholar.google.com",
-}
+    # FAISS
+    FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./data/faiss_index")
     
-# Allowlist persistence: file to persist allowed hosts/commands the user
-# confirmed during interactive sessions. This keeps confirmations from
-# prompting on every run. The file will be created under the memory folder.
-CONFIG["allowlist_path"] = str(ROOT / "memory" / "allowed_hosts.json")
-# Default runtime allowlist values (can be overridden by the persisted file)
-CONFIG["allowed_url_hosts"] = []
-CONFIG["allowed_commands"] = []
+    # Chroma
+    CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
+    CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))
+    CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma_db")
+    CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "documents")
+    
+    # Pinecone
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+    PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-west-2")
+    PINECONE_INDEX = os.getenv("PINECONE_INDEX", "study-assistant")
+    
+    # Qdrant
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+    QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "documents")
+    
+    # ========== Database Configuration ==========
+    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+    MONGODB_DB = os.getenv("MONGODB_DB", "study_assistant")
+    
+    # ========== Authentication ==========
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
+    JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "1440"))  # 24 hours
+    
+    # ========== Agent Configuration ==========
+    MAX_AGENT_ITERATIONS = int(os.getenv("MAX_AGENT_ITERATIONS", "5"))
+    CONVERSATION_HISTORY_LIMIT = int(os.getenv("CONVERSATION_HISTORY_LIMIT", "10"))
+    
+    # ========== RAG Configuration ==========
+    CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
+    CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+    RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
+    
+    # ========== CORS Configuration ==========
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+        if origin.strip()
+    ]
+    CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+    
+    # ========== Rate Limiting ==========
+    RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+    RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
+    RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # seconds
+    
+    # Legacy compatibility for dict-style access
+    _KEY_MAPPING = {
+        "mongo_uri": "MONGODB_URI",
+        "mongo_db": "MONGODB_DB",
+        "jwt_secret_key": "JWT_SECRET_KEY",
+        "jwt_algorithm": "JWT_ALGORITHM",
+        "cors_origins": "CORS_ORIGINS",
+        "ollama_host": "OPENAI_BASE_URL",  # Temporary mapping
+    }
+    
+    def __getitem__(self, key):
+        """Support dict-style access for backward compatibility."""
+        # Check if there's a mapping
+        mapped_key = self._KEY_MAPPING.get(key, key.upper())
+        if hasattr(self, mapped_key):
+            return getattr(self, mapped_key)
+        # Try the key as-is
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(f"Configuration key '{key}' not found")
+    
+    def __contains__(self, key):
+        """Support 'in' operator."""
+        mapped_key = self._KEY_MAPPING.get(key, key.upper())
+        return hasattr(self, mapped_key) or hasattr(self, key)
+    
+    @classmethod
+    def validate(cls):
+        """Validate critical configuration."""
+        errors = []
+        
+        # Check required fields
+        if cls.OPENAI_API_KEY == "dummy" and "openai.com" in cls.OPENAI_BASE_URL:
+            errors.append("OPENAI_API_KEY is required when using OpenAI API")
+        
+        if not cls.MONGODB_URI:
+            errors.append("MONGODB_URI is required")
+        
+        if cls.JWT_SECRET_KEY == "dev-secret-change-in-production":
+            print("WARNING: Using default JWT secret. Change in production!")
+        
+        # Check vector store specific requirements
+        if cls.VECTOR_STORE == "pinecone" and not cls.PINECONE_API_KEY:
+            errors.append("PINECONE_API_KEY is required when using Pinecone")
+        
+        if cls.VECTOR_STORE == "qdrant" and not cls.QDRANT_URL:
+            errors.append("QDRANT_URL is required when using Qdrant")
+        
+        # Check embedding provider requirements
+        if cls.EMBEDDING_PROVIDER == "huggingface" and not cls.HF_API_KEY:
+            errors.append("HF_API_KEY is required when using HuggingFace embeddings")
+        
+        if errors:
+            raise ValueError(f"Configuration errors:\n" + "\n".join(f"  - {e}" for e in errors))
+        
+        return True
+    
+    @classmethod
+    def print_config(cls):
+        """Print current configuration (excluding secrets)."""
+        print("=" * 50)
+        print("CONFIGURATION")
+        print("=" * 50)
+        print(f"Server: {cls.HOST}:{cls.PORT}")
+        print(f"LLM: {cls.OPENAI_MODEL} @ {cls.OPENAI_BASE_URL}")
+        print(f"Embeddings: {cls.EMBEDDING_PROVIDER} / {cls.EMBEDDING_MODEL}")
+        print(f"Vector Store: {cls.VECTOR_STORE}")
+        print(f"Database: {cls.MONGODB_DB}")
+        print("=" * 50)
 
 
-def ensure_paths():
-    # Ensure memory directory exists for allowlist
-    p = Path(CONFIG["allowlist_path"]).parent
-    p.mkdir(parents=True, exist_ok=True)
+# Singleton config instance
+config = Config()
+
+# Backward compatibility alias (uppercase)
+CONFIG = config
 
 
-ensure_paths()
+# Validate on import
+try:
+    config.validate()
+except ValueError as e:
+    print(f"Configuration Error: {e}")
+    # Don't fail on import, let the application decide
+
+
+if __name__ == "__main__":
+    # Print config when run directly
+    config.print_config()

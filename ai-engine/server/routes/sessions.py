@@ -12,7 +12,7 @@ from datetime import datetime
 from pymongo import MongoClient, DESCENDING
 from bson import ObjectId
 from config import CONFIG
-from core.agent_new import run_agent
+from core.agent import run_agent
 import logging
 import json
 
@@ -442,8 +442,10 @@ async def session_chat_stream(
                 ):
                     if chunk:
                         full_response += chunk
-                        # Send chunk as plain SSE (no JSON wrapping)
-                        yield f"data: {chunk}\n\n"
+                        # Send chunk as JSON so leading spaces/newlines are preserved.
+                        # (SSE parsers can drop a single leading space after `data:`.)
+                        payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
+                        yield f"data: {payload}\n\n"
                 
                 # Send completion event
                 yield f"event: done\ndata: \n\n"

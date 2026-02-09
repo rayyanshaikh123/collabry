@@ -34,6 +34,8 @@ export default function StudyNotebookPage() {
   const notebookId = params.id as string;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const creationAttempted = useRef(false);
+  const addSourceInFlightRef = useRef(false);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // Show create form for 'new' route
   if (notebookId === 'new') {
@@ -56,6 +58,23 @@ export default function StudyNotebookPage() {
   const removeSource = useRemoveSource(notebookId);
   const linkArtifact = useLinkArtifact(notebookId);
   const unlinkArtifact = useUnlinkArtifact(notebookId);
+
+  // Dedupe sources defensively to avoid UI-only duplicates from transient cache states
+  const dedupedSources = React.useMemo(() => {
+    const sources = notebook?.sources ?? [];
+    const seen = new Set<string>();
+    const unique: Source[] = [];
+
+    for (const s of sources) {
+      const id = (s as any)?._id as string | undefined;
+      if (!id) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      unique.push(s);
+    }
+
+    return unique;
+  }, [notebook?.sources]);
 
   // AI operations
   const generateQuiz = useGenerateQuiz();
@@ -126,6 +145,10 @@ export default function StudyNotebookPage() {
     } else if (type === 'website') {
       setAddWebsiteModalOpen(true);
     } else if (type === 'pdf') {
+      if (addSource.isPending || addSourceInFlightRef.current) {
+        showInfo('Upload already in progress');
+        return;
+      }
       // Trigger file input
       const input = document.createElement('input');
       input.type = 'file';
@@ -133,6 +156,8 @@ export default function StudyNotebookPage() {
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file) {
+          if (addSourceInFlightRef.current) return;
+          addSourceInFlightRef.current = true;
           try {
             const formData = new FormData();
             formData.append('file', file);
@@ -144,6 +169,8 @@ export default function StudyNotebookPage() {
           } catch (error) {
             console.error('Failed to upload PDF:', error);
             showError('Failed to upload PDF');
+          } finally {
+            addSourceInFlightRef.current = false;
           }
         }
       };
@@ -245,18 +272,102 @@ export default function StudyNotebookPage() {
     );
   };
 
-  // Handler: Send Message
-  const handleSendMessage = async (message: string) => {
-    if (!notebook || !message.trim()) return;
+  const extractAnswerFromJson = (text: string): string | null => {
+    try {
+      const trimmed = text.trim();
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString()
-    };
+      if (trimmed.includes('"answer"')) {
+        const answerIndex = trimmed.indexOf('"answer"');
+        if (answerIndex > 0) {
+          let startIndex = trimmed.lastIndexOf('{', answerIndex);
+          if (startIndex >= 0) {
+            let braceCount = 0;
+            let endIndex = -1;
+            for (let i = startIndex; i < trimmed.length; i++) {
+              if (trimmed[i] === '{') braceCount++;
+              if (trimmed[i] === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                  endIndex = i + 1;
+                  break;
+                }
+              }
+            }
 
-    setLocalMessages((prev) => [...prev, userMessage]);
+            if (endIndex > startIndex) {
+              const jsonStr = trimmed.substring(startIndex, endIndex);
+              try {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed.tool === null && parsed.answer) {
+                  let result = parsed.answer;
+                  result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+
+                  if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+                    result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+                    parsed.follow_up_questions.forEach((q: string, i: number) => {
+                      result += `\n${i + 1}. ${q}`;
+                    });
+                  }
+                  return result;
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+        }
+      }
+
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed.tool === null && parsed.answer) {
+            let result = parsed.answer;
+            result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
+
+            if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
+              result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
+              parsed.follow_up_questions.forEach((q: string, i: number) => {
+                result += `\n${i + 1}. ${q}`;
+              });
+            }
+            return result;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  };
+
+  const runAssistantStream = async ({ userText, includeUserMessage }: { userText: string; includeUserMessage: boolean }) => {
+    if (!notebook || !userText.trim()) return;
+
+    let rafId: number | null = null;
+
+    // Ensure only one stream is active at a time
+    if (chatAbortRef.current) {
+      try {
+        chatAbortRef.current.abort();
+      } catch {
+        // ignore
+      }
+      chatAbortRef.current = null;
+    }
+
+    if (includeUserMessage) {
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userText,
+        timestamp: new Date().toISOString()
+      };
+      setLocalMessages((prev) => [...prev, userMessage]);
+    }
+
     setIsChatLoading(true);
     setIsStreaming(true);
 
@@ -268,17 +379,11 @@ export default function StudyNotebookPage() {
       timestamp: new Date().toISOString(),
       isLoading: true
     };
-
     setLocalMessages((prev) => [...prev, loadingMessage]);
 
     try {
-      // Get selected source IDs
-      const selectedSourceIds = notebook.sources
-        .filter(s => s.selected)
-        .map(s => s._id);
+      const selectedSourceIds = dedupedSources.filter(s => s.selected).map(s => s._id);
 
-      // Call streaming API (use sessions streaming endpoint)
-      // Include Authorization header from localStorage if available
       let authToken = '';
       try {
         const authStorage = localStorage.getItem('auth-storage');
@@ -290,157 +395,121 @@ export default function StudyNotebookPage() {
         console.debug('Could not read auth token from storage', e);
       }
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+      const abortController = new AbortController();
+      chatAbortRef.current = abortController;
 
       const response = await fetch(`${AI_ENGINE_URL}/ai/sessions/${notebook.aiSessionId}/chat/stream`, {
         method: 'POST',
         headers,
+        signal: abortController.signal,
         body: JSON.stringify({
-          message,
+          message: userText,
           session_id: notebook.aiSessionId,
           source_ids: selectedSourceIds
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
-      }
+      if (!response.ok) throw new Error('Failed to get AI response');
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
+      let sseBuffer = '';
 
-      // Helper: extract answer text from embedded JSON tool output
-      const extractAnswerFromJson = (text: string): string | null => {
-        try {
-          const trimmed = text.trim();
-
-          if (trimmed.includes('"answer"')) {
-            const answerIndex = trimmed.indexOf('"answer"');
-            if (answerIndex > 0) {
-              let startIndex = trimmed.lastIndexOf('{', answerIndex);
-              if (startIndex >= 0) {
-                let braceCount = 0;
-                let endIndex = -1;
-                for (let i = startIndex; i < trimmed.length; i++) {
-                  if (trimmed[i] === '{') braceCount++;
-                  if (trimmed[i] === '}') {
-                    braceCount--;
-                    if (braceCount === 0) {
-                      endIndex = i + 1;
-                      break;
-                    }
-                  }
-                }
-
-                if (endIndex > startIndex) {
-                  const jsonStr = trimmed.substring(startIndex, endIndex);
-                  try {
-                    const parsed = JSON.parse(jsonStr);
-                    if (parsed.tool === null && parsed.answer) {
-                      let result = parsed.answer;
-                      result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
-
-                      if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
-                        result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
-                        parsed.follow_up_questions.forEach((q: string, i: number) => {
-                          result += `\n${i + 1}. ${q}`;
-                        });
-                      }
-                      return result;
-                    }
-                  } catch (e) {
-                    // JSON parse failed
-                  }
-                }
-              }
-            }
-          }
-
-          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-            try {
-              const parsed = JSON.parse(trimmed);
-              if (parsed.tool === null && parsed.answer) {
-                let result = parsed.answer;
-                result = result.replace(/\n\nFollow-up questions?:[\s\S]*$/i, '');
-
-                if (parsed.follow_up_questions && Array.isArray(parsed.follow_up_questions) && parsed.follow_up_questions.length > 0) {
-                  result += '\n\n📝 **Follow-up questions to deepen your understanding:**';
-                  parsed.follow_up_questions.forEach((q: string, i: number) => {
-                    result += `\n${i + 1}. ${q}`;
-                  });
-                }
-                return result;
-              }
-            } catch (e) {
-              // Parse failed
-            }
-          }
-        } catch (e) {
-          // Extraction failed
-        }
-        return null;
+      let rafPending = false;
+      let lastRendered = '';
+      const scheduleRender = () => {
+        if (rafPending) return;
+        rafPending = true;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          rafPending = false;
+          if (abortController.signal.aborted) return;
+          const extracted = extractAnswerFromJson(fullResponse);
+          const displayContent = extracted ?? fullResponse;
+          if (displayContent === lastRendered) return;
+          lastRendered = displayContent;
+          setLocalMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === loadingId);
+            if (idx === -1) return prev;
+            const current = prev[idx];
+            if (current.content === displayContent && current.isLoading === false) return prev;
+            const next = prev.slice();
+            next[idx] = { ...current, content: displayContent, isLoading: false };
+            return next;
+          });
+        });
       };
 
       if (reader) {
+        let sawDoneEvent = false;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          const chunkText = decoder.decode(value, { stream: true });
+          sseBuffer += chunkText;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          while (true) {
+            const eventSepIndex = sseBuffer.indexOf('\n\n');
+            if (eventSepIndex === -1) break;
 
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              
-              if (!data || data.trim() === '[DONE]') continue;
-              
-              const processedData = data.replace(/\\n/g, '\n');
-              fullResponse += processedData;
-              
-              let displayContent = fullResponse;
-              
-              // Extract answer from JSON if present (helper moved above)
-              
-              const extracted = extractAnswerFromJson(fullResponse);
-              if (extracted) {
-                displayContent = extracted;
+            const rawEvent = sseBuffer.slice(0, eventSepIndex);
+            sseBuffer = sseBuffer.slice(eventSepIndex + 2);
+            if (!rawEvent) continue;
+
+            const eventLines = rawEvent.split(/\r?\n/);
+            let eventName = '';
+            const dataLines: string[] = [];
+            for (const line of eventLines) {
+              if (line.startsWith('event:')) {
+                eventName = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                let payload = line.slice(5);
+                if (payload.startsWith(' ')) payload = payload.slice(1);
+                dataLines.push(payload);
               }
-              
-              setLocalMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === loadingId
-                    ? { ...msg, content: displayContent, isLoading: false }
-                    : msg
-                )
-              );
-            } else if (line.startsWith('event: done')) {
+            }
+
+            if (eventName === 'done') {
               const extracted = extractAnswerFromJson(fullResponse);
               if (extracted) {
                 fullResponse = extracted;
-                setLocalMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === loadingId
-                      ? { ...msg, content: extracted, isLoading: false }
-                      : msg
-                  )
-                );
+                scheduleRender();
               }
+              sseBuffer = '';
+              sawDoneEvent = true;
               break;
             }
+
+            const eventData = dataLines.join('\n');
+            if (!eventData || eventData === '[DONE]') continue;
+
+            let appended = eventData;
+            try {
+              const maybeJson = JSON.parse(eventData);
+              if (maybeJson && typeof maybeJson.chunk === 'string') appended = maybeJson.chunk;
+            } catch {
+              // ignore
+            }
+
+            fullResponse += appended;
+            scheduleRender();
           }
+
+          if (sawDoneEvent) break;
         }
       }
 
+      scheduleRender();
       setIsStreaming(false);
       setIsChatLoading(false);
 
+      if (chatAbortRef.current === abortController) chatAbortRef.current = null;
     } catch (error) {
-      console.error('Chat error:', error);
+      if ((error as any)?.name !== 'AbortError') console.error('Chat error:', error);
       setLocalMessages((prev) =>
         prev.map((msg) =>
           msg.id === loadingId
@@ -450,7 +519,40 @@ export default function StudyNotebookPage() {
       );
       setIsStreaming(false);
       setIsChatLoading(false);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      chatAbortRef.current = null;
     }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    await runAssistantStream({ userText: message, includeUserMessage: true });
+  };
+
+  const handleRegeneratePrompt = async (messageId: string) => {
+    const idx = localMessages.findIndex((m) => m.id === messageId);
+    if (idx === -1) return;
+    const msg = localMessages[idx];
+    if (msg.role !== 'user') return;
+
+    setLocalMessages((prev) => prev.slice(0, idx + 1));
+    await runAssistantStream({ userText: msg.content, includeUserMessage: false });
+  };
+
+  const handleEditPrompt = async (messageId: string, newText: string) => {
+    const idx = localMessages.findIndex((m) => m.id === messageId);
+    if (idx === -1) return;
+    const msg = localMessages[idx];
+    if (msg.role !== 'user') return;
+
+    setLocalMessages((prev) => {
+      const next = prev.slice(0, idx + 1);
+      next[idx] = { ...next[idx], content: newText };
+      return next;
+    });
+    await runAssistantStream({ userText: newText, includeUserMessage: false });
   };
 
   // Studio Handlers
@@ -959,12 +1061,12 @@ Output ONLY the JSON object.`;
   return (
     <>
     <NotebookLayout
-      sources={notebook.sources.map((s) => ({
+      sources={dedupedSources.map((s) => ({
         id: s._id,
         type: s.type as SourcePanelType['type'],
         name: s.name,
         size: s.size ? `${(s.size / 1024 / 1024).toFixed(2)} MB` : undefined,
-        dateAdded: 'Just now',
+        dateAdded: s.dateAdded ? new Date(s.dateAdded).toLocaleString() : '—',
         selected: s.selected,
         url: s.url
       }))}
@@ -973,6 +1075,8 @@ Output ONLY the JSON object.`;
       onRemoveSource={handleRemoveSource}
       messages={localMessages}
       onSendMessage={handleSendMessage}
+      onRegeneratePrompt={handleRegeneratePrompt}
+      onEditPrompt={handleEditPrompt}
       onClearChat={handleClearChat}
       onRegenerateResponse={handleRegenerateResponse}
       isChatLoading={isChatLoading}

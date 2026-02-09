@@ -132,8 +132,8 @@ const CollaborativeBoard: React.FC = () => {
   const router = useRouter();
   const params = useParams();
   const boardId = params?.id as string;
-  
-  const { user } = useAuthStore();
+
+  const { user, accessToken } = useAuthStore();
   const { 
     currentBoard, 
     participants, 
@@ -154,8 +154,250 @@ const CollaborativeBoard: React.FC = () => {
   const drawingShapeIdRef = useRef<string | null>(null);
   const [editor, setEditor] = useState<TLEditor | null>(null);
   const [pendingElements, setPendingElements] = useState<PendingElement[]>([]);
+  const importPayloadRef = useRef<any | null>(null);
+  const importAppliedRef = useRef(false);
   const animationFrameRef = useRef<number | null>(null);
   const cursorPositionRef = useRef({ x: 0, y: 0 });
+
+  const generateShapeId = (prefix: string = 'shape') => {
+    return `${prefix}:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  };
+
+  const buildInfographicShapes = (infographic: any) => {
+    if (!infographic) return [];
+    const title = String(infographic.title || 'Infographic');
+    const subtitle = infographic.subtitle ? String(infographic.subtitle) : '';
+    const sections = Array.isArray(infographic.sections) ? infographic.sections : [];
+
+    const originX = 120;
+    const originY = 140;
+
+    const shapes: any[] = [];
+
+    shapes.push({
+      id: generateShapeId('shape'),
+      typeName: 'shape',
+      type: 'text',
+      x: originX,
+      y: originY,
+      parentId: 'page:page',
+      index: 'a1',
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      meta: {},
+      props: {
+        text: subtitle ? `${title}\n${subtitle}` : title,
+        font: 'sans',
+        size: 'xl',
+        color: 'black',
+        align: 'start',
+        w: 680,
+        autoSize: false,
+        scale: 1,
+      },
+    });
+
+    sections.slice(0, 4).forEach((section: any, idx: number) => {
+      const cardX = originX + (idx % 2) * 360;
+      const cardY = originY + 110 + Math.floor(idx / 2) * 220;
+      const icon = section?.icon ? String(section.icon) : '📌';
+      const sectionTitle = section?.title ? String(section.title) : `Section ${idx + 1}`;
+      const keyPoints = Array.isArray(section?.keyPoints) ? section.keyPoints.slice(0, 4) : [];
+      const body = keyPoints.map((p: any) => `• ${String(p)}`).join('\n');
+      const text = body ? `${icon} ${sectionTitle}\n${body}` : `${icon} ${sectionTitle}`;
+
+      shapes.push({
+        id: generateShapeId('shape'),
+        typeName: 'shape',
+        type: 'geo',
+        x: cardX,
+        y: cardY,
+        parentId: 'page:page',
+        index: `a${idx + 2}`,
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        meta: {},
+        props: {
+          geo: 'rectangle',
+          w: 330,
+          h: 200,
+          color: 'blue',
+          fill: 'semi',
+          dash: 'draw',
+          size: 'm',
+          font: 'sans',
+          text,
+          align: 'start',
+          verticalAlign: 'start',
+          growY: 0,
+          url: '',
+        },
+      });
+    });
+
+    return shapes;
+  };
+
+  const buildMindmapShapes = (mindmap: any) => {
+    if (!mindmap) return [];
+
+    let nodes: Array<{ id: string; label: string }> = [];
+    let edges: Array<{ from: string; to: string }> = [];
+
+    if (Array.isArray(mindmap.nodes)) {
+      nodes = mindmap.nodes
+        .map((n: any, idx: number) => ({
+          id: String(n?.id ?? `n${idx + 1}`),
+          label: String(n?.label ?? n?.text ?? n?.title ?? `Node ${idx + 1}`),
+        }))
+        .filter((n: any) => n.id);
+
+      if (Array.isArray(mindmap.edges)) {
+        edges = mindmap.edges
+          .map((e: any) => ({
+            from: String(e?.from ?? e?.source ?? e?.src ?? ''),
+            to: String(e?.to ?? e?.target ?? e?.dst ?? ''),
+          }))
+          .filter((e: any) => e.from && e.to);
+      }
+    } else if (mindmap?.label && Array.isArray(mindmap?.children)) {
+      const walk = (node: any, parentId: string | null) => {
+        const id = String(node?.id ?? generateShapeId('n'));
+        const label = String(node?.label ?? node?.title ?? 'Node');
+        nodes.push({ id, label });
+        if (parentId) edges.push({ from: parentId, to: id });
+        (node?.children || []).forEach((c: any) => walk(c, id));
+      };
+      walk(mindmap, null);
+    }
+
+    if (nodes.length === 0) return [];
+
+    const maxNodes = 12;
+    if (nodes.length > maxNodes) nodes = nodes.slice(0, maxNodes);
+    const nodeIdSet = new Set(nodes.map((n) => n.id));
+    edges = edges.filter((e) => nodeIdSet.has(e.from) && nodeIdSet.has(e.to));
+
+    const indegree = new Map<string, number>();
+    nodes.forEach((n) => indegree.set(n.id, 0));
+    edges.forEach((e) => indegree.set(e.to, (indegree.get(e.to) || 0) + 1));
+    const root = nodes.find((n) => (indegree.get(n.id) || 0) === 0) || nodes[0];
+
+    const children = new Map<string, string[]>();
+    edges.forEach((e) => {
+      const list = children.get(e.from) || [];
+      list.push(e.to);
+      children.set(e.from, list);
+    });
+
+    const depth = new Map<string, number>();
+    depth.set(root.id, 0);
+    const queue: string[] = [root.id];
+    while (queue.length) {
+      const current = queue.shift()!;
+      const d = depth.get(current) || 0;
+      (children.get(current) || []).forEach((c) => {
+        if (!depth.has(c)) {
+          depth.set(c, d + 1);
+          queue.push(c);
+        }
+      });
+    }
+
+    const byDepth = new Map<number, string[]>();
+    nodes.forEach((n) => {
+      const d = depth.get(n.id) ?? 0;
+      const list = byDepth.get(d) || [];
+      list.push(n.id);
+      byDepth.set(d, list);
+    });
+
+    const originX = 120;
+    const originY = 160;
+    const dx = 320;
+    const dy = 160;
+
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const shapes: any[] = [];
+
+    shapes.push({
+      id: generateShapeId('shape'),
+      typeName: 'shape',
+      type: 'text',
+      x: originX,
+      y: originY - 70,
+      parentId: 'page:page',
+      index: 'a1',
+      rotation: 0,
+      isLocked: false,
+      opacity: 1,
+      meta: {},
+      props: {
+        text: `🧠 Mindmap: ${root.label}`,
+        font: 'sans',
+        size: 'l',
+        color: 'black',
+        align: 'start',
+        w: 700,
+        autoSize: false,
+        scale: 1,
+      },
+    });
+
+    const depthLevels = Array.from(byDepth.keys()).sort((a, b) => a - b);
+    let shapeIndex = 2;
+    depthLevels.forEach((d) => {
+      const ids = byDepth.get(d) || [];
+      const count = ids.length;
+      ids.forEach((id, i) => {
+        const n = nodeMap.get(id);
+        if (!n) return;
+        const x = originX + d * dx;
+        const y = originY + (i - (count - 1) / 2) * dy;
+        const isRoot = id === root.id;
+
+        shapes.push({
+          id: generateShapeId('shape'),
+          typeName: 'shape',
+          type: 'geo',
+          x,
+          y,
+          parentId: 'page:page',
+          index: `a${shapeIndex++}`,
+          rotation: 0,
+          isLocked: false,
+          opacity: 1,
+          meta: {},
+          props: {
+            geo: 'ellipse',
+            w: isRoot ? 280 : 220,
+            h: isRoot ? 140 : 110,
+            color: isRoot ? 'violet' : 'blue',
+            fill: 'semi',
+            dash: 'draw',
+            size: 'm',
+            font: 'sans',
+            text: n.label,
+            align: 'middle',
+            verticalAlign: 'middle',
+            growY: 0,
+            url: '',
+          },
+        });
+      });
+    });
+
+    return shapes;
+  };
+
+  const buildShapesFromImport = (payload: any) => {
+    if (!payload || typeof payload !== 'object') return [];
+    if (payload.kind === 'mindmap') return buildMindmapShapes(payload.data);
+    if (payload.kind === 'infographic') return buildInfographicShapes(payload.data);
+    return [];
+  };
 
   // Handle tldraw editor mount
   const handleMount = useCallback((editorInstance: any) => {
@@ -436,28 +678,52 @@ const CollaborativeBoard: React.FC = () => {
 
   // Initialize board connection
   useEffect(() => {
-    if (!boardId || !user) return;
+    if (!boardId || !user || !accessToken) return;
+
+    let isMounted = true;
+    let joinTimeoutId: NodeJS.Timeout | null = null;
 
     const initBoard = async () => {
+      if (!isMounted) return;
+      
       try {
         setIsLoading(true);
-        
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-          router.push('/login');
+
+        // Wait for socket to connect
+        try {
+          await socketClient.connectBoards(accessToken);
+          if (!isMounted) return;
+          console.log('[Board] Socket connected, joining board...');
+        } catch (error: any) {
+          if (!isMounted) return;
+          console.error('[Board] Socket connection failed:', error.message);
+          alert('Failed to connect to server. Please check if the backend is running.');
+          setIsLoading(false);
           return;
         }
 
-        socketClient.connectBoards(token);
+        // Set a timeout for joinBoard callback
+        joinTimeoutId = setTimeout(() => {
+          if (!isMounted) return;
+          console.error('[Board] Join board timeout');
+          alert('Failed to load board. The board may not exist or you may not have access.');
+          router.push('/study-board');
+        }, 15000);
 
         socketClient.joinBoard(boardId, (response: any) => {
-          if (response.error) {
-            console.error('Failed to join board:', response.error);
-            alert(response.error);
-            router.push('/dashboard');
+          if (!isMounted || !joinTimeoutId) return;
+          
+          clearTimeout(joinTimeoutId);
+          joinTimeoutId = null;
+
+          if (response?.error || !response) {
+            console.error('[Board] Join error:', response?.error || 'No response');
+            alert(response?.error || 'Failed to join board. Please try again.');
+            router.push('/study-board');
             return;
           }
 
+          console.log('[Board] Successfully joined board');
           setCurrentBoard(response.board);
           
           // Check for template shapes in sessionStorage
@@ -466,13 +732,24 @@ const CollaborativeBoard: React.FC = () => {
             try {
               const shapes = JSON.parse(templateShapes);
               setPendingElements(shapes);
-              // Clear from sessionStorage after loading
               sessionStorage.removeItem(`board-${boardId}-template`);
             } catch (error) {
               console.error('Failed to parse template shapes:', error);
             }
           } else if (response.board?.elements && response.board.elements.length > 0) {
             setPendingElements(response.board.elements);
+          }
+
+          // Artifact import payload (used when user selects "Add to Study Board" from Study Notebook)
+          const importPayload = sessionStorage.getItem(`board-${boardId}-import`);
+          if (importPayload) {
+            try {
+              importPayloadRef.current = JSON.parse(importPayload);
+              importAppliedRef.current = false;
+              sessionStorage.removeItem(`board-${boardId}-import`);
+            } catch (error) {
+              console.error('Failed to parse board import payload:', error);
+            }
           }
           
           response.participants?.forEach((p: any) => {
@@ -494,11 +771,13 @@ const CollaborativeBoard: React.FC = () => {
           setIsLoading(false);
         });
 
+        // Setup event listeners
         socketClient.onUserJoined(handleUserJoined);
         socketClient.onUserLeft(handleUserLeft);
         socketClient.onCursorMove(handleCursorMove);
 
       } catch (error) {
+        if (!isMounted) return;
         console.error('Failed to initialize board:', error);
         setIsLoading(false);
       }
@@ -506,12 +785,62 @@ const CollaborativeBoard: React.FC = () => {
 
     initBoard();
 
+    // Cleanup function
     return () => {
+      isMounted = false;
+      
+      if (joinTimeoutId) {
+        clearTimeout(joinTimeoutId);
+      }
+      
       if (boardId) {
         socketClient.leaveBoard(boardId);
       }
+      
+      // Remove event listeners
+      socketClient.off('user:joined');
+      socketClient.off('user:left');
+      socketClient.off('cursor:moved');
     };
-  }, [boardId, user, router, setCurrentBoard, addParticipant, handleUserJoined, handleUserLeft, handleCursorMove]);
+  }, [boardId, user, accessToken, router]);
+
+  // Apply imported artifacts after the board loads its existing elements.
+  // This should broadcast `element:create` so it persists and is collaborative.
+  useEffect(() => {
+    if (!editor || !boardId || !isConnected) return;
+    if (!importPayloadRef.current || importAppliedRef.current) return;
+
+    let cancelled = false;
+
+    const tryApply = () => {
+      if (cancelled) return;
+      if (!editor || !isConnected) return;
+
+      // Wait for initial load to finish.
+      if (pendingElements.length > 0 || isApplyingRemoteChange.current) {
+        setTimeout(tryApply, 120);
+        return;
+      }
+
+      try {
+        const shapes = buildShapesFromImport(importPayloadRef.current);
+        if (shapes.length > 0) {
+          editor.store.put(shapes);
+        }
+      } catch (e) {
+        console.error('Failed to apply imported shapes:', e);
+      } finally {
+        importAppliedRef.current = true;
+        importPayloadRef.current = null;
+      }
+    };
+
+    setTimeout(tryApply, 160);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, boardId, isConnected, pendingElements.length]);
 
   // Setup element event listeners
   useEffect(() => {
@@ -619,8 +948,8 @@ const CollaborativeBoard: React.FC = () => {
       <div className="h-full flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <p className="text-slate-600 mb-4">No board selected</p>
-          <Button onClick={() => router.push('/dashboard')}>
-            Go to Dashboard
+          <Button onClick={() => router.push('/study-board')}>
+            Back to Boards
           </Button>
         </div>
       </div>
@@ -636,7 +965,7 @@ const CollaborativeBoard: React.FC = () => {
             variant="secondary" 
             size="icon" 
             className="rounded-2xl h-10 w-10 border-b-2"
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/study-board')}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
@@ -693,7 +1022,7 @@ const CollaborativeBoard: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
         {/* tldraw Canvas */}
-        <div className="flex-1 relative p-0">
+        <div className="flex-1 relative p-0 whiteboard-grid">
           <Tldraw 
             store={store}
             autoFocus

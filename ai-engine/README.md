@@ -1,262 +1,505 @@
-# Collabry AI Core Engine - Study Copilot
+# Collabry AI Engine
 
-**Pedagogical AI Learning Assistant** - A modular AI backend powered by Google Gemini, designed to help students learn effectively through proven educational strategies.
+**Production-grade AI backend with LangChain, LiveKit voice tutoring, and multi-user RAG support.**
 
-## 🚀 What's New: Gemini-Powered AI Engine
+## 🏗️ Architecture Overview
 
-**January 2025 Update:** The AI engine has been migrated from Ollama/Llama 3.1 to Google Gemini for improved performance, accuracy, and easier deployment.
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                      AI-ENGINE (FastAPI Backend)                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │          server/main.py (FastAPI Application)                 │   │
+│  │  • JWT Authentication Middleware (server/deps.py)            │   │
+│  │  • Usage Tracking & Limits Middleware                        │   │
+│  │  • CORS Configuration                                        │   │
+│  └────┬─────────────────────────────────────────────────────────┘   │
+│       │                                                              │
+│  ┌────▼──────────────────── API ROUTES ─────────────────────────┐   │
+│  │                                                               │   │
+│  │  📝 /ai/chat         ──► Main chat endpoint                  │   │
+│  │  📝 /ai/qa           ──► Question answering                  │   │
+│  │  📝 /ai/summarize    ──► Document summarization              │   │
+│  │  📝 /ai/mindmap      ──► Mind map generation                 │   │
+│  │  📝 /ai/sessions     ──► Session management                  │   │
+│  │  📤 /ai/upload       ──► Document ingestion (RAG)            │   │
+│  │  📊 /ai/usage        ──► Usage analytics                     │   │
+│  │  📚 /ai/studyplan    ──► Study plan generation               │   │
+│  │                                                               │   │
+│  │  🎙️ /voice/rooms     ──► Create LiveKit room                 │   │
+│  │  🎙️ /voice/sessions  ──► Voice session management            │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌─────────────────── CORE: AGENT LAYER ───────────────────────┐    │
+│  │                                                              │    │
+│  │  core/agent.py (LangChain-based, 334 lines)                 │    │
+│  │  ✅ Native tool calling (no manual routing)                  │    │
+│  │  ✅ Streaming support                                        │    │
+│  │  ✅ Provider-agnostic (OpenAI-compatible APIs)               │    │
+│  │  ✅ Automatic artifact detection & formatting                │    │
+│  │                                                              │    │
+│  │  Dependencies:                                               │    │
+│  │  ├──► core/llm.py (Unified LLM client)                      │    │
+│  │  ├──► core/embeddings.py (Unified embeddings)               │    │
+│  │  ├──► core/conversation.py (MongoDB chat history)           │    │
+│  │  ├──► core/artifact_templates.py (Quiz/Mindmap templates)   │    │
+│  │  └──► tools/* (LangChain tools)                             │    │
+│  │                                                              │    │
+│  │  Compatibility Layer (temporary):                            │    │
+│  │  └──► core/agent_compat.py (wrapper for old routes)         │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌────────────────── RAG & RETRIEVAL ──────────────────────────┐    │
+│  │  core/rag_retriever.py (Active - FAISS-based)               │    │
+│  │  • User-isolated document storage                           │    │
+│  │  • Metadata filtering (user_id, session_id)                 │    │
+│  │  • HuggingFace embeddings                                   │    │
+│  │  • MongoDB GridFS backup                                    │    │
+│  │                                                              │    │
+│  │  rag/ module (Future migration target)                      │    │
+│  │  ├──► vectorstore.py (Multi-provider vector DB)             │    │
+│  │  ├──► retriever.py (Enhanced retrieval)                     │    │
+│  │  └──► ingest.py (Document processing pipeline)              │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌─────────────── VOICE/LIVEKIT INTEGRATION ───────────────────┐    │
+│  │  (Separate process - event-driven voice tutoring)           │    │
+│  │                                                              │    │
+│  │  livekit_agents_voice_tutor.py (Worker Process)             │    │
+│  │           │                                                  │    │
+│  │           ├──► core/voice_agent.py                          │    │
+│  │           │     • Audio I/O (STT/TTS/VAD)                   │    │
+│  │           │     • Groq Whisper STT                          │    │
+│  │           │     • ElevenLabs TTS (+ Edge-TTS fallback)      │    │
+│  │           │     • Silero VAD                                │    │
+│  │           │                                                  │    │
+│  │           └──► core/teaching_engine.py                      │    │
+│  │                 • State Machine (7 teaching phases)         │    │
+│  │                 • Deterministic teaching logic              │    │
+│  │                 • LLM only generates speech                 │    │
+│  │                 • RAG-grounded responses                    │    │
+│  │                 • Curriculum management                     │    │
+│  │                                                              │    │
+│  │  Supporting Components:                                      │    │
+│  │  ├──► core/livekit_manager.py (Room/token creation)         │    │
+│  │  ├──► core/teaching_models.py (Data models)                 │    │
+│  │  ├──► core/voice_events.py (Event definitions)              │    │
+│  │  └──► core/curriculum.py (Lesson plan management)           │    │
+│  └──────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌──────────────────── TOOLS LIBRARY ──────────────────────────┐    │
+│  │  tools/generate_quiz.py                                     │    │
+│  │  tools/generate_flashcards.py                               │    │
+│  │  tools/mindmap_generator.py                                 │    │
+│  │  tools/summarize.py                                         │    │
+│  │  tools/search_sources.py (RAG integration)                  │    │
+│  │  tools/web_search.py                                        │    │
+│  │  tools/web_scraper.py                                       │    │
+│  │  tools/ppt_generator.py                                     │    │
+│  │  tools/doc_generator.py                                     │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│  ┌────────────────── STORAGE & DATA ───────────────────────────┐    │
+│  │  MongoDB:                                                   │    │
+│  │    • Conversations (chat history)                           │    │
+│  │    • User sessions                                          │    │
+│  │    • Usage tracking & analytics                             │    │
+│  │    • Documents (GridFS backup)                              │    │
+│  │                                                              │    │
+│  │  Vector Store (FAISS - local filesystem):                   │    │
+│  │    • User documents (RAG embeddings)                        │    │
+│  │    • HuggingFace embeddings                                 │    │
+│  │    • Per-user isolation via metadata                        │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
 
-✅ **2-3x faster** response times  
-✅ **10x faster** startup (no model loading)  
-✅ **90-95%** intent classification accuracy  
-✅ **$0** hosting cost (free tier)  
-✅ **Zero local dependencies** (cloud-based)  
+┌──────────────────────────────────────────────────────────────────────┐
+│                        EXTERNAL SERVICES                              │
+│  • LiveKit Cloud (WebRTC rooms for voice tutoring)                   │
+│  • OpenAI / Ollama / Together AI (LLM providers)                     │
+│  • Groq (Whisper STT)                                                │
+│  • ElevenLabs (TTS)                                                  │
+│  • MongoDB Atlas (Database)                                          │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-📖 **[See GEMINI_MIGRATION.md for complete migration details](GEMINI_MIGRATION.md)**  
-⚡ **[Quick Start Guide →](QUICKSTART_GEMINI.md)**
+---
 
-## Architecture
+## 🚀 Features
 
-This is a **backend-only AI Core Engine** with:
-- **Study Copilot Agent** - Pedagogical AI optimized for learning
-- **Google Gemini** - Unified AI reasoning engine (replaces Ollama + spaCy + HuggingFace)
-- **FastAPI REST API** with JWT authentication
-- **Multi-user isolation** (see [MULTI_USER_ARCHITECTURE.md](MULTI_USER_ARCHITECTURE.md))
-- LangChain-compatible agent orchestration
-- RAG pipeline with FAISS + sentence-transformers (user-scoped document filtering)
-- **MongoDB persistence** for conversation memory (REQUIRED, no fallback)
-- Modular tool system for study platform features
-- **Multiple sessions per user** (ChatGPT-style)
-- **Background task processing** for document ingestion
+### Core Capabilities
+- **LangChain-based Agent**: Native tool calling, no manual intent classification
+- **Multi-user Isolated RAG**: User-specific document retrieval with metadata filtering
+- **Streaming Responses**: Real-time token streaming for chat endpoints
+- **JWT Authentication**: Secure user isolation across all endpoints
+- **Usage Tracking**: Token/request analytics with MongoDB persistence
+- **Background Processing**: Async document ingestion and generation tasks
 
-## Study Copilot Features
+### AI Tools & Artifacts
+- **Study Tools**: Quiz generation, flashcards, mind maps, study plans
+- **Document Tools**: Summarization, Q&A, concept maps, course outlines
+- **Search Tools**: Web search, RAG-based source search, web scraping
+- **Generation Tools**: PPT generator, document generator, infographics
 
-### 🎓 Pedagogical Approach
-The Study Copilot employs research-backed learning strategies:
-- **Step-by-step explanations** - Breaks complex topics into digestible chunks
-- **Examples & analogies** - Makes abstract concepts concrete and relatable
-- **Clarifying questions** - Detects vague input and asks for specifics
-- **No hallucination** - Only cites sources from retrieved documents or tools
-- **Follow-up questions** - Encourages active recall and deeper thinking
+### Voice Tutoring (LiveKit)
+- **Real-time Voice Interaction**: WebRTC-based audio communication
+- **Adaptive Teaching**: State machine-driven pedagogical decisions
+- **RAG Integration**: Voice tutor can reference uploaded study materials
+- **Multi-modal Input**: STT (Groq Whisper), VAD (Silero), TTS (ElevenLabs)
+- **Fallback Providers**: Edge-TTS when ElevenLabs unavailable
 
-📖 **See [STUDY_COPILOT.md](STUDY_COPILOT.md) for complete pedagogical documentation**
+---
 
-### 📚 Learning Capabilities
-- **Q&A over documents** - Retrieves and synthesizes from uploaded materials
-- **Summarization** - Creates study-focused summaries with key points
-- **Concept extraction** - Identifies and explains core concepts with examples
-- **Follow-up question generation** - Promotes active learning (3 levels: recall, apply, connect)
-
-### 🚀 FastAPI Server
-- **RESTful API** with OpenAPI documentation at `/docs`
-- **JWT-based authentication** for all endpoints
-- **Streaming & non-streaming** chat responses
-- **Background tasks** for document embedding
-- **Health check** endpoint for monitoring
-- **CORS support** for frontend integration
-
-### 🔒 Multi-User Isolation
-- **Memory isolation**: Each user's conversations stored with `user_id` in MongoDB
-- **Session management**: Multiple chat sessions per user (UUID-based)
-- **RAG filtering**: User-specific + public documents only
-- **JWT authentication**: User identity extracted from validated tokens
-- **No cross-user data leakage**: Permission checks enforce isolation
-
-📖 **See [MULTI_USER_ARCHITECTURE.md](MULTI_USER_ARCHITECTURE.md) for complete details**
-
-### 📚 Study Platform Endpoints
-- `POST /ai/chat` - Conversational AI with tool invocation
-- `POST /ai/chat/stream` - Streaming chat with SSE
-- `POST /ai/upload` - Document upload for RAG (background processing)
-- `POST /ai/summarize` - Text summarization
-- `POST /ai/qa` - Question answering with RAG
-- `POST /ai/mindmap` - Mind map generation
-- `GET /ai/sessions` - List user sessions
-- `POST /ai/sessions` - Create new session
-
-### Active Tools
-- **web_search**: Hybrid web search (Serper API + DuckDuckGo fallback)
-- **web_scrape**: Full content extraction from URLs
-- **read_file** / **write_file**: Local file operations
-- **doc_generator**: Create Word documents (.docx) for study notes
-- **ppt_generator**: Generate PowerPoint presentations (.pptx)
-- **ocr_read**: Extract text from images (Tesseract)
-- **image_gen**: Generate images (requires Stable Diffusion WebUI)
-
-### Legacy Components (Moved to `legacy_tools/`)
-- CLI interface (`main_cli.py`) - for local testing only
-- Browser control
-- System automation
-- Task scheduler
-
-## Quick Start
+## 📦 Installation
 
 ### Prerequisites
+- Python 3.10+
+- MongoDB (local or Atlas)
+- Node.js 18+ (for frontend)
+- LiveKit account (for voice tutoring)
 
-1. **Get Gemini API Key** (REQUIRED - replaces Ollama):
-   - Visit: https://aistudio.google.com/app/apikey
-   - Sign in with Google account
-   - Click "Create API Key"
-   - Copy the generated key
-   
-   **Note:** Free tier includes 15 requests/minute, 1.5M tokens/day
+### 1. Clone Repository
+```bash
+git clone https://github.com/your-org/collabry.git
+cd collabry/ai-engine
+```
 
-2. **Install MongoDB** (REQUIRED for memory persistence):
-   ```powershell
-   # Option 1: Docker (recommended for development)
-   docker run -d -p 27017:27017 --name collabry-mongo mongo:latest
-   
-   # Option 2: Windows installer
-   # Download from https://www.mongodb.com/try/download/community
-   ```
+### 2. Create Virtual Environment
+```bash
+python -m venv venv
 
-3. **Create virtual environment** and install dependencies:
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
+# Windows
+venv\Scripts\activate
 
-4. **Configure environment variables** (REQUIRED for security):
-   ```powershell
-   # Copy the example environment file
-   copy .env.example .env
-   
-   # Edit .env with your values (use notepad, VSCode, etc.)
-   notepad .env
-   ```
-   
-   **Minimum required variables:**
-   - `GEMINI_API_KEY` - Google Gemini API key (from step 1)
-   - `MONGO_URI` - MongoDB connection string
-   - `JWT_SECRET_KEY` - Secret for JWT validation (CHANGE IN PRODUCTION!)
-   
-   **Optional but recommended:**
-   - `GEMINI_MODEL` - Model to use (default: gemini-2.0-flash-lite)
-   - `SERPER_API_KEY` - Enhanced web search (get free key at https://serper.dev)
+# Linux/Mac
+source venv/bin/activate
+```
 
-### Running the FastAPI Server
+### 3. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
 
-Start the production server:
-```powershell
+### 4. Configure Environment Variables
+```bash
+cp .env.example .env
+# Edit .env with your API keys and configuration
+```
+
+**Required Environment Variables:**
+
+```env
+# MongoDB
+MONGO_URI=mongodb://localhost:27017/collabry
+
+# JWT Authentication
+JWT_SECRET=your-secret-key-here
+JWT_ALGORITHM=HS256
+
+# LLM Provider (OpenAI-compatible)
+OPENAI_API_KEY=your-openai-key
+OPENAI_BASE_URL=https://api.openai.com/v1  # Or Ollama: http://localhost:11434/v1
+
+# Embeddings
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+
+# LiveKit (for voice tutoring)
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your-api-key
+LIVEKIT_API_SECRET=your-api-secret
+LIVEKIT_AGENT_NAME=collabry-tutor
+
+# Voice Services
+GROQ_API_KEY=your-groq-key
+ELEVENLABS_API_KEY=your-elevenlabs-key
+
+# CORS
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# Optional
+OLLAMA_HOST=http://localhost:11434
+```
+
+### 5. Start the Server
+```bash
+# Development mode with auto-reload
 python run_server.py
+
+# Production mode
+uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
 
-Development mode with auto-reload:
-```powershell
-python run_server.py --reload
+Server will be available at: **http://localhost:8000**
+- API Docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+---
+
+## 🎙️ Voice Tutoring Setup
+
+### 1. Install LiveKit CLI (optional)
+```bash
+# For testing without frontend
+pip install livekit livekit-agents
 ```
 
-Custom host/port:
-```powershell
-python run_server.py --host 0.0.0.0 --port 8080
+### 2. Start Voice Tutor Worker
+```bash
+# In separate terminal
+python livekit_agents_voice_tutor.py dev
 ```
 
-Access the API:
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-- **Root**: http://localhost:8000/
-
-### Testing
-
-**FastAPI Integration Tests** (requires server running):
-```powershell
-# Terminal 1: Start server
-python run_server.py
-
-# Terminal 2: Run tests
-python test_fastapi_server.py
+### 3. Create Voice Session via API
+```bash
+curl -X POST http://localhost:8000/voice/rooms \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "notebook_id": "general",
+    "username": "John",
+    "source": "Your study material text here..."
+  }'
 ```
 
-**Component Tests:**
-```powershell
-# Tool loading test
-python test_tools_loading.py
+Response includes:
+- `room_name`: LiveKit room identifier
+- `student_token`: JWT token for frontend connection
+- `ws_url`: LiveKit WebSocket URL
+- `session_id`: Session tracking ID
 
-# Memory system test (MongoDB required)
-python test_memory_mongodb.py
+### 4. Frontend Integration
+The frontend (`frontend/app/(main)/voice-tutor/page.tsx`) automatically:
+1. Creates room via API
+2. Connects to LiveKit with student token
+3. Handles audio I/O via `@livekit/components-react`
+4. Displays transcript and session stats
 
-# Agent execution test
-python test_agent_execution.py
-```
+---
 
-**Multi-user isolation tests:**
-```powershell
-python scripts/test_multi_user_isolation.py
-```
+## 🔧 Development
 
-### Local CLI Testing (Legacy)
-
-Test with different users/sessions:
-```powershell
-# User Alice, work session
-python legacy_tools/main_cli.py --user alice --session work
-
-# User Alice, personal session (different terminal)
-python legacy_tools/main_cli.py --user alice --session personal
-
-# User Bob, default session (different terminal)
-python legacy_tools/main_cli.py --user bob --session default
-```
-
-CLI commands: `sessions`, `new session`, `switch <session_id>`, `exit`
-
-## Configuration
-
-Edit [`config.py`](config.py) to customize:
-- LLM model (`llm_model`)
-- Ollama host (`ollama_host`)
-- **MongoDB settings** (`mongo_uri`, `mongo_db`, `memory_collection`)
-- Embedding model (`embedding_model`)
-- RAG retrieval settings (`retrieval_top_k`)
-
-Environment variables override config defaults:
-```powershell
-# Ollama Configuration (standardized ENV variables)
-$env:OLLAMA_BASE_URL = "http://localhost:11434"  # Ollama API endpoint
-$env:OLLAMA_MODEL = "llama3.1"                   # Model name
-$env:OLLAMA_TIMEOUT = "60"                       # Request timeout (seconds)
-$env:OLLAMA_MAX_RETRIES = "3"                    # Retry attempts on failure
-$env:OLLAMA_RETRY_DELAY = "1.0"                  # Initial retry delay (seconds)
-
-# Legacy ENV variables (still supported)
-$env:OLLAMA_HOST = "http://localhost:11434"
-$env:COLLABRY_LLM_MODEL = "mistral"
-$env:COLLABRY_TEMPERATURE = "0.3"
-
-# MongoDB Configuration
-$env:MONGO_URI = "mongodb://localhost:27017"
-$env:MONGO_DB = "collabry"
-```
-
-## Roadmap
-
-- [x] Backend-only architecture (CLI moved to legacy)
-- [x] **MongoDB persistence (no fallback)** ✓
-- [x] **JWT-based multi-user isolation** ✓
-- [x] **Multiple sessions per user** ✓
-- [x] **User-scoped RAG retrieval** ✓
-- [ ] FastAPI REST API layer
-- [ ] Role-based access control (admin/teacher/student)
-- [ ] Production deployment configuration
-- [ ] Rate limiting per user
-- [ ] Document sharing between users
-
-## Project Structure
-
+### Project Structure
 ```
 ai-engine/
-├── core/                  # Core AI components
-│   ├── agent.py          # LangChain agent orchestration
-│   ├── local_llm.py      # Ollama LLM wrapper
-│   ├── memory.py         # Conversation memory (LangGraph checkpointing)
-│   ├── embeddings.py     # sentence-transformers embeddings
-│   ├── rag_retriever.py  # FAISS-based RAG
-│   ├── intent_classifier.py  # TF-IDF intent classification
-│   └── nlp.py            # NLP preprocessing
-├── tools/                 # Modular tool system
-├── legacy_tools/          # Archived CLI/system tools
-├── models/                # Pretrained models
-├── memory/                # Memory persistence
-├── documents/             # RAG document store
-└── config.py             # Configuration
+├── api/                    # Vercel serverless entrypoint
+├── core/                   # Core business logic
+│   ├── agent.py           # LangChain agent (main)
+│   ├── llm.py             # Unified LLM client
+│   ├── embeddings.py      # Unified embeddings
+│   ├── rag_retriever.py   # RAG document retrieval
+│   ├── conversation.py    # MongoDB chat history
+│   ├── voice_agent.py     # LiveKit voice I/O
+│   ├── teaching_engine.py # Teaching state machine
+│   └── ...
+├── server/                 # FastAPI application
+│   ├── main.py            # App initialization
+│   ├── deps.py            # JWT authentication
+│   ├── routes/            # API endpoints
+│   └── schemas.py         # Pydantic models
+├── tools/                  # LangChain tools
+│   ├── generate_quiz.py
+│   ├── search_sources.py
+│   └── ...
+├── rag/                    # Future RAG module (not active)
+├── data/                   # Training data, curricula
+├── documents/              # User-uploaded documents
+├── config.py              # Configuration management
+├── requirements.txt       # Python dependencies
+├── run_server.py          # Development server launcher
+└── livekit_agents_voice_tutor.py  # LiveKit worker
+```
+
+### Running Tests
+```bash
+# Lint code
+flake8 core/ server/ tools/
+
+# Type checking
+mypy core/ server/
+
+# Run LiveKit test (interactive)
+python dev_livekit_connect_test.py
+```
+
+### Debug Mode
+```bash
+# Enable debug logging
+export LOG_LEVEL=DEBUG
+python run_server.py
+```
+
+---
+
+## 📊 API Usage Examples
+
+### 1. Chat (Main Endpoint)
+```bash
+curl -X POST http://localhost:8000/ai/chat \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Create a quiz about photosynthesis",
+    "session_id": "session-123",
+    "notebook_id": "biology-101",
+    "stream": false
+  }'
+```
+
+### 2. Upload Document (RAG)
+```bash
+curl -X POST http://localhost:8000/ai/upload \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -F "file=@notes.pdf" \
+  -F "session_id=session-123" \
+  -F "notebook_id=biology-101"
+```
+
+### 3. Question Answering
+```bash
+curl -X POST http://localhost:8000/ai/qa \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is photosynthesis?",
+    "session_id": "session-123",
+    "notebook_id": "biology-101"
+  }'
+```
+
+### 4. Generate Mind Map
+```bash
+curl -X POST http://localhost:8000/ai/mindmap \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "Neural Networks",
+    "session_id": "session-123"
+  }'
+```
+
+---
+
+## 🔐 Authentication
+
+All endpoints (except `/health`) require JWT authentication:
+
+```bash
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
+```
+
+JWT payload must include:
+```json
+{
+  "sub": "user-id-123",
+  "exp": 1234567890
+}
+```
+
+Generate JWT using your authentication service (e.g., backend user service).
+
+---
+
+## 🚧 Migration Notes
+
+### Pending Migrations
+
+**⚠️ Compatibility Layer Still Active:**
+- `core/agent_compat.py` is a temporary wrapper for old routes
+- Routes using it: `/ai/qa`, `/ai/summarize`, `/ai/mindmap`
+- **TODO**: Migrate these routes to directly use `core/agent.py`
+
+**⚠️ RAG Module Not Active:**
+- New `rag/` module exists but is not used yet
+- Current RAG uses `core/rag_retriever.py` (FAISS-only)
+- **TODO**: Migrate to multi-provider `rag/` module for future scalability
+
+### Cleaned Up (Refactorization Complete)
+- ✅ Removed all test scripts (kept `dev_livekit_connect_test.py` for debugging)
+- ✅ Consolidated documentation to single README.md
+- ✅ Deleted PowerShell setup scripts
+- ✅ Removed `legacy_tools/` folder (CLI, browser automation)
+- ✅ Consolidated to LangChain-based agent (`core/agent.py`)
+- ✅ Deleted old LLM services (local_llm, ollama_service, gemini_service)
+- ✅ Deleted intent classification system (4 files)
+- ✅ Deleted deprecated modules (nlp.py, study_copilot.py)
+- ✅ Deleted training/model folders for intent classification
+- ✅ Removed duplicate route files (chat_new.py, upload_new.py)
+
+**Files Deleted:** ~40+ files, ~3500+ lines of code removed
+
+---
+
+## 🐛 Troubleshooting
+
+### MongoDB Connection Issues
+```bash
+# Check MongoDB is running
+mongosh --eval "db.runCommand({ ping: 1 })"
+
+# Update connection string in .env
+MONGO_URI=mongodb://localhost:27017/collabry
+```
+
+### LLM Provider Issues
+```bash
+# Test OpenAI connection
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Test Ollama connection
+curl http://localhost:11434/api/tags
+```
+
+### LiveKit Connection Issues
+```bash
+# Verify LiveKit credentials
+python dev_livekit_connect_test.py
+
+# Check LiveKit Cloud dashboard for room status
+# https://cloud.livekit.io
+```
+
+### CORS Issues
+```bash
+# Add frontend origin to .env
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+
+# Restart server after changing CORS_ORIGINS
+```
+
+---
+
+## 📚 Additional Resources
+
+- **LangChain Docs**: https://python.langchain.com/docs
+- **LiveKit Agents**: https://docs.livekit.io/agents
+- **FastAPI Docs**: https://fastapi.tiangolo.com
+- **MongoDB Docs**: https://www.mongodb.com/docs
+
+---
+
+## 📝 License
+
+[Your License Here]
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+---
+
+## 📧 Support
+
+For issues or questions:
+- GitHub Issues: [Your Repo URL]/issues
+- Email: support@collabry.com
+- Discord: [Your Discord Server]
+
+---
+
+**Built with ❤️ by the Collabry Team**

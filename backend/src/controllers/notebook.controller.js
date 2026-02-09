@@ -7,6 +7,7 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const cheerio = require('cheerio');
 const notificationService = require('../services/notification.service');
 const { getIO } = require('../socket');
 const { emitNotificationToUser } = require('../socket/notificationNamespace');
@@ -54,9 +55,100 @@ async function extractSourceContent(source) {
     }
     return `[Document: ${source.name} - No file path]`;
   } else if (source.type === 'website') {
+    if (source.content && typeof source.content === 'string' && source.content.trim().length > 0) {
+      return source.content;
+    }
     return `[Website: ${source.url}]`;
   }
   return '';
+}
+
+function normalizeWebsiteUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+
+  // Add scheme if missing
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractTextFromHtml(html) {
+  const $ = cheerio.load(html);
+
+  // Remove non-content
+  $('script, style, noscript, svg, canvas, iframe').remove();
+
+  // Prefer main/article content
+  const title = ($('title').first().text() || '').trim();
+  const candidates = ['main', 'article', '[role="main"]'];
+  let text = '';
+  for (const selector of candidates) {
+    const el = $(selector).first();
+    if (el && el.length) {
+      text = el.text();
+      break;
+    }
+  }
+  if (!text) {
+    text = $('body').text();
+  }
+
+  // Collapse whitespace
+  text = String(text || '')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[\t\f\v]+/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+
+  return { title, text };
+}
+
+async function scrapeWebsite(url) {
+  const normalized = normalizeWebsiteUrl(url);
+  if (!normalized) {
+    throw new AppError('Invalid URL. Only http(s) URLs are allowed.', 400);
+  }
+
+  const response = await axios.get(normalized, {
+    timeout: 20000,
+    maxRedirects: 5,
+    headers: {
+      // Some sites block empty UA
+      'User-Agent': 'CollabryBot/1.0 (Study Notebook Website Source)'
+    },
+    responseType: 'text',
+    validateStatus: (status) => status >= 200 && status < 400,
+  });
+
+  const contentType = String(response.headers?.['content-type'] || '');
+  if (contentType && !contentType.includes('text/html')) {
+    // We can still try parsing, but this usually means a PDF/image/etc.
+    console.warn(`Website scrape non-HTML content-type: ${contentType}`);
+  }
+
+  const html = String(response.data || '');
+  const { title, text } = extractTextFromHtml(html);
+
+  if (!text || text.length < 50) {
+    throw new AppError('Failed to extract readable text from the website.', 422);
+  }
+
+  // Hard cap to keep ingestion predictable
+  const maxChars = 200_000;
+  const clipped = text.length > maxChars ? text.slice(0, maxChars) + '\n\n[...clipped]' : text;
+
+  return {
+    normalizedUrl: normalized,
+    title,
+    content: `Source URL: ${normalized}\n${title ? `Title: ${title}\n` : ''}\n${clipped}`
+  };
 }
 
 /**
@@ -399,7 +491,19 @@ exports.addSource = asyncHandler(async (req, res) => {
     if (!url) {
       throw new AppError('URL is required for website sources', 400);
     }
-    source.url = url;
+
+    // Scrape website server-side so ingestion uses real text (like PDFs)
+    const scraped = await scrapeWebsite(url);
+    source.url = scraped.normalizedUrl;
+    source.content = scraped.content;
+    source.size = scraped.content.length;
+
+    // If the client passed name=url, replace with page title/hostname for nicer UI
+    const clientName = String(name || '').trim();
+    const derivedName = scraped.title || new URL(scraped.normalizedUrl).hostname;
+    if (!clientName || clientName === url || clientName === scraped.normalizedUrl) {
+      source.name = derivedName;
+    }
   } else if (type === 'text' || type === 'notes') {
     if (!content) {
       throw new AppError('Content is required for text/notes sources', 400);
@@ -556,13 +660,10 @@ exports.getSourceContent = asyncHandler(async (req, res) => {
 
   let content = '';
 
-  if (source.filePath) {
-    // Read file content
-    content = await fs.readFile(source.filePath, 'utf-8');
-  } else if (source.content) {
-    content = source.content;
-  } else if (source.url) {
-    content = `Website: ${source.url}`;
+  try {
+    content = await extractSourceContent(source);
+  } catch (error) {
+    content = `[Error extracting content: ${source.name}]`;
   }
 
   res.json({
@@ -684,16 +785,10 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
   for (const source of selectedSources) {
     let content = '';
 
-    if (source.filePath) {
-      try {
-        content = await fs.readFile(source.filePath, 'utf-8');
-      } catch (error) {
-        content = `[Error reading file: ${source.name}]`;
-      }
-    } else if (source.content) {
-      content = source.content;
-    } else if (source.url) {
-      content = `Website: ${source.url}`;
+    try {
+      content = await extractSourceContent(source);
+    } catch (error) {
+      content = `[Error extracting content: ${source.name}]`;
     }
 
     context.push({

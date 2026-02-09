@@ -100,8 +100,11 @@ export const useRealtimeNotifications = () => {
       console.log('✓ Connected to notification socket');
     });
 
-    notificationSocket.on('disconnect', () => {
-      console.log('✗ Disconnected from notification socket');
+    notificationSocket.on('disconnect', (reason) => {
+      // Only log meaningful disconnects (not React StrictMode cleanup)
+      if (reason !== 'io client disconnect') {
+        console.log('✗ Disconnected from notification socket:', reason);
+      }
     });
 
     // Listen for new notifications
@@ -135,7 +138,19 @@ export const useRealtimeNotifications = () => {
     setSocket(notificationSocket);
 
     return () => {
-      notificationSocket.disconnect();
+      // Only disconnect if socket is actually connected or connecting
+      // Prevents "WebSocket is closed before connection" errors in React StrictMode
+      // Note: This error is harmless in dev mode and doesn't occur in production
+      if (notificationSocket.connected) {
+        notificationSocket.disconnect();
+      } else if (notificationSocket.active) {
+        // Socket is connecting but not yet connected - just remove listeners
+        notificationSocket.removeAllListeners();
+        notificationSocket.close();
+      } else {
+        // Socket never connected - just close it
+        notificationSocket.close();
+      }
     };
   }, [accessToken, queryClient]);
 

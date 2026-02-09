@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import SummarizeRequest, SummarizeResponse, ErrorResponse
-from core.agent_compat import create_agent
+from core.agent import run_agent, chat
 from config import CONFIG
 import json
 import logging
@@ -46,13 +46,6 @@ async def summarize_text(
     try:
         logger.info(f"Summarization request from user={user_id}, style={request.style}")
         
-        # Create agent for summarization (no session needed for stateless operation)
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),  # Temporary session for stateless operation
-            config=CONFIG
-        )
-        
         # Build summarization prompt based on style
         style_instructions = {
             "concise": "Provide a concise 2-3 sentence summary.",
@@ -76,16 +69,16 @@ Text to summarize:
 
 Summary:"""
         
-        # Collect response
-        response_chunks = []
+        # Execute agent directly with new API
+        session_id = str(uuid4())  # Temporary session for stateless operation
+        summary = await chat(
+            user_id=user_id,
+            session_id=session_id,
+            message=prompt,
+            notebook_id=None
+        )
         
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        # Execute agent
-        agent.handle_user_input_stream(prompt, collect_chunk)
-        
-        summary = "".join(response_chunks).strip()
+        summary = summary.strip()
         
         logger.info(f"Summary generated: {len(summary)} chars from {len(request.text)} chars")
         
@@ -127,13 +120,6 @@ async def summarize_stream(
     try:
         logger.info(f"Streaming summarization request from user={user_id}, style={request.style}")
         
-        # Create agent for summarization
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=str(uuid4()),  # Temporary session for stateless operation
-            config=CONFIG
-        )
-        
         # Build summarization prompt based on style
         style_instructions = {
             "concise": "Provide a concise 2-3 sentence summary.",
@@ -162,16 +148,16 @@ Summary:"""
             
             # Track if we've sent any data
             has_data = False
+            session_id = str(uuid4())  # Temporary session for stateless operation
             
-            # Execute agent with immediate streaming
-            chunks_buffer = []
-            def collect_chunk(chunk: str):
-                chunks_buffer.append(chunk)
-            
-            agent.handle_user_input_stream(prompt, collect_chunk)
-            
-            # Stream the collected chunks
-            for chunk in chunks_buffer:
+            # Stream the response using new agent API
+            async for chunk in run_agent(
+                user_id=user_id,
+                session_id=session_id,
+                message=prompt,
+                notebook_id=None,
+                stream=True
+            ):
                 if chunk.strip():
                     has_data = True
                     yield f"data: {chunk}\n\n"

@@ -22,6 +22,7 @@ from server.limit_middleware import UsageLimitMiddleware
 from core.usage_tracker import usage_tracker
 from config import CONFIG
 import logging
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -76,9 +77,18 @@ app = FastAPI(
 allowed_origins = CONFIG["cors_origins"]
 logger.info(f"CORS allowed origins: {allowed_origins}")
 
+# Allow localhost/127.0.0.1 on any port (useful when Next picks 3001, etc.)
+# Can be overridden by setting CORS_ORIGIN_REGEX in the environment.
+cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$",
+)
+logger.info(f"CORS origin regex: {cors_origin_regex}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,  # Environment-configurable origins
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
