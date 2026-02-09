@@ -95,17 +95,70 @@ export const useAddSource = (notebookId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: AddSourcePayload) => notebookService.addSource(notebookId, payload as any),
-    onSuccess: (response: any) => {
-      const addedSource = response?.data as Source | undefined;
-      if (addedSource?._id) {
-        updateNotebookQueryCache(queryClient, notebookId, (nb) => {
-          const existing = nb.sources ?? [];
-          const alreadyThere = existing.some((s) => s._id === addedSource._id);
-          if (alreadyThere) return nb;
-          return { ...nb, sources: [...existing, addedSource] };
-        });
+    onMutate: async (payload: AddSourcePayload) => {
+      await queryClient.cancelQueries({ queryKey: ['notebooks', notebookId] });
+
+      const previous = queryClient.getQueryData(['notebooks', notebookId]);
+
+      const optimisticId = `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      const nowIso = new Date().toISOString();
+      const optimisticSource: Source = {
+        _id: optimisticId,
+        type: 'text',
+        name: 'New source',
+        selected: true,
+        dateAdded: nowIso,
+      };
+
+      try {
+        if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+          const rawType = String(payload.get('type') || 'pdf');
+          const type = (['pdf', 'text', 'website', 'notes'].includes(rawType) ? rawType : 'pdf') as Source['type'];
+          const name = String(payload.get('name') || 'Untitled Source');
+          optimisticSource.type = type;
+          optimisticSource.name = name;
+        } else {
+          const p: any = payload;
+          optimisticSource.type = p.type;
+          optimisticSource.name = p.name || p.url || 'Untitled Source';
+          if (p.url) optimisticSource.url = p.url;
+        }
+      } catch {
+        // best-effort; keep defaults
       }
-    }
+
+      updateNotebookQueryCache(queryClient, notebookId, (nb) => {
+        const existing = nb.sources ?? [];
+        return { ...nb, sources: [...existing, optimisticSource] };
+      });
+
+      return { previous, optimisticId };
+    },
+    onError: (_err, _payload, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['notebooks', notebookId], context.previous);
+      }
+    },
+    onSuccess: (response: any, _payload: AddSourcePayload, context) => {
+      const addedSource = response?.data as Source | undefined;
+      if (!addedSource?._id) return;
+
+      updateNotebookQueryCache(queryClient, notebookId, (nb) => {
+        const existing = nb.sources ?? [];
+        const withoutOptimistic = context?.optimisticId
+          ? existing.filter((s) => s._id !== context.optimisticId)
+          : existing;
+
+        const alreadyThere = withoutOptimistic.some((s) => s._id === addedSource._id);
+        if (alreadyThere) return nb;
+        return { ...nb, sources: [...withoutOptimistic, addedSource] };
+      });
+    },
+    onSettled: () => {
+      // Ensure we converge with backend (and pick up any server-side derived fields)
+      queryClient.invalidateQueries({ queryKey: ['notebooks', notebookId] });
+    },
   });
 };
 

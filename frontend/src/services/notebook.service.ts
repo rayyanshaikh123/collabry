@@ -21,9 +21,10 @@ export interface Source {
 
 export interface Artifact {
   _id: string;
-  type: 'quiz' | 'mindmap' | 'flashcards';
+  type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic';
   referenceId: string;
   title: string;
+  data?: any; // Inline data for flashcards and infographics
   createdAt: string;
 }
 

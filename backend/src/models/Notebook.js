@@ -27,17 +27,20 @@ const SourceSchema = new mongoose.Schema({
 const ArtifactSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['quiz', 'mindmap', 'flashcards'],
+    enum: ['quiz', 'mindmap', 'flashcards', 'infographic'],
     required: true
   },
   referenceId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    refPath: 'artifacts.type' // Dynamic reference
+    type: mongoose.Schema.Types.Mixed, // Support both ObjectId and string IDs
+    required: true
   },
   title: {
     type: String,
     required: true
+  },
+  data: {
+    type: mongoose.Schema.Types.Mixed, // For inline artifacts (flashcards, infographics)
+    required: false
   },
   createdAt: {
     type: Date,

@@ -187,11 +187,19 @@ const CollaborativeBoard: React.FC = () => {
       opacity: 1,
       meta: {},
       props: {
-        text: subtitle ? `${title}\n${subtitle}` : title,
+        richText: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: subtitle ? `${title}\n${subtitle}` : title }]
+            }
+          ]
+        },
         font: 'sans',
         size: 'xl',
         color: 'black',
-        align: 'start',
+        textAlign: 'start',
         w: 680,
         autoSize: false,
         scale: 1,
@@ -228,7 +236,15 @@ const CollaborativeBoard: React.FC = () => {
           dash: 'draw',
           size: 'm',
           font: 'sans',
-          text,
+          richText: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text }]
+              }
+            ]
+          },
           align: 'start',
           verticalAlign: 'start',
           growY: 0,
@@ -240,153 +256,54 @@ const CollaborativeBoard: React.FC = () => {
     return shapes;
   };
 
-  const buildMindmapShapes = (mindmap: any) => {
-    if (!mindmap) return [];
-
-    let nodes: Array<{ id: string; label: string }> = [];
-    let edges: Array<{ from: string; to: string }> = [];
-
-    if (Array.isArray(mindmap.nodes)) {
-      nodes = mindmap.nodes
-        .map((n: any, idx: number) => ({
-          id: String(n?.id ?? `n${idx + 1}`),
-          label: String(n?.label ?? n?.text ?? n?.title ?? `Node ${idx + 1}`),
-        }))
-        .filter((n: any) => n.id);
-
-      if (Array.isArray(mindmap.edges)) {
-        edges = mindmap.edges
-          .map((e: any) => ({
-            from: String(e?.from ?? e?.source ?? e?.src ?? ''),
-            to: String(e?.to ?? e?.target ?? e?.dst ?? ''),
-          }))
-          .filter((e: any) => e.from && e.to);
-      }
-    } else if (mindmap?.label && Array.isArray(mindmap?.children)) {
-      const walk = (node: any, parentId: string | null) => {
-        const id = String(node?.id ?? generateShapeId('n'));
-        const label = String(node?.label ?? node?.title ?? 'Node');
-        nodes.push({ id, label });
-        if (parentId) edges.push({ from: parentId, to: id });
-        (node?.children || []).forEach((c: any) => walk(c, id));
-      };
-      walk(mindmap, null);
-    }
-
-    if (nodes.length === 0) return [];
-
-    const maxNodes = 12;
-    if (nodes.length > maxNodes) nodes = nodes.slice(0, maxNodes);
-    const nodeIdSet = new Set(nodes.map((n) => n.id));
-    edges = edges.filter((e) => nodeIdSet.has(e.from) && nodeIdSet.has(e.to));
-
-    const indegree = new Map<string, number>();
-    nodes.forEach((n) => indegree.set(n.id, 0));
-    edges.forEach((e) => indegree.set(e.to, (indegree.get(e.to) || 0) + 1));
-    const root = nodes.find((n) => (indegree.get(n.id) || 0) === 0) || nodes[0];
-
-    const children = new Map<string, string[]>();
-    edges.forEach((e) => {
-      const list = children.get(e.from) || [];
-      list.push(e.to);
-      children.set(e.from, list);
-    });
-
-    const depth = new Map<string, number>();
-    depth.set(root.id, 0);
-    const queue: string[] = [root.id];
-    while (queue.length) {
-      const current = queue.shift()!;
-      const d = depth.get(current) || 0;
-      (children.get(current) || []).forEach((c) => {
-        if (!depth.has(c)) {
-          depth.set(c, d + 1);
-          queue.push(c);
-        }
-      });
-    }
-
-    const byDepth = new Map<number, string[]>();
-    nodes.forEach((n) => {
-      const d = depth.get(n.id) ?? 0;
-      const list = byDepth.get(d) || [];
-      list.push(n.id);
-      byDepth.set(d, list);
-    });
-
+  const buildMindmapShapes = (payload: any) => {
+    if (!payload) return [];
+    
+    const title = payload.title || 'Mind Map';
+    const data = payload.data || payload;
+    const nodeCount = data?.nodes?.length || 0;
+    const svgBase64 = data?.svgBase64;
+    
     const originX = 120;
     const originY = 160;
-    const dx = 320;
-    const dy = 160;
-
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
     const shapes: any[] = [];
 
+    // Create a simple card representing the mindmap
     shapes.push({
       id: generateShapeId('shape'),
       typeName: 'shape',
-      type: 'text',
+      type: 'geo',
       x: originX,
-      y: originY - 70,
+      y: originY,
       parentId: 'page:page',
       index: 'a1',
       rotation: 0,
       isLocked: false,
       opacity: 1,
-      meta: {},
+      meta: { mindmapData: data, svgBase64 },
       props: {
-        text: `🧠 Mindmap: ${root.label}`,
+        geo: 'rectangle',
+        w: 500,
+        h: 300,
+        color: 'violet',
+        fill: 'semi',
+        dash: 'draw',
+        size: 'm',
         font: 'sans',
-        size: 'l',
-        color: 'black',
-        align: 'start',
-        w: 700,
-        autoSize: false,
-        scale: 1,
+        richText: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: `🧠 ${title}\n\nMindmap with ${nodeCount} nodes\n\n💡 View in Study Notebook to see full diagram\n📊 This is a visual representation placeholder` }]
+            }
+          ]
+        },
+        align: 'middle',
+        verticalAlign: 'middle',
+        growY: 0,
+        url: '',
       },
-    });
-
-    const depthLevels = Array.from(byDepth.keys()).sort((a, b) => a - b);
-    let shapeIndex = 2;
-    depthLevels.forEach((d) => {
-      const ids = byDepth.get(d) || [];
-      const count = ids.length;
-      ids.forEach((id, i) => {
-        const n = nodeMap.get(id);
-        if (!n) return;
-        const x = originX + d * dx;
-        const y = originY + (i - (count - 1) / 2) * dy;
-        const isRoot = id === root.id;
-
-        shapes.push({
-          id: generateShapeId('shape'),
-          typeName: 'shape',
-          type: 'geo',
-          x,
-          y,
-          parentId: 'page:page',
-          index: `a${shapeIndex++}`,
-          rotation: 0,
-          isLocked: false,
-          opacity: 1,
-          meta: {},
-          props: {
-            geo: 'ellipse',
-            w: isRoot ? 280 : 220,
-            h: isRoot ? 140 : 110,
-            color: isRoot ? 'violet' : 'blue',
-            fill: 'semi',
-            dash: 'draw',
-            size: 'm',
-            font: 'sans',
-            text: n.label,
-            align: 'middle',
-            verticalAlign: 'middle',
-            growY: 0,
-            url: '',
-          },
-        });
-      });
     });
 
     return shapes;
@@ -394,7 +311,7 @@ const CollaborativeBoard: React.FC = () => {
 
   const buildShapesFromImport = (payload: any) => {
     if (!payload || typeof payload !== 'object') return [];
-    if (payload.kind === 'mindmap') return buildMindmapShapes(payload.data);
+    if (payload.kind === 'mindmap') return buildMindmapShapes(payload);
     if (payload.kind === 'infographic') return buildInfographicShapes(payload.data);
     return [];
   };

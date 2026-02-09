@@ -67,6 +67,10 @@ class Config:
     # ========== Database Configuration ==========
     MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
     MONGODB_DB = os.getenv("MONGODB_DB", "study_assistant")
+    MEMORY_COLLECTION = os.getenv("MEMORY_COLLECTION", "conversations")
+    
+    # ========== Documents/RAG Storage ==========
+    DOCUMENTS_PATH = os.getenv("DOCUMENTS_PATH", "documents")
     
     # ========== Authentication ==========
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
@@ -103,6 +107,12 @@ class Config:
         "jwt_algorithm": "JWT_ALGORITHM",
         "cors_origins": "CORS_ORIGINS",
         "ollama_host": "OPENAI_BASE_URL",  # Temporary mapping
+        "documents_path": "DOCUMENTS_PATH",  # RAG retriever
+        "faiss_index_path": "FAISS_INDEX_PATH",
+        "embedding_model": "EMBEDDING_MODEL",
+        "huggingface_api_key": "HF_API_KEY",
+        "memory_collection": "MEMORY_COLLECTION",
+        "retrieval_top_k": "RETRIEVAL_TOP_K",
     }
     
     def __getitem__(self, key):
@@ -115,6 +125,13 @@ class Config:
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(f"Configuration key '{key}' not found")
+    
+    def get(self, key, default=None):
+        """Support dict.get() method for backward compatibility."""
+        try:
+            return self[key]
+        except KeyError:
+            return default
     
     def __contains__(self, key):
         """Support 'in' operator."""

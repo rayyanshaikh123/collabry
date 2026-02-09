@@ -165,7 +165,9 @@ class GenerateController {
             topic: mapTopic,
             subject: subjectId || null,
             nodes: generatedMap.nodes,
-            edges: generatedMap.edges
+            edges: generatedMap.edges,
+            mermaidCode: generatedMap.mermaidCode,
+            svgBase64: generatedMap.svgBase64
           });
 
           return res.status(201).json({

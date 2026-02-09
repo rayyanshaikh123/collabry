@@ -206,6 +206,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
           artifact={selectedArtifact}
           onClose={() => onSelectArtifact('')}
           onEdit={onEditArtifact}
+          onDelete={onDeleteArtifact}
         />
       )}
     </div>

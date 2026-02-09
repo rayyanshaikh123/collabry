@@ -643,10 +643,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 </div>
                                 <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border-2 border-blue-200 dark:border-blue-800 shadow-sm">
                                   <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-4 text-center">{flashcardSet.title}</h3>
-                                  <FlashcardViewer cards={flashcardSet.cards.slice(0, 3)} />
-                                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4 italic">
-                                    Preview showing first 3 cards. Click "Save to Studio" to study all {flashcardSet.cards.length} cards.
-                                  </p>
+                                  <FlashcardViewer cards={flashcardSet.cards} />
                                 </div>
                               </div>
                             )}

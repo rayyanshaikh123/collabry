@@ -45,9 +45,9 @@ def get_current_user(
         logger.info(f"✅ Token decoded successfully. Payload: {payload}")
         
         # Extract user_id from 'sub' or 'id' claim (backend uses 'id', standard is 'sub')
-        user_id: Optional[str] = payload.get("sub") or payload.get("id")
+        user_id_raw = payload.get("sub") or payload.get("id")
         
-        if user_id is None:
+        if user_id_raw is None:
             logger.warning(f"❌ JWT token missing 'sub' or 'id' claim. Payload: {payload}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -56,9 +56,9 @@ def get_current_user(
             )
         
         # Convert ObjectId to string if needed
-        user_id = str(user_id)
+        user_id = str(user_id_raw)
         
-        logger.info(f"✅ Authenticated user: {user_id}")
+        logger.info(f"✅ Authenticated user: '{user_id}' (raw_type={type(user_id_raw).__name__}, str_len={len(user_id)})")
         return user_id
         
     except JWTError as e:

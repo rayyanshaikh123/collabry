@@ -235,12 +235,19 @@ async function ingestSourceToRAG(notebook, source, authToken) {
         }
       } catch (pollErr) {
         console.warn(`  Warning: Failed to poll task status:`, pollErr.message);
-        // If it's a 403 or 404, assume the task completed
-        if (pollErr.response && (pollErr.response.status === 403 || pollErr.response.status === 404)) {
-          console.log(`  ℹ Task not found (${pollErr.response.status}), assuming completed`);
+        // If it's a 404, the task likely completed and was cleaned up
+        if (pollErr.response && pollErr.response.status === 404) {
+          console.log(`  ℹ Task not found (404), assuming completed`);
           status = 'completed';
         }
-        break; // Continue anyway if polling fails
+        // If it's a 403, there's an auth issue - log details but continue
+        else if (pollErr.response && pollErr.response.status === 403) {
+          console.error(`  ⚠️ Auth error (403) accessing task status - user_id mismatch?`);
+          console.error(`  Response:`, pollErr.response.data);
+          // Don't assume completed for 403 - this is a real error
+          status = 'failed';
+        }
+        break; // Stop polling on error
       }
     }
     
@@ -522,6 +529,21 @@ exports.addSource = asyncHandler(async (req, res) => {
 
   // Extract JWT token from request
   const authToken = req.headers.authorization?.split(' ')[1];
+  
+  if (authToken) {
+    // Debug: decode JWT to see user_id (for troubleshooting only)
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.decode(authToken);
+      console.log(`[DEBUG] JWT payload: ${JSON.stringify(decoded)}`);
+      console.log(`[DEBUG] User ID in JWT: ${decoded?.id || decoded?.sub}`);
+      console.log(`[DEBUG] Notebook userId: ${notebook.userId}`);
+    } catch (e) {
+      console.warn('[DEBUG] Failed to decode JWT for logging:', e.message);
+    }
+  } else {
+    console.warn('[DEBUG] No authToken found in request headers');
+  }
 
   // Ingest source into AI engine's RAG system (WAIT for completion)
   if (authToken && notebook.aiSessionId) {
@@ -692,9 +714,9 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     throw new AppError('Notebook not found', 404);
   }
 
-  const { type, referenceId, title } = req.body;
+  const { type, referenceId, title, data } = req.body;
 
-  // Validate artifact exists
+  // Validate artifact exists (only for types with backend collections)
   if (type === 'quiz') {
     // Quiz model stores owner in `createdBy`
     const quiz = await Quiz.findOne({ _id: referenceId, createdBy: req.user._id });
@@ -704,10 +726,12 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     const mindmap = await MindMap.findOne({ _id: referenceId, createdBy: req.user._id });
     if (!mindmap) throw new AppError('Mind map not found', 404);
   }
+  // Note: flashcards and infographic types don't have backend collections yet
+  // They store data inline in the artifact
 
   // Check if already linked
   const existing = notebook.artifacts.find(
-    a => a.type === type && a.referenceId.toString() === referenceId
+    a => a.type === type && a.referenceId.toString() === referenceId.toString()
   );
 
   if (existing) {
@@ -718,11 +742,18 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     });
   }
 
-  notebook.artifacts.push({
+  const artifactData = {
     type,
     referenceId,
     title: title || `${type.charAt(0).toUpperCase() + type.slice(1)}`
-  });
+  };
+
+  // Add inline data if provided (for flashcards, infographics)
+  if (data) {
+    artifactData.data = data;
+  }
+
+  notebook.artifacts.push(artifactData);
 
   await notebook.save();
 

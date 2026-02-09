@@ -28,61 +28,103 @@ export interface BoardTemplate {
 const generateId = (prefix: string = 'shape') => `${prefix}:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // Helper to create a complete geo shape with all required props
-const createGeoShape = (overrides: Partial<TemplateShape> & { props: any }): TemplateShape => ({
-  type: 'geo',
-  typeName: 'shape',
-  x: 0,
-  y: 0,
-  parentId: 'page:page',
-  index: 'a1',
-  rotation: 0,
-  isLocked: false,
-  opacity: 1,
-  meta: {},
-  ...overrides,
-  props: {
-    geo: 'rectangle',
-    w: 200,
-    h: 200,
-    color: 'black',
-    fill: 'none',
-    dash: 'draw',
-    size: 'm',
-    font: 'draw',
-    text: '',
-    align: 'middle',
-    verticalAlign: 'middle',
-    growY: 0,
-    url: '',
-    ...overrides.props,
-  },
-});
+const createGeoShape = (overrides: Partial<TemplateShape> & { props: any }): TemplateShape => {
+  const { text, ...restProps } = overrides.props || {};
+  const richText = text ? {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text }]
+      }
+    ]
+  } : {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '' }]
+      }
+    ]
+  };
+  
+  return {
+    type: 'geo',
+    typeName: 'shape',
+    x: 0,
+    y: 0,
+    parentId: 'page:page',
+    index: 'a1',
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    meta: {},
+    ...overrides,
+    props: {
+      geo: 'rectangle',
+      w: 200,
+      h: 200,
+      color: 'black',
+      fill: 'none',
+      dash: 'draw',
+      size: 'm',
+      font: 'draw',
+      richText,
+      align: 'middle',
+      verticalAlign: 'middle',
+      growY: 0,
+      url: '',
+      ...restProps,
+    },
+  };
+};
 
 // Helper to create a text shape with all required props
-const createTextShape = (overrides: Partial<TemplateShape> & { props: any }): TemplateShape => ({
-  type: 'text',
-  typeName: 'shape',
-  x: 0,
-  y: 0,
-  parentId: 'page:page',
-  index: 'a1',
-  rotation: 0,
-  isLocked: false,
-  opacity: 1,
-  meta: {},
-  ...overrides,
-  props: {
-    text: '',
-    font: 'draw',
-    size: 'm',
-    color: 'black',
-    align: 'middle',
-    w: 200,
-    autoSize: true,
-    scale: 1,
-    ...overrides.props,
-  },
-});
+const createTextShape = (overrides: Partial<TemplateShape> & { props: any }): TemplateShape => {
+  const { text, ...restProps } = overrides.props || {};
+  const richText = text ? {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text }]
+      }
+    ]
+  } : {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '' }]
+      }
+    ]
+  };
+  
+  return {
+    type: 'text',
+    typeName: 'shape',
+    x: 0,
+    y: 0,
+    parentId: 'page:page',
+    index: 'a1',
+    rotation: 0,
+    isLocked: false,
+    opacity: 1,
+    meta: {},
+    ...overrides,
+    props: {
+      richText,
+      font: 'draw',
+      size: 'm',
+      color: 'black',
+      textAlign: 'middle',
+      w: 200,
+      autoSize: true,
+      scale: 1,
+      ...restProps,
+    },
+  };
+};
 
 // Function to get template shapes with fresh IDs
 export const getTemplateShapes = (template: BoardTemplate): any[] => {

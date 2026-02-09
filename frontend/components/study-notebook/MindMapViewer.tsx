@@ -41,6 +41,15 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
       return;
     }
     
+    // Check if mermaidCode is already cached in the mindmap data
+    if (mindmapJson.mermaidCode) {
+      console.log('MindMapViewer: Using cached mermaidCode from database');
+      setMermaidCode(mindmapJson.mermaidCode);
+      setSvgBase64(mindmapJson.svgBase64 || null);
+      setLoading(false);
+      return;
+    }
+    
     console.log('MindMapViewer: Starting render with:', {
       hasNodes: !!mindmapJson.nodes,
       nodeCount: mindmapJson.nodes?.length || 0,

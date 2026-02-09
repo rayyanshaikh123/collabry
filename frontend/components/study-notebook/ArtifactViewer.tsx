@@ -17,9 +17,10 @@ interface ArtifactViewerProps {
   artifact: Artifact;
   onClose: () => void;
   onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEdit }) => {
+const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEdit, onDelete }) => {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -37,7 +38,12 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
     try {
       const payload =
         artifact.type === 'mindmap'
-          ? { kind: 'mindmap' as const, data: artifact.data, title: artifact.title }
+          ? { 
+              kind: 'mindmap' as const, 
+              data: artifact.data,
+              title: artifact.title,
+              svgBase64: artifact.data?.svgBase64
+            }
           : { kind: 'infographic' as const, data: artifact.data, title: artifact.title };
 
       sessionStorage.setItem(`board-${boardId}-import`, JSON.stringify(payload));
@@ -51,17 +57,32 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
   const handleExport = () => {
     setIsExporting(true);
     try {
-      // Export as JSON
-      const dataStr = JSON.stringify(artifact, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // For mindmaps, export as SVG image if available
+      if (artifact.type === 'mindmap' && artifact.data?.svgBase64) {
+        // Convert base64 SVG to blob
+        const svgData = atob(artifact.data.svgBase64);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(svgBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        // For other artifacts, export as JSON
+        const dataStr = JSON.stringify(artifact, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
@@ -98,6 +119,9 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
     // TODO: Implement specific renderers for each artifact type
     switch (artifact.type) {
       case 'flashcards':
+        console.log('Rendering flashcards artifact:', artifact);
+        console.log('Flashcards data:', artifact.data);
+        console.log('Flashcards cards:', artifact.data?.cards);
         return (
           <div className="space-y-6">
             <div className="flex items-center gap-3 mb-6">
@@ -114,12 +138,16 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             ) : (
               <div className="text-center py-8">
                 <p className="text-slate-500 dark:text-slate-400">No flashcards available</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Data: {JSON.stringify(artifact.data)}</p>
               </div>
             )}
           </div>
         );
 
       case 'quiz':
+        console.log('Rendering quiz artifact:', artifact);
+        console.log('Quiz data:', artifact.data);
+        console.log('Quiz questions:', artifact.data?.questions);
         return (
           <div className="space-y-6">
             <div className="flex items-center gap-3 mb-6">
@@ -139,12 +167,15 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             ) : (
               <div className="text-center py-8">
                 <p className="text-slate-500 dark:text-slate-400">No quiz questions available</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Data: {JSON.stringify(artifact.data)}</p>
               </div>
             )}
           </div>
         );
 
       case 'mindmap':
+        console.log('Rendering mindmap artifact:', artifact);
+        console.log('Mindmap data:', artifact.data);
         return (
           <div className="space-y-6">
             <div className="flex items-center gap-3 mb-6">
@@ -167,6 +198,7 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             ) : (
               <div className="text-center py-8">
                 <p className="text-slate-500 dark:text-slate-400">No mind map data available</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Data: {JSON.stringify(artifact.data)}</p>
               </div>
             )}
           </div>
@@ -351,8 +383,20 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             >
               <ICONS.share className="w-4 h-4 mr-2" />
               {isSharing ? 'Sharing...' : 'Share'}
-              Share
             </Button>
+            {onDelete && (
+              <Button 
+                variant="danger" 
+                size="sm"
+                onClick={() => {
+                  onDelete(artifact.id);
+                  onClose();
+                }}
+              >
+                <ICONS.trash className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
       </Card>

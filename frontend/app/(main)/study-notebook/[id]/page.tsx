@@ -818,7 +818,7 @@ Output ONLY the JSON object.`;
       const quizData = {
         title: `Practice Quiz - ${displayCount} Questions`,
         description: quizPrompt || 'Generated from study session',
-        subject: notebook.title || 'Study Notes',
+        sourceType: 'ai',
         questions: questions.map((q, index) => {
           const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
 
@@ -841,12 +841,15 @@ Output ONLY the JSON object.`;
             correctAnswerText = q.answer;
           }
 
-          const correctAnswerIndex = options.findIndex((opt: string) => opt === correctAnswerText);
+          // Ensure correctAnswerText is not empty
+          if (!correctAnswerText && options.length > 0) {
+            correctAnswerText = options[0];
+          }
           
           return {
-            question: q.question,
-            options,
-            correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
+            question: q.question || 'Question',
+            options: options.length >= 2 ? options : ['Option 1', 'Option 2'],
+            correctAnswer: correctAnswerText || (options[0] || 'Option 1'),
             explanation: q.explanation || '',
             difficulty: (q.difficulty as any) || quizDifficulty,
             points: 1,
@@ -856,8 +859,8 @@ Output ONLY the JSON object.`;
         settings: {
           shuffleQuestions: false,
           shuffleOptions: false,
-          showExplanations: true,
-          allowReview: true
+          showCorrectAnswers: true,
+          allowRetake: true
         }
       };
 
@@ -867,6 +870,10 @@ Output ONLY the JSON object.`;
         type: 'quiz',
         referenceId: createdQuiz._id,
         title: quizData.title,
+        data: {
+          questions: quizData.questions,
+          settings: quizData.settings
+        }
       });
 
       showSuccess('Quiz saved to Studio successfully!');
@@ -895,6 +902,10 @@ Output ONLY the JSON object.`;
           type: 'mindmap',
           referenceId: savedId,
           title: `Mind Map - ${notebook.title}`,
+          data: {
+            nodes: mindmap.nodes,
+            edges: mindmap.edges
+          }
         });
         showSuccess('Mind map saved to Studio successfully!');
       } else {
@@ -982,6 +993,32 @@ Output ONLY the JSON object.`;
     showSuccess('Saved prompt changes locally (frontend only).');
   };
 
+  const handleSelectArtifact = (artifactId: string) => {
+    if (!artifactId) {
+      setSelectedArtifact(null);
+      return;
+    }
+
+    const artifact = notebook?.artifacts.find(a => a._id === artifactId);
+    if (artifact) {
+      console.log('Selected artifact from notebook:', artifact);
+      console.log('Artifact data:', artifact.data);
+      console.log('Artifact type:', artifact.type);
+      
+      const edits = artifactEdits[artifact._id] || {};
+      const selectedData = {
+        id: artifact._id,
+        type: artifact.type as ArtifactType,
+        title: edits.numberOfQuestions ? `${artifact.title} (${edits.numberOfQuestions} q)` : artifact.title,
+        createdAt: artifact.createdAt,
+        data: artifact.data || { referenceId: artifact.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
+      };
+      
+      console.log('Setting selectedArtifact:', selectedData);
+      setSelectedArtifact(selectedData);
+    }
+  };
+
   const handleDeleteArtifact = (artifactId: string) => {
     if (!notebook) return;
 
@@ -1003,27 +1040,6 @@ Output ONLY the JSON object.`;
       'Delete',
       'Cancel'
     );
-  };
-
-  const handleSelectArtifact = (id: string) => {
-    if (!id || !notebook) {
-      setSelectedArtifact(null);
-      return;
-    }
-    
-    const artifact = notebook.artifacts.find((a) => a._id === id);
-    if (artifact) {
-      const artifactType = (artifact.type === 'quiz' || artifact.type === 'mindmap' || artifact.type === 'flashcards') 
-        ? artifact.type 
-        : 'quiz' as ArtifactType;
-      setSelectedArtifact({
-        id: artifact._id,
-        type: artifactType,
-        title: artifact.title,
-        createdAt: artifact.createdAt,
-        data: { referenceId: artifact.referenceId }
-      });
-    }
   };
 
   // Auto-scroll to bottom when messages change
@@ -1091,7 +1107,8 @@ Output ONLY the JSON object.`;
           type: a.type as ArtifactType,
           title: edits.numberOfQuestions ? `${a.title} (${edits.numberOfQuestions} q)` : a.title,
           createdAt: a.createdAt,
-          data: { referenceId: a.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
+          // Preserve inline data (flashcards, infographics) and also include metadata
+          data: a.data || { referenceId: a.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
         });
       })}
       onGenerateArtifact={handleGenerateArtifact}
