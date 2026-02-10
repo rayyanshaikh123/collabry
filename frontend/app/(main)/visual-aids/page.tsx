@@ -6,3 +6,4 @@ import VisualAidsView from '../../../views/VisualAids';
 export default function VisualAidsPage() {
   return <VisualAidsView />;
 }
+

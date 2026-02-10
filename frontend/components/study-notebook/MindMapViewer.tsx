@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import renderMindmap from '../../src/lib/mindmapClient';
+import renderMindmap from '@/lib/mindmapClient';
 
 interface Props {
   mindmapJson: any;

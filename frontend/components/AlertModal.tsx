@@ -3,7 +3,7 @@
 import React from 'react';
 import { Card, Button } from './UIElements';
 import { ICONS } from '../constants';
-import { useUIStore } from '../src/stores/ui.store';
+import { useUIStore } from '@/lib/stores/ui.store';
 
 interface AlertModalProps {
   isOpen?: boolean;

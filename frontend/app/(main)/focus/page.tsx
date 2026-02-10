@@ -6,3 +6,4 @@ import FocusMode from '../../../views/FocusMode';
 export default function FocusPage() {
   return <FocusMode />;
 }
+

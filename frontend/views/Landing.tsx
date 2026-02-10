@@ -2,7 +2,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import DarkModeToggle from '../src/components/DarkModeToggle';
+import DarkModeToggle from '@/components/DarkModeToggle';
 import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { motion } from 'framer-motion';

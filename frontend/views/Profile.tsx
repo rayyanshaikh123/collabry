@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Badge, ProgressBar, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { useAuthStore } from '../src/stores/auth.store';
-import { gamificationService, GamificationStats } from '../src/services/gamification.service';
-import { authService } from '../src/services/auth.service';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { gamificationService, GamificationStats } from '@/lib/services/gamification.service';
+import { authService } from '@/lib/services/auth.service';
 
 // Modal component
 const Modal: React.FC<{
@@ -69,7 +69,7 @@ const ProfileView: React.FC = () => {
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  const userInitials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
+  const userInitials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'U';
   const joinedDate = user?.createdAt 
     ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) 
     : 'Unknown';

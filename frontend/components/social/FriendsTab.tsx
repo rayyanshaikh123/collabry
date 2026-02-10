@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Search, UserPlus, Check, X, Trash2, Ban } from 'lucide-react';
-import friendService, { Friendship, FriendRequest, User } from '@/src/services/friend.service';
+import friendService, { Friendship, FriendRequest, User } from '@/lib/services/friend.service';
 import { useToast } from '@/hooks/use-toast';
 
 export default function FriendsTab() {

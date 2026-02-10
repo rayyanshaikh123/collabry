@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCreateNotebook } from '../../src/hooks/useNotebook';
+import { useCreateNotebook } from '@/hooks/useNotebook';
 import { ICONS } from '../../constants';
 import { Button, Card, Input } from '../UIElements';
-import api from '../../src/lib/api';
-import { showError, showAlert } from '../../src/lib/alert';
+import api from '@/lib/api';
+import { showError, showAlert } from '@/lib/alert';
 
 export default function CreateNotebookForm() {
   const router = useRouter();

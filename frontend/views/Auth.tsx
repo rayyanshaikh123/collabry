@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, Button, Input } from '../components/UIElements';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> = ({ type, onAuthSuccess }) => {
   const [isRegister, setIsRegister] = useState(type === 'register');

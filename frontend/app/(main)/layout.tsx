@@ -10,11 +10,11 @@ import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import { ICONS } from '../../constants';
-import { useAuthStore } from '../../src/stores/auth.store';
-import { useUIStore } from '../../src/stores/ui.store';
-import { useSocket } from '../../src/hooks/useCollaboration';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { useUIStore } from '@/lib/stores/ui.store';
+import { useSocket } from '@/hooks/useCollaboration';
 import { AppRoute } from '../../types';
-import { DarkModeToggle } from '../../src/components/DarkModeToggle';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
 import FocusWidget from '../../components/FocusWidget';
 
@@ -186,3 +186,5 @@ export default function MainLayout({
     </div>
   );
 }
+
+

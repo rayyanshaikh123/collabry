@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, Badge, ProgressBar } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
-import { usageService, type UsageStats } from '../src/services/usage.service';
-import { useAuthStore } from '../src/stores/auth.store';
+import { usageService, type UsageStats } from '@/lib/services/usage.service';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { useRouter } from 'next/navigation';
 
 const SUBSCRIPTION_TIERS = {

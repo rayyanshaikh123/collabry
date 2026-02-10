@@ -1,12 +1,18 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { ICONS } from '../../../constants'
-import { Button } from '../../../components/UIElements'
-import { useAuthStore } from '../../../src/stores/auth.store'
+import { useEffect, useState, useCallback } from 'react'
+import { ICONS } from '@/constants'
+import { Button } from '@/components/UIElements'
+import { useAuthStore } from '@/lib/stores/auth.store'
 import { LiveKitRoom, useParticipants, useTracks, RoomAudioRenderer } from '@livekit/components-react'
 import { Track } from 'livekit-client'
+
+import { FileUploadSection } from '@/components/voice-tutor/FileUploadSection'
+import { SessionStats as SessionStatsCard } from '@/components/voice-tutor/SessionStats'
+import { SessionStatus } from '@/components/voice-tutor/SessionStatus'
+import { AudioVisualizer } from '@/components/voice-tutor/AudioVisualizer'
+import { TranscriptPanel } from '@/components/voice-tutor/TranscriptPanel'
+import { useVoiceSession } from '@/hooks/useVoiceSession'
 
 interface ConversationTurn {
   speaker: 'student' | 'tutor'
@@ -89,21 +95,8 @@ function LiveKitRoomContent({
 }
 
 export default function VoiceTutorPage() {
-  const router = useRouter()
   const { accessToken, isAuthenticated } = useAuthStore()
-  const [loading, setLoading] = useState(false)
-  const [connected, setConnected] = useState(false)
-  const [sessionCreated, setSessionCreated] = useState(false)
   const [muted, setMuted] = useState(false)
-  const [source, setSource] = useState('')
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [roomName, setRoomName] = useState<string>()
-  const [sessionId, setSessionId] = useState<string>()
-  const [token, setToken] = useState<string>()
-  const [wsUrl, setWsUrl] = useState<string>()
-  const [transcript, setTranscript] = useState<ConversationTurn[]>([])
-  const [status, setStatus] = useState('Ready to start')
-  const [error, setError] = useState<string | null>(null)
   const [tutorSpeaking, setTutorSpeaking] = useState(false)
   const [sessionStats, setSessionStats] = useState<SessionStats>({
     duration: 0,
@@ -113,14 +106,30 @@ export default function VoiceTutorPage() {
     understandingScore: 0,
     attentionScore: 1.0,
   })
-  const transcriptEndRef = useRef<HTMLDivElement>(null)
-  const audioContextRef = useRef<AudioContext | undefined>(undefined)
-  const [visualizerData, setVisualizerData] = useState<number[]>(new Array(20).fill(0))
 
-  // Auto-scroll transcript
-  useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [transcript])
+  const {
+    loading,
+    connected,
+    sessionCreated,
+    selectedFile,
+    sessionId,
+    token,
+    wsUrl,
+    transcript,
+    status,
+    error,
+    setError,
+    handleFileChange,
+    handleFileRemove,
+    createLearningSession,
+    startVoiceSession,
+    onTranscriptUpdate,
+    resetSessionState,
+    setConnected,
+    setStatus,
+  } = useVoiceSession(accessToken, isAuthenticated)
+
+  const [visualizerData, setVisualizerData] = useState<number[]>(new Array(20).fill(0))
 
   // Simulated audio visualizer effect
   useEffect(() => {
@@ -137,191 +146,6 @@ export default function VoiceTutorPage() {
 
     return () => clearInterval(interval)
   }, [tutorSpeaking])
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setSelectedFile(file)
-
-    // Read file content
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const content = event.target?.result as string
-      setSource(content)
-    }
-    reader.readAsText(file)
-  }
-
-  const createLearningSession = async () => {
-    if (!selectedFile || !source) {
-      setError('Please upload study material before creating a session')
-      return
-    }
-
-    try {
-      setLoading(true)
-      setStatus('Creating learning session...')
-      setError(null)
-
-      console.log('Authenticated:', isAuthenticated)
-      console.log('Access token exists:', !!accessToken)
-      
-      if (!accessToken || !isAuthenticated) {
-        setStatus('Please log in to create a session')
-        setError('No authentication token found. Please log in.')
-        setLoading(false)
-        router.push('/login?redirect=/voice-tutor')
-        return
-      }
-
-      const apiUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000'
-      const endpoint = `${apiUrl}/voice/rooms`
-      console.log('Calling API:', endpoint)
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          notebook_id: 'general',
-          username: 'Student',
-          source: source,
-        }),
-      })
-
-      console.log('Response status:', response.status)
-      console.log('Response ok:', response.ok)
-
-      if (!response.ok) {
-        let errorData
-        const contentType = response.headers.get('content-type')
-        
-        if (contentType && contentType.includes('application/json')) {
-          errorData = await response.json()
-        } else {
-          const text = await response.text()
-          errorData = { detail: text || `HTTP ${response.status}: ${response.statusText}` }
-        }
-        
-        console.error('Error response:', errorData)
-        const errorMessage = errorData.detail || errorData.message || `Request failed with status ${response.status}`
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
-      console.log('Session created:', data)
-      setToken(data.student_token)
-      setWsUrl(data.ws_url)
-      setRoomName(data.room_name)
-      setSessionId(data.session_id)
-      setSessionCreated(true)
-      setStatus('Learning session ready. Click "Start Voice Session" to begin.')
-      setLoading(false)
-      setError(null)
-    } catch (error) {
-      console.error('=== Learning Session Error ===')
-      console.error('Error type:', typeof error)
-      console.error('Error object:', error)
-      console.error('Error stack:', error instanceof Error ? error.stack : 'N/A')
-      console.error('========================')
-      
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create session'
-      setStatus('Error: ' + errorMessage)
-      setError(errorMessage)
-      setLoading(false)
-    }
-  }
-
-  const startVoiceSession = async () => {
-    if (!sessionCreated || !roomName || !token || !wsUrl) {
-      setError('Please create a learning session first')
-      return
-    }
-
-    setStatus('Connecting to voice tutor...')
-    setConnected(true)
-  }
-
-  const createRoom = async () => {
-    try {
-      setLoading(true)
-      setStatus('Creating voice session...')
-      setError(null)
-
-      console.log('Authenticated:', isAuthenticated)
-      console.log('Access token exists:', !!accessToken)
-      
-      if (!accessToken || !isAuthenticated) {
-        setStatus('Please log in to start a voice session')
-        setError('No authentication token found. Please log in.')
-        setLoading(false)
-        router.push('/login?redirect=/voice-tutor')
-        return
-      }
-
-      const apiUrl = process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000'
-      const endpoint = `${apiUrl}/voice/rooms`
-      console.log('Calling API:', endpoint)
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          notebook_id: 'general',
-          username: 'Student',
-          source: source || undefined,
-        }),
-      })
-
-      console.log('Response status:', response.status)
-      console.log('Response ok:', response.ok)
-
-      if (!response.ok) {
-        let errorData
-        const contentType = response.headers.get('content-type')
-        
-        if (contentType && contentType.includes('application/json')) {
-          errorData = await response.json()
-        } else {
-          const text = await response.text()
-          errorData = { detail: text || `HTTP ${response.status}: ${response.statusText}` }
-        }
-        
-        console.error('Error response:', errorData)
-        const errorMessage = errorData.detail || errorData.message || `Request failed with status ${response.status}`
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
-      console.log('Room created:', data)
-      setRoomName(data.room_name)
-      setSessionId(data.session_id)
-      setToken(data.student_token)
-      setWsUrl(data.ws_url)
-      setConnected(true)
-      setStatus('Connecting to AI tutor...')
-
-      setLoading(false)
-      setError(null)
-    } catch (error) {
-      console.error('=== Voice Tutor Error ===')
-      console.error('Error type:', typeof error)
-      console.error('Error object:', error)
-      console.error('Error stack:', error instanceof Error ? error.stack : 'N/A')
-      console.error('========================')
-      
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create session'
-      setStatus('Error: ' + errorMessage)
-      setError(errorMessage)
-      setLoading(false)
-    }
-  }
 
   const endSession = async () => {
     if (!sessionId) return
@@ -348,14 +172,7 @@ export default function VoiceTutorPage() {
         }
       )
 
-      setConnected(false)
-      setSessionCreated(false)
-      setRoomName(undefined)
-      setSessionId(undefined)
-      setSelectedFile(null)
-      setSource('')
-      setStatus('Session ended')
-      setTranscript([])
+      resetSessionState()
       setSessionStats({
         duration: 0,
         questionsAsked: 0,
@@ -374,10 +191,6 @@ export default function VoiceTutorPage() {
     setMuted(!muted)
     setStatus(muted ? 'Microphone enabled' : 'Microphone muted')
   }
-
-  const handleTranscriptUpdate = useCallback((turn: ConversationTurn) => {
-    setTranscript(prev => [...prev, turn])
-  }, [])
 
   const handleTutorSpeaking = useCallback((speaking: boolean) => {
     setTutorSpeaking(speaking)
@@ -429,7 +242,7 @@ export default function VoiceTutorPage() {
           style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
         >
           <LiveKitRoomContent 
-            onTranscriptUpdate={handleTranscriptUpdate}
+            onTranscriptUpdate={onTranscriptUpdate}
             onTutorSpeaking={handleTutorSpeaking}
             onConnectionStatus={handleConnectionStatus}
           />
@@ -497,65 +310,12 @@ export default function VoiceTutorPage() {
 
         {/* Source Input */}
         {!connected && !sessionCreated && (
-          <div className="max-w-7xl mx-auto mb-6">
-            <div className="bg-white dark:bg-slate-900 border-4 border-slate-200 dark:border-slate-800 rounded-3xl p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <label className="block font-bold text-slate-700 dark:text-slate-300">
-                  Upload Study Material
-                </label>
-                <span className="text-rose-500 dark:text-rose-400 text-sm font-black">*Required</span>
-              </div>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".txt,.md,.pdf,.doc,.docx"
-                  onChange={handleFileChange}
-                  disabled={loading}
-                  className="hidden"
-                  id="file-upload"
-                />
-                <label
-                  htmlFor="file-upload"
-                  className="flex items-center justify-center gap-3 w-full p-8 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 cursor-pointer transition-colors"
-                >
-                  {selectedFile ? (
-                    <>
-                      <ICONS.FileText className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
-                      <div className="text-center">
-                        <p className="font-bold text-slate-700 dark:text-slate-300">{selectedFile.name}</p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                          {(selectedFile.size / 1024).toFixed(1)} KB
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setSelectedFile(null)
-                          setSource('')
-                        }}
-                        className="text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300"
-                      >
-                        <ICONS.X className="w-5 h-5" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <ICONS.Upload className="w-6 h-6 text-slate-400 dark:text-slate-500" />
-                      <div className="text-center">
-                        <p className="font-bold text-slate-700 dark:text-slate-300">Click to upload study material</p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                          TXT, MD, PDF, DOC, or DOCX files
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </label>
-              </div>
-              <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                Upload your study material (notes, textbooks, documents) to create a personalized learning session. The AI tutor will use this content to guide the conversation.
-              </p>
-            </div>
-          </div>
+          <FileUploadSection
+            selectedFile={selectedFile}
+            loading={loading}
+            onFileChange={handleFileChange}
+            onFileRemove={handleFileRemove}
+          />
         )}
 
         {/* Session Created - Waiting to Start */}
@@ -584,88 +344,17 @@ export default function VoiceTutorPage() {
           {/* Left Column - Session Stats */}
           <div className="lg:col-span-1 space-y-6">
             {/* Status Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-4 border-slate-100 dark:border-slate-800 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-3 h-3 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">
-                  {connected ? 'Connected' : 'Disconnected'}
-                </h2>
-              </div>
-              <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
-                {status}
-              </p>
-            </div>
+            <SessionStatus connected={connected} status={status} />
 
             {/* Session Stats */}
             {connected && (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-4 border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
-                <h2 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-4">
-                  Session Stats
-                </h2>
-                
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Current Topic
-                    </p>
-                    <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                      {sessionStats.currentTopic}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Questions Asked
-                    </p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-200">
-                      {sessionStats.questionsAsked}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Questions Answered
-                    </p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-200">
-                      {sessionStats.questionsAnswered}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Understanding Score
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-rose-500 via-amber-500 to-emerald-500 rounded-full transition-all duration-500"
-                          style={{ width: `${sessionStats.understandingScore * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-black text-slate-700 dark:text-slate-300">
-                        {Math.round(sessionStats.understandingScore * 100)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-                      Attention Score
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-indigo-500 dark:bg-indigo-600 rounded-full transition-all duration-500"
-                          style={{ width: `${sessionStats.attentionScore * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-black text-slate-700 dark:text-slate-300">
-                        {Math.round(sessionStats.attentionScore * 100)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <SessionStatsCard
+                currentTopic={sessionStats.currentTopic}
+                questionsAsked={sessionStats.questionsAsked}
+                questionsAnswered={sessionStats.questionsAnswered}
+                understandingScore={sessionStats.understandingScore}
+                attentionScore={sessionStats.attentionScore}
+              />
             )}
 
             {/* Controls */}
@@ -694,91 +383,11 @@ export default function VoiceTutorPage() {
             
             {/* Audio Visualizer */}
             {connected && (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border-4 border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="flex items-center justify-center gap-2 h-32">
-                  {visualizerData.map((height, i) => (
-                    <div
-                      key={i}
-                      className="w-2 bg-gradient-to-t from-indigo-500 to-indigo-300 dark:from-indigo-600 dark:to-indigo-400 rounded-full transition-all duration-100"
-                      style={{ 
-                        height: `${Math.max(10, height)}%`,
-                        opacity: tutorSpeaking ? 0.8 : 0.2,
-                      }}
-                    />
-                  ))}
-                </div>
-                {tutorSpeaking && (
-                  <p className="text-center text-sm font-bold text-indigo-600 dark:text-indigo-400 mt-4">
-                    Tutor is speaking...
-                  </p>
-                )}
-              </div>
+              <AudioVisualizer tutorSpeaking={tutorSpeaking} visualizerData={visualizerData} />
             )}
 
             {/* Transcript */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border-4 border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col" style={{ height: connected ? '500px' : 'auto' }}>
-              <div className="px-6 py-4 border-b-4 border-slate-100 dark:border-slate-800">
-                <h2 className="text-lg font-black text-slate-800 dark:text-slate-200">
-                  Conversation Transcript
-                </h2>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {transcript.length === 0 && !connected && (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">🎓</div>
-                    <p className="text-slate-500 dark:text-slate-400 font-semibold">
-                      Start a voice session to begin learning
-                    </p>
-                    <p className="text-slate-400 dark:text-slate-500 text-sm mt-2">
-                      Your AI tutor will teach through interactive conversation
-                    </p>
-                  </div>
-                )}
-
-                {transcript.length === 0 && connected && (
-                  <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 dark:border-indigo-500 mx-auto mb-4"></div>
-                    <p className="text-slate-500 dark:text-slate-400 font-semibold">
-                      Waiting for tutor...
-                    </p>
-                  </div>
-                )}
-
-                {transcript.map((turn, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${turn.speaker === 'student' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-5 py-3 ${
-                        turn.speaker === 'student'
-                          ? 'bg-indigo-500 dark:bg-indigo-600 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">
-                          {turn.speaker === 'student' ? '👤' : '🤖'}
-                        </span>
-                        <span className="text-xs font-black uppercase opacity-70">
-                          {turn.speaker === 'student' ? 'You' : 'Tutor'}
-                        </span>
-                      </div>
-                      <p className="font-medium text-sm leading-relaxed">
-                        {turn.text}
-                      </p>
-                      <p className={`text-xs mt-2 opacity-60 ${
-                        turn.speaker === 'student' ? 'text-white' : 'text-slate-500 dark:text-slate-400'
-                      }`}>
-                        {new Date(turn.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={transcriptEndRef} />
-              </div>
-            </div>
+            <TranscriptPanel transcript={transcript} connected={connected} />
           </div>
 
         </div>
@@ -821,3 +430,5 @@ export default function VoiceTutorPage() {
     </div>
   )
 }
+
+

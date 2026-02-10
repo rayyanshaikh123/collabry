@@ -10,7 +10,7 @@ import {
   useMarkAllAsRead,
   useDeleteNotification,
   useRealtimeNotifications,
-} from '@/src/hooks/useNotifications';
+} from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -105,3 +105,4 @@ export default function NotificationsPage() {
     </div>
   );
 }
+

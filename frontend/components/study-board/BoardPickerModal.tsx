@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Card } from '../UIElements';
 import { ICONS } from '../../constants';
-import { studyBoardService } from '../../src/services/studyBoard.service';
+import { studyBoardService } from '@/lib/services/studyBoard.service';
 
 type BoardListItem = {
   _id: string;

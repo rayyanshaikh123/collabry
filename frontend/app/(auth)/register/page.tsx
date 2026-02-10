@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import Auth from '../../../views/Auth';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '../../../src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,3 +32,5 @@ export default function RegisterPage() {
 
   return <Auth type="register" onAuthSuccess={handleAuthSuccess} />;
 }
+
+

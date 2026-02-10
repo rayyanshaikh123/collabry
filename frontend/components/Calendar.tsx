@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Card, Badge, Button } from './UIElements';
 import { ICONS } from '../constants';
-import { StudyTask, StudyPlan } from '../src/services/studyPlanner.service';
+import { StudyTask, StudyPlan } from '@/lib/services/studyPlanner.service';
 
 interface CalendarProps {
   tasks: StudyTask[];

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../components/UIElements';
 import AlertModal from '../components/AlertModal';
-import { useUIStore } from '../src/stores/ui.store';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useUIStore } from '@/lib/stores/ui.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { Check, X, AlertCircle, CreditCard, Calendar, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 

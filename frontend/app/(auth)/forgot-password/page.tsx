@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { authService } from '@/src/services/auth.service';
+import { authService } from '@/lib/services/auth.service';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -148,3 +148,4 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
+

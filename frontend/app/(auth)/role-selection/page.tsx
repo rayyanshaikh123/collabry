@@ -17,3 +17,4 @@ export default function RoleSelectionPage() {
 
   return <RoleSelection onSelectRole={handleSelectRole} />;
 }
+

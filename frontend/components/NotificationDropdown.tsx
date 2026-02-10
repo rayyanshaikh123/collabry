@@ -9,8 +9,8 @@ import {
   useMarkAllAsRead,
   useDeleteNotification,
   useRealtimeNotifications,
-} from '../src/hooks/useNotifications';
-import { type Notification } from '../src/services/notification.service';
+} from '@/hooks/useNotifications';
+import { type Notification } from '@/lib/services/notification.service';
 import { useRouter } from 'next/navigation';
 
 const NotificationDropdown: React.FC = () => {

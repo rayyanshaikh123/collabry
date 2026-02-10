@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Card, Button, Badge, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '../src/hooks/useAI';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '@/hooks/useAI';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import ReactMarkdown from 'react-markdown';
-import { useSessions, useCreateSession, useSessionMessages, useSaveMessage, useDeleteSession } from '../src/hooks/useSessions';
-import type { Message as ChatMessage } from '../src/services/sessions.service';
+import { useSessions, useCreateSession, useSessionMessages, useSaveMessage, useDeleteSession } from '@/hooks/useSessions';
+import type { Message as ChatMessage } from '@/lib/services/sessions.service';
 import AlertModal from '../components/AlertModal';
-import { useAlert } from '../src/hooks/useAlert';
+import { useAlert } from '@/hooks/useAlert';
 
 interface ChatSession {
   id: string;

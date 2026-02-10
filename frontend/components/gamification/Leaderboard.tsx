@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Badge, Button } from '../UIElements';
 import { ICONS } from '../../constants';
-import { gamificationService, LeaderboardEntry } from '../../src/services/gamification.service';
-import { useAuthStore } from '../../src/stores/auth.store';
+import { gamificationService, LeaderboardEntry } from '@/lib/services/gamification.service';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 interface LeaderboardProps {
   type?: 'xp' | 'level' | 'streak' | 'tasks';

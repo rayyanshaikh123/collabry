@@ -12,7 +12,7 @@ import InfographicViewer from './InfographicViewer';
 import CourseCard, { CourseInfo } from './CourseCard';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 import BoardPickerModal from '../study-board/BoardPickerModal';
-import renderMindmap from '../../src/lib/mindmapClient';
+import renderMindmap from '@/lib/mindmapClient';
 
 interface ArtifactViewerProps {
   artifact: Artifact;

@@ -6,3 +6,4 @@ import PlannerNew from '../../../views/PlannerNew';
 export default function PlannerPage() {
   return <PlannerNew />;
 }
+

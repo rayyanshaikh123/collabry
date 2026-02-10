@@ -6,3 +6,4 @@ import UsageView from '@/views/Usage';
 export default function UsagePage() {
   return <UsageView />;
 }
+

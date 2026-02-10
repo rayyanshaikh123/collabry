@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Check, Sparkles, Zap, Crown, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Card } from '../components/UIElements';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { useRouter } from 'next/navigation';
 
 // Type definitions

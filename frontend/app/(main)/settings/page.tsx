@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuthStore } from '@/src/stores/auth.store';
-import { useUIStore } from '@/src/stores/ui.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { useUIStore } from '@/lib/stores/ui.store';
 import { 
   User, 
   Bell, 
@@ -518,3 +518,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Badge } from '../UIElements';
 import { ICONS } from '../../constants';
-import { gamificationService, GamificationStats } from '../../src/services/gamification.service';
+import { gamificationService, GamificationStats } from '@/lib/services/gamification.service';
 
 interface AchievementsDisplayProps {
   userId?: string;
