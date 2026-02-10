@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useNotebooks, useDeleteNotebook } from '../../../src/hooks/useNotebook';
+import { useNotebooks, useDeleteNotebook } from '@/hooks/useNotebook';
 import { Card, Button } from '../../../components/UIElements';
 import { ICONS } from '../../../constants';
-import { showError, showConfirm } from '../../../src/lib/alert';
+import { showError, showConfirm } from '@/lib/alert';
 
 export default function StudyNotebooksPage() {
   const router = useRouter();
@@ -231,3 +231,5 @@ export default function StudyNotebooksPage() {
     </div>
   );
 }
+
+

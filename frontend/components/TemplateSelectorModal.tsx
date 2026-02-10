@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { boardTemplates, BoardTemplate } from '../lib/boardTemplates';
+import { boardTemplates, BoardTemplate } from '@/lib/boardTemplates';
 import { Button } from './UIElements';
 import { ICONS } from '../constants';
 

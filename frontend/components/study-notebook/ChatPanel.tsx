@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, Button, Input } from '../UIElements';
 import { ICONS } from '../../constants';
 import ReactMarkdown from 'react-markdown';
@@ -9,12 +10,14 @@ import remarkBreaks from 'remark-breaks';
 import CourseCard from './CourseCard';
 import QuizCard from './QuizCard';
 import MindMapViewer from './MindMapViewer';
+import InfographicViewer from './InfographicViewer';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 import { extractQuizFromMarkdown } from '../../lib/quizParser';
 import { extractMindMapFromMarkdown } from '../../lib/mindmapParser';
 import { extractInfographicFromMarkdown, containsInfographicData } from '../../lib/infographicParser';
 import { extractFlashcardsFromMarkdown, containsFlashcardData } from '../../lib/flashcardParser';
 import FlashcardViewer from './FlashcardViewer';
+import BoardPickerModal from '../study-board/BoardPickerModal';
 
 export interface ChatMessage {
   id: string;
@@ -27,6 +30,8 @@ export interface ChatMessage {
 interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
+  onRegeneratePrompt?: (messageId: string) => void;
+  onEditPrompt?: (messageId: string, newText: string) => void;
   onClearChat: () => void;
   onRegenerateResponse: () => void;
   isLoading?: boolean;
@@ -40,6 +45,8 @@ interface ChatPanelProps {
 const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
   onSendMessage,
+  onRegeneratePrompt,
+  onEditPrompt,
   onClearChat,
   onRegenerateResponse,
   isLoading = false,
@@ -49,11 +56,47 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onSaveInfographicToStudio,
   onSaveFlashcardsToStudio,
 }) => {
+  const router = useRouter();
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const carouselRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [canScrollLeft, setCanScrollLeft] = useState<{ [key: string]: boolean }>({});
   const [canScrollRight, setCanScrollRight] = useState<{ [key: string]: boolean }>({});
+
+  const [isBoardPickerOpen, setIsBoardPickerOpen] = useState(false);
+  const [pendingBoardInsert, setPendingBoardInsert] = useState<
+    | { kind: 'mindmap'; data: any; title?: string }
+    | { kind: 'infographic'; data: any; title?: string }
+    | null
+  >(null);
+
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
+
+  const openBoardPicker = (payload: NonNullable<typeof pendingBoardInsert>) => {
+    setPendingBoardInsert(payload);
+    setIsBoardPickerOpen(true);
+  };
+
+  const handleSelectBoard = (boardId: string) => {
+    if (!pendingBoardInsert) return;
+    try {
+      sessionStorage.setItem(`board-${boardId}-import`, JSON.stringify(pendingBoardInsert));
+    } catch (e) {
+      console.error('Failed to store board import payload:', e);
+    }
+    setIsBoardPickerOpen(false);
+    setPendingBoardInsert(null);
+    router.push(`/study-board/${boardId}`);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      console.error('Failed to copy to clipboard', e);
+    }
+  };
 
   const checkScrollButtons = (messageId: string) => {
     const carousel = carouselRefs.current[messageId];
@@ -107,6 +150,27 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
+  const startEdit = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setEditingText(message.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText('');
+  };
+
+  const saveEdit = (messageId: string) => {
+    const next = editingText.trim();
+    if (!next) return;
+    if (typeof onEditPrompt === 'function') {
+      onEditPrompt(messageId, next);
+    } else {
+      onSendMessage(next);
+    }
+    cancelEdit();
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -128,28 +192,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRegenerateResponse}
-                disabled={isLoading}
-                className="flex items-center gap-1"
-              >
-                <ICONS.refresh className="w-4 h-4" />
-                <span className="text-xs font-bold">Regenerate</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearChat}
-                disabled={isLoading}
-                className="flex items-center gap-1"
-              >
-                <ICONS.trash className="w-4 h-4" />
-                <span className="text-xs font-bold">Clear</span>
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearChat}
+              disabled={isLoading}
+              className="flex items-center gap-1"
+            >
+              <ICONS.trash className="w-4 h-4" />
+              <span className="text-xs font-bold">Clear</span>
+            </Button>
           )}
         </div>
       </div>
@@ -194,6 +246,50 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-sm'
                   } px-5 py-3 shadow-sm`}
                 >
+                  {/* Per-message tools (user prompts + assistant responses) */}
+                  <div className={`flex items-center gap-1 mb-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(message.content)}
+                      className={`p-1 rounded-lg transition-colors ${
+                        message.role === 'user'
+                          ? 'hover:bg-white/15 text-white/90'
+                          : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                      title="Copy"
+                      aria-label="Copy"
+                    >
+                      <ICONS.Copy className="w-4 h-4" />
+                    </button>
+
+                    {message.role === 'user' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(message)}
+                          className="p-1 rounded-lg hover:bg-white/15 text-white/90 transition-colors"
+                          title="Edit"
+                          aria-label="Edit"
+                        >
+                          <ICONS.Edit className="w-4 h-4" />
+                        </button>
+
+                        {typeof onRegeneratePrompt === 'function' && (
+                          <button
+                            type="button"
+                            onClick={() => onRegeneratePrompt(message.id)}
+                            className="p-1 rounded-lg hover:bg-white/15 text-white/90 transition-colors"
+                            title="Regenerate"
+                            aria-label="Regenerate"
+                            disabled={isLoading}
+                          >
+                            <ICONS.refresh className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   {message.isLoading ? (
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
@@ -204,7 +300,33 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       <span className="text-xs text-slate-500 dark:text-slate-400">Thinking...</span>
                     </div>
                   ) : message.role === 'user' ? (
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    editingMessageId === message.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="w-full min-h-[96px] px-4 py-3 bg-white/10 text-white placeholder:text-white/60 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/30 text-sm"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(message.id)}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-indigo-700 hover:bg-slate-50"
+                          >
+                            Run
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    )
                     ) : (
                     <>
                       {(() => {
@@ -223,16 +345,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         }
 
                         // Only parse courses if the message contains properly formatted course links
-                        // Must have markdown links with Platform info (not just mentions of "course")
+                        // OR contains plain text course format with Platform: ... | Rating: ... | Price: ...
                         const hasFormattedCourseLinks = message.content.includes('[') && 
                                                        message.content.includes('](') && 
-                                                       /\[.*\]\(https?:\/\/.*\)\s*-\s*Platform:/i.test(message.content);
+                                                       /\[.*\]\(https?:\/\/.*\)\s*-?\s*Platform:/i.test(message.content);
+                        
+                        const hasPlainTextCourses = /Platform:\s*[A-Za-z\s]+\s*\|\s*Rating:/i.test(message.content);
                         
                         let courses: any[] = [];
                         let cleanMarkdownAfterCourses = message.content;
                         
-                        // Only parse if we have properly formatted course links
-                        if (hasFormattedCourseLinks) {
+                        // Parse if we have either format
+                        if (hasFormattedCourseLinks || hasPlainTextCourses) {
                           const result = extractCoursesFromMarkdown(message.content);
                           courses = result.courses;
                           cleanMarkdownAfterCourses = result.cleanMarkdown;
@@ -246,6 +370,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         }
                         
                         const { cleanMarkdown: markdownAfterQuiz, quiz } = extractQuizFromMarkdown(cleanMarkdownAfterCourses);
+
+                        // Used by multiple artifact detectors to infer what the user asked for
+                        const currentMessageIndex = messages.findIndex(m => m.id === message.id);
+                        const priorUserMessages = currentMessageIndex > 0
+                          ? messages.slice(0, currentMessageIndex).filter((m) => m.role === 'user')
+                          : [];
                         
                         // Only parse mindmap if:
                         // 1. The message contains mindmap JSON structure (nodes/edges)
@@ -255,15 +385,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         
                         // Check if this is an explicit mindmap request
                         // Look for the marker we add in the prompt, or check if previous user message was about mindmap
-                        const currentMessageIndex = messages.findIndex(m => m.id === message.id);
                         const isExplicitMindmapRequest = message.content.includes('[MINDMAP_GENERATION_REQUEST]') ||
                                                         // Check if any previous user message in the conversation was about mindmap
-                                                        (currentMessageIndex > 0 && messages.slice(0, currentMessageIndex).some((m) => 
-                                                          m.role === 'user' && 
+                                                        priorUserMessages.some((m) => 
                                                           (m.content.toLowerCase().includes('mind map') || 
                                                            m.content.toLowerCase().includes('mindmap') ||
                                                            m.content.includes('[MINDMAP_GENERATION_REQUEST]'))
-                                                        ));
+                                                        );
                         
                         // Also check if mindmap JSON might be wrapped in answer field of JSON response
                         let contentToParse = markdownAfterQuiz;
@@ -306,25 +434,28 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         let mindmap = null;
                         let cleanMarkdown = markdownAfterQuiz;
                         
-                        // Only parse if we have structure AND it was explicitly requested
-                        if (hasMindmapStructure && isExplicitMindmapRequest) {
+                        // Parse mindmap when it was explicitly requested.
+                        // This supports both JSON responses and plain hierarchical outlines.
+                        if (isExplicitMindmapRequest) {
                           const result = extractMindMapFromMarkdown(contentToParse);
                           mindmap = result.mindmap;
                           cleanMarkdown = result.cleanMarkdown;
-                          
+
                           // Debug logging
                           if (mindmap) {
                             console.log('✅ Mindmap parsed successfully:', {
                               nodeCount: mindmap.nodes?.length || 0,
-                              edgeCount: mindmap.edges?.length || 0
+                              edgeCount: mindmap.edges?.length || 0,
+                              hadStructureHint: hasMindmapStructure
                             });
-                          } else {
-                            console.log('⚠️ Mindmap JSON detected but parsing failed or rejected');
+                          } else if (hasMindmapStructure) {
+                            console.log('⚠️ Mindmap structure detected but parsing failed or rejected');
                           }
                         }
 
                         // Check for infographic JSON
-                        const isExplicitInfographicRequest = message.content.toLowerCase().includes('infographic');
+                        const isExplicitInfographicRequest = message.content.includes('[INFOGRAPHIC_GENERATION_REQUEST]') ||
+                          priorUserMessages.some((m) => m.content.toLowerCase().includes('infographic'));
                         const hasInfographicData = containsInfographicData(message.content);
                         
                         let infographic = null;
@@ -336,11 +467,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/g, '').trim();
+
+                            // If the assistant responded with JSON only, don't show it as markdown
+                            if (cleanMarkdown.trim().startsWith('{')) {
+                              cleanMarkdown = '';
+                            }
                           }
                         }
 
                         // Check for flashcard data
-                        const isExplicitFlashcardRequest = message.content.toLowerCase().includes('flashcard');
+                        const isExplicitFlashcardRequest = message.content.includes('[FLASHCARDS_GENERATION_REQUEST]') ||
+                          priorUserMessages.some((m) => m.content.toLowerCase().includes('flashcard'));
                         const hasFlashcardData = containsFlashcardData(message.content);
                         
                         let flashcardSet = null;
@@ -352,6 +489,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"cards"[\s\S]*"front"[\s\S]*\}/g, '').trim();
+
+                            // If the assistant responded with JSON only, don't show it as markdown
+                            if (cleanMarkdown.trim().startsWith('{')) {
+                              cleanMarkdown = '';
+                            }
                           }
                         }
 
@@ -370,17 +512,29 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                       {mindmap.nodes.length} {mindmap.nodes.length === 1 ? 'Node' : 'Nodes'}
                                     </span>
                                   </div>
-                                  {onSaveMindMapToStudio && (
+                                  <div className="flex items-center gap-2">
+                                    {onSaveMindMapToStudio && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => onSaveMindMapToStudio(mindmap)}
+                                        className="flex items-center gap-1"
+                                      >
+                                        <ICONS.Download className="w-4 h-4" />
+                                        <span className="text-xs font-bold">Save to Studio</span>
+                                      </Button>
+                                    )}
+
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => onSaveMindMapToStudio(mindmap)}
+                                      onClick={() => openBoardPicker({ kind: 'mindmap', data: mindmap, title: 'Mindmap' })}
                                       className="flex items-center gap-1"
                                     >
-                                      <ICONS.Download className="w-4 h-4" />
-                                      <span className="text-xs font-bold">Save to Studio</span>
+                                      <ICONS.StudyBoard className="w-4 h-4" />
+                                      <span className="text-xs font-bold">Add to Study Board</span>
                                     </Button>
-                                  )}
+                                  </div>
                                 </div>
                                 <div className="w-full overflow-auto min-h-[300px] max-h-[500px]">
                                   <MindMapViewer 
@@ -425,40 +579,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                       Visual Summary
                                     </span>
                                   </div>
-                                  {onSaveInfographicToStudio && (
-                                    <button
-                                      onClick={() => onSaveInfographicToStudio(infographic)}
-                                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
-                                    >
-                                      <ICONS.download className="w-4 h-4" />
-                                      Save to Studio
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border-2 border-cyan-200 dark:border-cyan-800 shadow-sm">
-                                  <div className="text-center mb-4">
-                                    <h3 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-2">{infographic.title}</h3>
-                                    {infographic.subtitle && (
-                                      <p className="text-sm text-slate-600 dark:text-slate-400">{infographic.subtitle}</p>
+                                  <div className="flex items-center gap-2">
+                                    {onSaveInfographicToStudio && (
+                                      <button
+                                        onClick={() => onSaveInfographicToStudio(infographic)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
+                                      >
+                                        <ICONS.download className="w-4 h-4" />
+                                        Save to Studio
+                                      </button>
                                     )}
+
+                                    <button
+                                      onClick={() => openBoardPicker({ kind: 'infographic', data: infographic, title: infographic?.title || 'Infographic' })}
+                                      className="flex items-center gap-2 px-4 py-2 bg-white/90 dark:bg-slate-800/90 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all"
+                                    >
+                                      <ICONS.StudyBoard className="w-4 h-4" />
+                                      Add to Study Board
+                                    </button>
                                   </div>
-                                  <div className="space-y-4">
-                                    {infographic.sections?.slice(0, 2).map((section: any, idx: number) => (
-                                      <div key={idx} className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <span className="text-2xl">{section.icon}</span>
-                                          <h4 className="font-bold text-slate-800 dark:text-slate-200">{section.title}</h4>
-                                        </div>
-                                        {section.keyPoints?.slice(0, 3).map((point: string, pidx: number) => (
-                                          <p key={pidx} className="text-sm text-slate-600 dark:text-slate-400 ml-8">• {point}</p>
-                                        ))}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4 italic">
-                                    Click "Save to Studio" to view full interactive infographic
-                                  </p>
                                 </div>
+                                <InfographicViewer
+                                  infographic={infographic}
+                                  variant="compact"
+                                  maxSections={2}
+                                  className="border-2 border-cyan-200 dark:border-cyan-800 shadow-sm"
+                                />
                               </div>
                             )}
                             
@@ -487,10 +633,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 </div>
                                 <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border-2 border-blue-200 dark:border-blue-800 shadow-sm">
                                   <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-4 text-center">{flashcardSet.title}</h3>
-                                  <FlashcardViewer cards={flashcardSet.cards.slice(0, 3)} />
-                                  <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4 italic">
-                                    Preview showing first 3 cards. Click "Save to Studio" to study all {flashcardSet.cards.length} cards.
-                                  </p>
+                                  <FlashcardViewer cards={flashcardSet.cards} />
                                 </div>
                               </div>
                             )}
@@ -624,6 +767,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           Press Enter to send • Shift + Enter for new line
         </p>
       </div>
+
+      <BoardPickerModal
+        isOpen={isBoardPickerOpen}
+        onClose={() => {
+          setIsBoardPickerOpen(false);
+          setPendingBoardInsert(null);
+        }}
+        onSelectBoard={handleSelectBoard}
+        title="Add to Study Board"
+      />
     </div>
   );
 };

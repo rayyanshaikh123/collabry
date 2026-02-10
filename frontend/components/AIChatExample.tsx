@@ -6,8 +6,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAIChat, useAIHealth } from '../src/hooks/useAI';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAIChat, useAIHealth } from '@/hooks/useAI';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 export default function AIChatExample() {
   const [message, setMessage] = useState('');

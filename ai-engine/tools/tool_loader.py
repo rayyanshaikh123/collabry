@@ -31,7 +31,13 @@ def load_tools():
             # Support LangChain @tool decorated callables (have .name attr)
             for attr in dir(module):
                 obj = getattr(module, attr)
-                if callable(obj) and hasattr(obj, "name") and not obj.__name__.startswith("_"):
+                # Check for StructuredTool objects (from @tool decorator)
+                if callable(obj) and hasattr(obj, "name"):
+                    # Skip private attributes (use .name for StructuredTool, __name__ for functions)
+                    obj_name = getattr(obj, "__name__", getattr(obj, "name", attr))
+                    if obj_name.startswith("_"):
+                        continue
+                    
                     tname = getattr(obj, "name")
                     if tname not in tools:  # don't overwrite dict variant
                         tools[tname] = {"name": tname, "func": obj, "description": (obj.__doc__ or "").strip()}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, Button, Badge } from './UIElements';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 const DEFAULT_DURATION = 25 * 60; // 25 minutes
 

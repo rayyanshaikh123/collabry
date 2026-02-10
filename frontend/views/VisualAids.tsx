@@ -11,9 +11,9 @@ import {
   useGenerateQuiz,
   useGenerateMindMap,
   useCreateSubject,
-} from '../src/hooks/useVisualAids';
+} from '@/hooks/useVisualAids';
 import AlertModal from '../components/AlertModal';
-import { useAlert } from '../src/hooks/useAlert';
+import { useAlert } from '@/hooks/useAlert';
 
 const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -700,7 +700,7 @@ const VisualAidsView: React.FC = () => {
               onClick={() => {
                 generateMindMap.mutate({
                   topic: 'Sample Topic',
-                  saveToLibrary: true,
+                  save: true,
                 });
               }}
               disabled={generateMindMap.isPending}
@@ -758,7 +758,7 @@ const VisualAidsView: React.FC = () => {
                 onClick={() => {
                   generateMindMap.mutate({
                     topic: 'Getting Started',
-                    saveToLibrary: true,
+                    save: true,
                   });
                 }}
               >

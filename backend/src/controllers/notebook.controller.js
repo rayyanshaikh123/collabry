@@ -7,6 +7,7 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const cheerio = require('cheerio');
 const notificationService = require('../services/notification.service');
 const { getIO } = require('../socket');
 const { emitNotificationToUser } = require('../socket/notificationNamespace');
@@ -54,9 +55,100 @@ async function extractSourceContent(source) {
     }
     return `[Document: ${source.name} - No file path]`;
   } else if (source.type === 'website') {
+    if (source.content && typeof source.content === 'string' && source.content.trim().length > 0) {
+      return source.content;
+    }
     return `[Website: ${source.url}]`;
   }
   return '';
+}
+
+function normalizeWebsiteUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+
+  // Add scheme if missing
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractTextFromHtml(html) {
+  const $ = cheerio.load(html);
+
+  // Remove non-content
+  $('script, style, noscript, svg, canvas, iframe').remove();
+
+  // Prefer main/article content
+  const title = ($('title').first().text() || '').trim();
+  const candidates = ['main', 'article', '[role="main"]'];
+  let text = '';
+  for (const selector of candidates) {
+    const el = $(selector).first();
+    if (el && el.length) {
+      text = el.text();
+      break;
+    }
+  }
+  if (!text) {
+    text = $('body').text();
+  }
+
+  // Collapse whitespace
+  text = String(text || '')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[\t\f\v]+/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+
+  return { title, text };
+}
+
+async function scrapeWebsite(url) {
+  const normalized = normalizeWebsiteUrl(url);
+  if (!normalized) {
+    throw new AppError('Invalid URL. Only http(s) URLs are allowed.', 400);
+  }
+
+  const response = await axios.get(normalized, {
+    timeout: 20000,
+    maxRedirects: 5,
+    headers: {
+      // Some sites block empty UA
+      'User-Agent': 'CollabryBot/1.0 (Study Notebook Website Source)'
+    },
+    responseType: 'text',
+    validateStatus: (status) => status >= 200 && status < 400,
+  });
+
+  const contentType = String(response.headers?.['content-type'] || '');
+  if (contentType && !contentType.includes('text/html')) {
+    // We can still try parsing, but this usually means a PDF/image/etc.
+    console.warn(`Website scrape non-HTML content-type: ${contentType}`);
+  }
+
+  const html = String(response.data || '');
+  const { title, text } = extractTextFromHtml(html);
+
+  if (!text || text.length < 50) {
+    throw new AppError('Failed to extract readable text from the website.', 422);
+  }
+
+  // Hard cap to keep ingestion predictable
+  const maxChars = 200_000;
+  const clipped = text.length > maxChars ? text.slice(0, maxChars) + '\n\n[...clipped]' : text;
+
+  return {
+    normalizedUrl: normalized,
+    title,
+    content: `Source URL: ${normalized}\n${title ? `Title: ${title}\n` : ''}\n${clipped}`
+  };
 }
 
 /**
@@ -134,6 +226,10 @@ async function ingestSourceToRAG(notebook, source, authToken) {
         );
         status = statusResponse.data.status;
         console.log(`  Polling (${attempts}s): ${status}`);
+
+        if (status === 'failed' && statusResponse.data && statusResponse.data.error) {
+          console.error(`  ❌ Ingestion error: ${statusResponse.data.error}`);
+        }
         
         // If task is unknown (server restarted), assume it completed
         if (status === 'unknown') {
@@ -143,12 +239,19 @@ async function ingestSourceToRAG(notebook, source, authToken) {
         }
       } catch (pollErr) {
         console.warn(`  Warning: Failed to poll task status:`, pollErr.message);
-        // If it's a 403 or 404, assume the task completed
-        if (pollErr.response && (pollErr.response.status === 403 || pollErr.response.status === 404)) {
-          console.log(`  ℹ Task not found (${pollErr.response.status}), assuming completed`);
+        // If it's a 404, the task likely completed and was cleaned up
+        if (pollErr.response && pollErr.response.status === 404) {
+          console.log(`  ℹ Task not found (404), assuming completed`);
           status = 'completed';
         }
-        break; // Continue anyway if polling fails
+        // If it's a 403, there's an auth issue - log details but continue
+        else if (pollErr.response && pollErr.response.status === 403) {
+          console.error(`  ⚠️ Auth error (403) accessing task status - user_id mismatch?`);
+          console.error(`  Response:`, pollErr.response.data);
+          // Don't assume completed for 403 - this is a real error
+          status = 'failed';
+        }
+        break; // Stop polling on error
       }
     }
     
@@ -399,7 +502,19 @@ exports.addSource = asyncHandler(async (req, res) => {
     if (!url) {
       throw new AppError('URL is required for website sources', 400);
     }
-    source.url = url;
+
+    // Scrape website server-side so ingestion uses real text (like PDFs)
+    const scraped = await scrapeWebsite(url);
+    source.url = scraped.normalizedUrl;
+    source.content = scraped.content;
+    source.size = scraped.content.length;
+
+    // If the client passed name=url, replace with page title/hostname for nicer UI
+    const clientName = String(name || '').trim();
+    const derivedName = scraped.title || new URL(scraped.normalizedUrl).hostname;
+    if (!clientName || clientName === url || clientName === scraped.normalizedUrl) {
+      source.name = derivedName;
+    }
   } else if (type === 'text' || type === 'notes') {
     if (!content) {
       throw new AppError('Content is required for text/notes sources', 400);
@@ -431,6 +546,21 @@ exports.addSource = asyncHandler(async (req, res) => {
 
   // Extract JWT token from request
   const authToken = req.headers.authorization?.split(' ')[1];
+  
+  if (authToken) {
+    // Debug: decode JWT to see user_id (for troubleshooting only)
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.decode(authToken);
+      console.log(`[DEBUG] JWT payload: ${JSON.stringify(decoded)}`);
+      console.log(`[DEBUG] User ID in JWT: ${decoded?.id || decoded?.sub}`);
+      console.log(`[DEBUG] Notebook userId: ${notebook.userId}`);
+    } catch (e) {
+      console.warn('[DEBUG] Failed to decode JWT for logging:', e.message);
+    }
+  } else {
+    console.warn('[DEBUG] No authToken found in request headers');
+  }
 
   // Ingest source into AI engine's RAG system (WAIT for completion)
   if (authToken && notebook.aiSessionId) {
@@ -576,13 +706,10 @@ exports.getSourceContent = asyncHandler(async (req, res) => {
 
   let content = '';
 
-  if (source.filePath) {
-    // Read file content
-    content = await fs.readFile(source.filePath, 'utf-8');
-  } else if (source.content) {
-    content = source.content;
-  } else if (source.url) {
-    content = `Website: ${source.url}`;
+  try {
+    content = await extractSourceContent(source);
+  } catch (error) {
+    content = `[Error extracting content: ${source.name}]`;
   }
 
   res.json({
@@ -611,9 +738,9 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     throw new AppError('Notebook not found', 404);
   }
 
-  const { type, referenceId, title } = req.body;
+  const { type, referenceId, title, data } = req.body;
 
-  // Validate artifact exists
+  // Validate artifact exists (only for types with backend collections)
   if (type === 'quiz') {
     // Quiz model stores owner in `createdBy`
     const quiz = await Quiz.findOne({ _id: referenceId, createdBy: req.user._id });
@@ -623,10 +750,12 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     const mindmap = await MindMap.findOne({ _id: referenceId, createdBy: req.user._id });
     if (!mindmap) throw new AppError('Mind map not found', 404);
   }
+  // Note: flashcards and infographic types don't have backend collections yet
+  // They store data inline in the artifact
 
   // Check if already linked
   const existing = notebook.artifacts.find(
-    a => a.type === type && a.referenceId.toString() === referenceId
+    a => a.type === type && a.referenceId.toString() === referenceId.toString()
   );
 
   if (existing) {
@@ -637,11 +766,18 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
     });
   }
 
-  notebook.artifacts.push({
+  const artifactData = {
     type,
     referenceId,
     title: title || `${type.charAt(0).toUpperCase() + type.slice(1)}`
-  });
+  };
+
+  // Add inline data if provided (for flashcards, infographics)
+  if (data) {
+    artifactData.data = data;
+  }
+
+  notebook.artifacts.push(artifactData);
 
   await notebook.save();
 
@@ -704,16 +840,10 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
   for (const source of selectedSources) {
     let content = '';
 
-    if (source.filePath) {
-      try {
-        content = await fs.readFile(source.filePath, 'utf-8');
-      } catch (error) {
-        content = `[Error reading file: ${source.name}]`;
-      }
-    } else if (source.content) {
-      content = source.content;
-    } else if (source.url) {
-      content = `Website: ${source.url}`;
+    try {
+      content = await extractSourceContent(source);
+    } catch (error) {
+      content = `[Error extracting content: ${source.name}]`;
     }
 
     context.push({

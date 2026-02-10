@@ -22,6 +22,34 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
+def _maybe_reexec_with_venv_python():
+    """Re-exec with workspace venv interpreter if present.
+
+    This repo commonly uses a venv at the workspace root (../.venv). If the user
+    runs `python run_server.py` with a different interpreter, optional voice
+    dependencies (elevenlabs/groq/silero-vad) may be missing and the voice tutor
+    silently falls back to edge-tts.
+    """
+    if os.environ.get("COLLABRY_SKIP_REEXEC", "").lower() in {"1", "true", "yes"}:
+        return
+
+    workspace_root = PROJECT_ROOT.parent
+    venv_python = workspace_root / ".venv" / ("Scripts" if platform.system() == "Windows" else "bin") / (
+        "python.exe" if platform.system() == "Windows" else "python"
+    )
+
+    try:
+        current = Path(sys.executable).resolve()
+        target = venv_python.resolve()
+    except Exception:
+        return
+
+    if target.exists() and current != target:
+        os.environ["COLLABRY_SKIP_REEXEC"] = "1"
+        print(f"↪ Re-launching server with venv Python: {target}")
+        os.execv(str(target), [str(target)] + sys.argv)
+
+
 def kill_process_on_port(port):
     """
     Kill any process using the specified port.
@@ -80,6 +108,8 @@ def kill_process_on_port(port):
 
 
 if __name__ == "__main__":
+    _maybe_reexec_with_venv_python()
+
     parser = argparse.ArgumentParser(description="Start Collabry AI Core FastAPI server")
     parser.add_argument(
         "--host",

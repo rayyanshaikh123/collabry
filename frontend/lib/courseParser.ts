@@ -1,6 +1,72 @@
 import { CourseInfo } from '../components/study-notebook/CourseCard';
 
 /**
+ * Parses plain text course format (fallback for LLMs that don't follow markdown)
+ * Format: "Title Platform: Name | Rating: X/Y | Price: $Z"
+ */
+function parsePlainTextCourses(text: string): CourseInfo[] {
+  const courses: CourseInfo[] = [];
+  
+  // Split by "Platform:" to find course entries
+  const parts = text.split(/(?=Platform:\s*)/);
+  
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed.length < 10) continue;
+    
+    // Extract platform
+    const platformMatch = trimmed.match(/Platform:\s*([A-Za-z\s]+?)(?:\s*\||$)/);
+    if (!platformMatch) continue;
+    
+    const platform = platformMatch[1].trim();
+    
+    // Extract title (everything before "Platform:")
+    const titleMatch = trimmed.match(/^(.+?)\s+Platform:/);
+    const title = titleMatch ? titleMatch[1].trim() : platform;
+    
+    // Extract rating
+    const ratingMatch = trimmed.match(/Rating:\s*(\d+\.?\d*)\s*\/\s*(\d+)/);
+    const rating = ratingMatch ? `${ratingMatch[1]}/${ratingMatch[2]}` : undefined;
+    
+    // Extract price
+    const priceMatch = trimmed.match(/Price:\s*(\$?\d+|\bFree\b|\bfree\b)/i);
+    const price = priceMatch ? (priceMatch[1].toLowerCase() === 'free' ? 'Free' : priceMatch[1]) : undefined;
+    
+    // Generate URL based on platform
+    let url = '#';
+    const platformLower = platform.toLowerCase();
+    const titleSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    if (platformLower.includes('udemy')) {
+      url = `https://www.udemy.com/course/${titleSlug}`;
+    } else if (platformLower.includes('coursera')) {
+      url = `https://www.coursera.org/learn/${titleSlug}`;
+    } else if (platformLower.includes('edx')) {
+      url = `https://www.edx.org/course/${titleSlug}`;
+    } else if (platformLower.includes('codecademy')) {
+      url = `https://www.codecademy.com/learn/${titleSlug}`;
+    } else if (platformLower.includes('pluralsight')) {
+      url = `https://www.pluralsight.com/courses/${titleSlug}`;
+    } else if (platformLower.includes('linkedin')) {
+      url = `https://www.linkedin.com/learning/${titleSlug}`;
+    } else if (platformLower.includes('udacity')) {
+      url = `https://www.udacity.com/course/${titleSlug}`;
+    }
+    
+    courses.push({
+      title,
+      url,
+      platform,
+      rating,
+      price,
+      description: `Learn about ${title}`
+    });
+  }
+  
+  return courses;
+}
+
+/**
  * Parses markdown text to extract course information from links
  * Supports formats like:
  * - [Course Title](https://url.com) - Platform: Coursera | Rating: 4.5/5 | Price: $49
@@ -89,7 +155,27 @@ export function extractCoursesFromMarkdown(markdownText: string): {
   cleanMarkdown: string;
   courses: CourseInfo[];
 } {
-  const courses = parseCourseLinks(markdownText);
+  // First, try parsing markdown links
+  let courses = parseCourseLinks(markdownText);
+  
+  // If no courses found with markdown links, try plain text parsing
+  if (courses.length === 0) {
+    courses = parsePlainTextCourses(markdownText);
+    
+    // If plain text courses found, remove them from the markdown
+    if (courses.length > 0) {
+      // Remove the plain text course entries
+      let cleanMarkdown = markdownText;
+      
+      // Remove lines containing "Platform: ... | Rating: ... | Price: ..."
+      cleanMarkdown = cleanMarkdown.replace(/^.*?Platform:.*?\|.*?\|.*?$/gm, '');
+      
+      // Clean up multiple consecutive newlines
+      cleanMarkdown = cleanMarkdown.replace(/\n{3,}/g, '\n\n').trim();
+      
+      return { cleanMarkdown, courses };
+    }
+  }
   
   if (courses.length === 0) {
     return { cleanMarkdown: markdownText, courses: [] };

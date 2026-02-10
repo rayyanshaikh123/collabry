@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import renderMindmap from '../../src/lib/mindmapClient';
+import renderMindmap from '@/lib/mindmapClient';
 
 interface Props {
   mindmapJson: any;
@@ -41,6 +41,15 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
       return;
     }
     
+    // Check if mermaidCode is already cached in the mindmap data
+    if (mindmapJson.mermaidCode) {
+      console.log('MindMapViewer: Using cached mermaidCode from database');
+      setMermaidCode(mindmapJson.mermaidCode);
+      setSvgBase64(mindmapJson.svgBase64 || null);
+      setLoading(false);
+      return;
+    }
+    
     console.log('MindMapViewer: Starting render with:', {
       hasNodes: !!mindmapJson.nodes,
       nodeCount: mindmapJson.nodes?.length || 0,
@@ -71,7 +80,7 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
       .catch((err) => {
         if (!mounted) return;
         console.error('MindMapViewer: Render error:', err);
-        setError(String(err));
+        setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         if (mounted) setLoading(false);

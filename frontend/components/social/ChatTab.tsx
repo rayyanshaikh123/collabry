@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Send, MessageCircle } from 'lucide-react';
-import chatService, { Message, Conversation } from '@/src/services/chat.service';
-import chatSocketClient from '@/src/lib/chatSocket';
-import { useAuthStore } from '@/src/stores/auth.store';
+import chatService, { Message, Conversation } from '@/lib/services/chat.service';
+import chatSocketClient from '@/lib/chatSocket';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 

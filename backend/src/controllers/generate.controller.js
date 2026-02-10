@@ -142,11 +142,11 @@ class GenerateController {
       const token = req.headers.authorization?.split(' ')[1];
       const { text, topic, subjectId, maxNodes, save, useRag } = req.body;
 
-      // Use defaults if topic not provided
-      const mapTopic = topic || 'Concept Map';
+      // Use defaults if topic not provided or empty
+      const mapTopic = (topic && topic.trim()) || 'Concept Map';
 
       // Generate mind map using AI engine
-      console.log('GenerateMindMap request useRag:', !!useRag);
+      console.log('GenerateMindMap request:', { topic: mapTopic, maxNodes, useRag: !!useRag });
       const generatedMap = await aiService.generateMindMap(
         mapTopic,
         {
@@ -165,7 +165,9 @@ class GenerateController {
             topic: mapTopic,
             subject: subjectId || null,
             nodes: generatedMap.nodes,
-            edges: generatedMap.edges
+            edges: generatedMap.edges,
+            mermaidCode: generatedMap.mermaidCode,
+            svgBase64: generatedMap.svgBase64
           });
 
           return res.status(201).json({

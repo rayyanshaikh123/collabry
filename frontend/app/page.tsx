@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import LandingPage from '../views/Landing';
 import Loader from '../components/ui/loader';
 import { useRouter } from 'next/navigation';
-import { useUIStore } from '../src/stores/ui.store';
+import { useUIStore } from '@/lib/stores/ui.store';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -37,3 +37,4 @@ export default function Home() {
     />
   );
 }
+

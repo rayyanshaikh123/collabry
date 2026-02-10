@@ -101,21 +101,6 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            {typeof onEditArtifact === 'function' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onEditArtifact(selectedArtifact?.id || artifacts[0]?.id || 'action-quiz')}
-                className="text-xs"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M17.414 2.586a2 2 0 010 2.828l-9.9 9.9a1 1 0 01-.465.263l-4 1a1 1 0 01-1.213-1.213l1-4a1 1 0 01.263-.465l9.9-9.9a2 2 0 012.828 0zM15.121 4.05l-9.9 9.9L4 15l.05-1.221 9.9-9.9 1.171 1.171z" />
-                </svg>
-                Edit
-              </Button>
-            )}
-          </div>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {hasSelectedSources

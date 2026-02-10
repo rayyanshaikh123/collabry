@@ -4,11 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, Button, Badge } from '../../../components/UIElements';
 import { ICONS } from '../../../constants';
-import { useAuthStore } from '../../../src/stores/auth.store';
-import { studyBoardService } from '../../../src/services/studyBoard.service';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { studyBoardService } from '@/lib/services/studyBoard.service';
 import TemplateSelectorModal from '../../../components/TemplateSelectorModal';
 import { BoardTemplate, getTemplateShapes } from '../../../lib/boardTemplates';
-import { showError } from '../../../src/lib/alert';
+import { showError } from '@/lib/alert';
 
 interface Board {
   _id: string;
@@ -311,4 +311,6 @@ export default function StudyBoardListPage() {
     </div>
   );
 }
+
+
 

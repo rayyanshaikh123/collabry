@@ -12,8 +12,9 @@ from datetime import datetime
 from pymongo import MongoClient, DESCENDING
 from bson import ObjectId
 from config import CONFIG
-from core.agent import create_agent
+from core.agent import run_agent
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai/sessions", tags=["sessions"])
@@ -315,6 +316,47 @@ async def delete_session(
         raise HTTPException(status_code=500, detail="Failed to delete session")
 
 
+@router.delete(
+    "/{session_id}/messages",
+    summary="Clear session messages",
+    description="Delete all messages in a session without deleting the session itself",
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse}
+    }
+)
+async def clear_session_messages(
+    session_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Clear all messages in a session.
+    """
+    try:
+        # Verify session exists and belongs to user
+        try:
+            session_obj_id = ObjectId(session_id)
+        except:
+            raise HTTPException(status_code=404, detail="Invalid session ID")
+            
+        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Delete all messages in this session
+        result = messages_collection.delete_many({"session_id": session_id})
+        
+        logger.info(f"Cleared {result.deleted_count} messages from session {session_id} for user {user_id}")
+        
+        return {"message": "Messages cleared successfully", "deleted_count": result.deleted_count}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to clear messages: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear messages")
+
+
 @router.get(
     "/{session_id}/chat/stream",
     summary="Streaming chat for session (GET)",
@@ -385,47 +427,74 @@ async def session_chat_stream(
         
         logger.info(f"Streaming chat request for session={session_id}, user={user_id}")
         
-        # Create user-isolated agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=session_id,
-            config=CONFIG
-        )
-        
         async def event_generator():
             """Generate SSE events that stream in real-time from agent."""
             full_response = ""
+            max_tool_output_chars = 4000
             
             try:
-                # Execute agent with streaming callback
-                def stream_chunk(chunk: str):
-                    """Callback for each chunk from agent."""
-                    nonlocal full_response
-                    if chunk.strip():
-                        full_response += chunk
-                        return chunk
-                    return None
-                
-                # Execute agent - this will call stream_chunk for each piece of output
-                # Pass source_ids to filter RAG by selected sources only
-                agent.handle_user_input_stream(
-                    request.message, 
-                    stream_chunk,
-                    source_ids=request.source_ids
-                )
-                
-                # Now stream the collected response character by character to preserve markdown
-                if full_response:
-                    import asyncio
-                    # Stream character by character to preserve newlines and markdown
-                    for char in full_response:
-                        # Escape special characters for SSE
-                        if char == '\n':
-                            # Send newline as literal \n for markdown to process
-                            yield f"data: \\n\n\n"
-                        else:
-                            yield f"data: {char}\n\n"
-                        await asyncio.sleep(0.008)  # 8ms delay for smooth streaming
+                # Stream from new agent architecture
+                async for event in run_agent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    message=request.message,
+                    notebook_id=session_id,  # Use session_id as notebook_id for now
+                    use_rag=bool(request.use_rag) or bool(request.source_ids),
+                    source_ids=request.source_ids,
+                    stream=True
+                ):
+                    if not event:
+                        continue
+                    
+                    event_type = event.get("type")
+                    
+                    # Handle token events (streaming text)
+                    if event_type == "token":
+                        content = event.get("content", "")
+                        full_response += content
+                        payload = json.dumps(
+                            {"type": "token", "content": content},
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {payload}\n\n"
+                    
+                    # Handle tool execution events
+                    elif event_type == "tool_start":
+                        tool_info = json.dumps({
+                            "type": "tool_start",
+                            "tool": event.get("tool"),
+                            "inputs": event.get("inputs")
+                        })
+                        yield f"data: {tool_info}\n\n"
+                    
+                    elif event_type == "tool_end":
+                        output = event.get("output")
+                        output_text = "" if output is None else str(output)
+                        output_preview = output_text[:max_tool_output_chars]
+                        truncated = len(output_text) > max_tool_output_chars
+
+                        tool_info = json.dumps({
+                            "type": "tool_end",
+                            "tool": event.get("tool"),
+                            "output": output_preview,
+                            "output_truncated": truncated,
+                            "output_len": len(output_text),
+                        })
+                        yield f"data: {tool_info}\n\n"
+                    
+                    # Handle completion
+                    elif event_type == "complete":
+                        full_response = event.get("message", full_response)
+                    
+                    # Handle errors
+                    elif event_type == "error":
+                        error_payload = json.dumps({
+                            "type": "error",
+                            "message": event.get("message"),
+                            "details": event.get("details")
+                        })
+                        yield f"data: {error_payload}\n\n"
+                        full_response = event.get("message", "An error occurred.")
                 
                 # Send completion event
                 yield f"event: done\ndata: \n\n"

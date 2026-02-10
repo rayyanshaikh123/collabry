@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Card, Button, Badge, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '../src/hooks/useAI';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '@/hooks/useAI';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import ReactMarkdown from 'react-markdown';
-import { useSessions, useCreateSession, useSessionMessages, useSaveMessage, useDeleteSession } from '../src/hooks/useSessions';
-import type { Message as ChatMessage } from '../src/services/sessions.service';
+import { useSessions, useCreateSession, useSessionMessages, useSaveMessage, useDeleteSession } from '@/hooks/useSessions';
+import type { Message as ChatMessage } from '@/lib/services/sessions.service';
 import AlertModal from '../components/AlertModal';
-import { useAlert } from '../src/hooks/useAlert';
+import { useAlert } from '@/hooks/useAlert';
 
 interface ChatSession {
   id: string;
@@ -194,7 +194,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
       const url = new URL(`/ai/sessions/${activeSessionId}/chat/stream`, AI_ENGINE_URL);
       
       // Use fetch with ReadableStream for SSE
@@ -328,7 +328,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
       const url = new URL('/ai/summarize/stream', AI_ENGINE_URL);
       console.log('📝 [streamSummarize] Calling URL:', url.toString());
       
@@ -452,7 +452,7 @@ const StudyBuddyNew: React.FC = () => {
         token = state?.accessToken || '';
       }
 
-      const AI_ENGINE_URL = 'http://localhost:8000';
+      const AI_ENGINE_URL = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
       let url: string;
       let requestBody: any;
       let headers: any = {

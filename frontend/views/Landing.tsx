@@ -2,7 +2,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import DarkModeToggle from '../src/components/DarkModeToggle';
+import DarkModeToggle from '@/components/DarkModeToggle';
 import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { motion } from 'framer-motion';
@@ -82,7 +82,7 @@ const LandingPage: React.FC<{ onGetStarted: () => void; onCycleTheme?: () => voi
         {/* Feature Teasers */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-6xl w-full mt-16 md:mt-20">
           {[
-            { title: 'AI Study Buddy', desc: 'Your 24/7 personal tutor powered by Gemini.', icon: '🤖', color: 'bg-amber-100 text-amber-700' },
+            { title: 'AI Study Buddy', desc: 'Your 24/7 personal tutor powered by Ollama.', icon: '🤖', color: 'bg-amber-100 text-amber-700' },
             { title: 'Live Boards', desc: 'Real-time collaborative drawing and brainstorming.', icon: '🎨', color: 'bg-indigo-100 text-indigo-700' },
             { title: 'Focus Streak', desc: 'Stay productive with gamified focus sessions.', icon: '🔥', color: 'bg-rose-100 text-rose-700' },
           ].map((f, i) => (

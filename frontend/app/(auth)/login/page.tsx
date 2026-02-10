@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import Auth from '../../../views/Auth';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore } from '../../../src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,3 +35,5 @@ export default function LoginPage() {
 
   return <Auth type="login" onAuthSuccess={handleAuthSuccess} />;
 }
+
+

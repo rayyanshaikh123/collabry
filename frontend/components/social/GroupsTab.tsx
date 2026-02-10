@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Users, Settings, Copy, LogOut } from 'lucide-react';
-import groupService, { Group } from '@/src/services/group.service';
+import groupService, { Group } from '@/lib/services/group.service';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';

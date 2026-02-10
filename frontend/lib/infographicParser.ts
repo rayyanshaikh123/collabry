@@ -10,11 +10,17 @@ export interface InfographicStat {
 }
 
 export interface InfographicSection {
-  id: string;
+  // V1 format
+  id?: string;
   title: string;
-  icon: string;
+  icon?: string;
   stats?: InfographicStat[];
   keyPoints?: string[];
+
+  // V2 format
+  type?: string;
+  items?: any[];
+  events?: any[];
 }
 
 export interface InfographicTimelineItem {
@@ -43,6 +49,11 @@ export interface InfographicData {
  */
 function cleanJSON(jsonString: string): string {
   let cleaned = jsonString.trim();
+
+  // Normalize smart quotes
+  cleaned = cleaned
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
   
   // Remove trailing commas before } or ]
   cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
@@ -50,6 +61,12 @@ function cleanJSON(jsonString: string): string {
   // Remove comments
   cleaned = cleaned.replace(/\/\/.*$/gm, '');
   cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // Convert common Pythonisms
+  cleaned = cleaned
+    .replace(/\bNone\b/g, 'null')
+    .replace(/\bTrue\b/g, 'true')
+    .replace(/\bFalse\b/g, 'false');
   
   // Remove any text after the closing brace
   const lastBrace = cleaned.lastIndexOf('}');
@@ -60,27 +77,90 @@ function cleanJSON(jsonString: string): string {
   return cleaned;
 }
 
-/**
- * Extract JSON from text (handles code blocks, plain JSON, etc.)
- */
-function extractJSON(text: string): any | null {
-  let cleanText = text.trim();
-  
-  // Remove markdown code block markers
-  cleanText = cleanText.replace(/^```json?\s*/i, '');
-  cleanText = cleanText.replace(/^```\s*/i, '');
-  cleanText = cleanText.replace(/```\s*$/i, '');
-  
-  // Find the first { and match balanced braces
-  const firstBrace = cleanText.indexOf('{');
+function repairCommonJsonMistakes(input: string): string {
+  let text = input;
+
+  // Quote unquoted keys: { title: "x" } -> { "title": "x" }
+  // Only runs for keys that appear after { or ,
+  text = text.replace(/([,{]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
+
+  // Add missing commas between adjacent objects/arrays in arrays:
+  // [ {..} {..} ] -> [ {..}, {..} ]
+  text = text.replace(/}\s*{/g, '},{');
+  text = text.replace(/]\s*\[/g, '],[');
+
+  // Add missing commas between string literals in arrays: ["a" "b"] -> ["a", "b"]
+  text = text.replace(/"\s+"/g, '","');
+
+  // Remove trailing commas again (repairs may introduce)
+  text = text.replace(/,(\s*[}\]])/g, '$1');
+
+  return text;
+}
+
+function tryParseJson(text: string): any | null {
+  const attempts = [text, cleanJSON(text), repairCommonJsonMistakes(cleanJSON(text))];
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt);
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
+function extractFencedJsonBlock(text: string): string | null {
+  // Prefer fenced json blocks; if multiple, pick one that looks like an infographic
+  const fenceRe = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  const blocks: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = fenceRe.exec(text)) !== null) {
+    if (match[1]) blocks.push(match[1]);
+  }
+  if (!blocks.length) return null;
+
+  const preferred = blocks.find((b) => /"title"[\s\S]*"sections"/i.test(b));
+  return preferred ?? blocks[0];
+}
+
+function extractBalancedObject(text: string): string | null {
+  const firstBrace = text.indexOf('{');
   if (firstBrace === -1) return null;
-  
+
   let braceCount = 0;
   let jsonEnd = -1;
-  
-  for (let i = firstBrace; i < cleanText.length; i++) {
-    if (cleanText[i] === '{') braceCount++;
-    if (cleanText[i] === '}') {
+  let inString = false;
+  let stringQuote: '"' | "'" | null = null;
+  let escaped = false;
+
+  for (let i = firstBrace; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (stringQuote && ch === stringQuote) {
+        inString = false;
+        stringQuote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      stringQuote = ch as any;
+      continue;
+    }
+
+    if (ch === '{') braceCount++;
+    if (ch === '}') {
       braceCount--;
       if (braceCount === 0) {
         jsonEnd = i + 1;
@@ -88,18 +168,34 @@ function extractJSON(text: string): any | null {
       }
     }
   }
-  
+
   if (jsonEnd === -1) return null;
-  
-  cleanText = cleanText.substring(firstBrace, jsonEnd);
-  
-  try {
-    const cleaned = cleanJSON(cleanText);
-    return JSON.parse(cleaned);
-  } catch (e) {
-    console.error('Failed to parse JSON:', e);
-    return null;
+  return text.substring(firstBrace, jsonEnd);
+}
+
+/**
+ * Extract JSON from text (handles code blocks, plain JSON, etc.)
+ */
+function extractJSON(text: string): any | null {
+  const raw = text.trim();
+
+  // 1) Prefer fenced JSON blocks
+  const fenced = extractFencedJsonBlock(raw);
+  if (fenced) {
+    const parsed = tryParseJson(fenced);
+    if (parsed) return parsed;
   }
+
+  // 2) Fallback: extract balanced object from the whole text (string-aware)
+  const balanced = extractBalancedObject(raw);
+  if (!balanced) return null;
+
+  const parsed = tryParseJson(balanced);
+  if (parsed) return parsed;
+
+  // Don't spam console for expected malformed AI JSON
+  console.debug('Infographic JSON parse failed');
+  return null;
 }
 
 /**
@@ -115,7 +211,9 @@ function isValidInfographicData(data: any): data is InfographicData {
   if (data.sections.length === 0) return false;
   
   for (const section of data.sections) {
-    if (!section.title || !section.icon) return false;
+    // Accept both V1 (icon/keyPoints/stats) and V2 (type + items/events)
+    if (!section || typeof section !== 'object') return false;
+    if (!section.title) return false;
   }
   
   return true;
@@ -165,6 +263,7 @@ export function extractInfographicFromMarkdown(markdownText: string): {
  * Check if text contains infographic JSON
  */
 export function containsInfographicData(text: string): boolean {
-  const jsonMatch = text.match(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/);
-  return jsonMatch !== null;
+  // Prefer fenced blocks first
+  if (/```(?:json)?[\s\S]*?"title"[\s\S]*?"sections"[\s\S]*?```/i.test(text)) return true;
+  return /\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/.test(text);
 }

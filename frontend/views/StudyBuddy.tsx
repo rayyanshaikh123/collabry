@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Badge, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '../src/hooks/useAI';
-import { useAuthStore } from '../src/stores/auth.store';
+import { useAIChat, useSummarize, useGenerateQA, useGenerateMindMap, useAIHealth } from '@/hooks/useAI';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 interface Message {
   id: string;

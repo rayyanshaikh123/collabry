@@ -11,11 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import ChatRequest, ChatResponse, ErrorResponse
-from core.agent import create_agent
+from core.agent import run_agent, chat as agent_chat
 from config import CONFIG
 import logging
 from uuid import uuid4
 from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["chat"])
@@ -48,38 +49,22 @@ async def chat(
         
         logger.info(f"Chat request from user={user_id}, session={session_id}")
         
-        # Create user-isolated agent
-        agent, _, _, memory = create_agent(
+        # Use new agent architecture
+        response = await agent_chat(
             user_id=user_id,
             session_id=session_id,
-            config=CONFIG
+            message=request.message,
+            notebook_id=None  # Can be extended to support notebook context
         )
         
-        # Collect response chunks
-        response_chunks = []
-        tool_used = None
-        
-        def collect_chunk(chunk: str):
-            response_chunks.append(chunk)
-        
-        # Execute agent with streaming collection
-        agent.handle_user_input_stream(request.message, collect_chunk)
-        
-        # Check if tool was used
-        if hasattr(agent, 'last_tool_called') and agent.last_tool_called:
-            tool_used = agent.last_tool_called
-        
-        # Combine chunks into full response
-        full_response = "".join(response_chunks)
-        
-        logger.info(f"Chat response generated: {len(full_response)} chars, tool={tool_used}")
+        logger.info(f"Chat response generated: {len(response)} chars")
         
         return ChatResponse(
-            response=full_response,
+            response=response,
             session_id=session_id,
             user_id=user_id,
             timestamp=datetime.utcnow(),
-            tool_used=tool_used
+            tool_used=None  # New agent doesn't expose this directly
         )
         
     except Exception as e:
@@ -114,45 +99,55 @@ async def chat_stream(
         
         logger.info(f"Streaming chat request from user={user_id}, session={session_id}")
         
-        # Create user-isolated agent
-        agent, _, _, _ = create_agent(
-            user_id=user_id,
-            session_id=session_id,
-            config=CONFIG
-        )
-        
         async def event_generator():
-            """Generate SSE events that stream in real-time."""
-            
-            def stream_chunk(chunk: str):
-                """Callback that yields chunks immediately."""
-                if chunk.strip():
-                    # Yield each chunk as it's generated
-                    return f"data: {chunk}\n\n"
-                return None
-            
-            # Track if we've sent any data
+            """Generate SSE events that stream tool calls and responses from ReAct agent."""
             has_data = False
             
-            # Execute agent with immediate streaming
-            chunks_buffer = []
-            def collect_chunk(chunk: str):
-                chunks_buffer.append(chunk)
+            try:
+                # Use new agent with streaming (returns event dicts)
+                async for event in run_agent(
+                    user_id=user_id,
+                    session_id=session_id,
+                    message=request.message,
+                    notebook_id=None,
+                    use_rag=bool(request.use_rag) or bool(request.source_ids),
+                    source_ids=request.source_ids,
+                    stream=True
+                ):
+                    if event:
+                        has_data = True
+                        event_type = event.get("type")
+                        
+                        if event_type == "tool_start":
+                            # Tool invocation started
+                            yield f"data: {json.dumps(event)}\n\n"
+                        
+                        elif event_type == "tool_end":
+                            # Tool completed
+                            yield f"data: {json.dumps(event)}\n\n"
+                        
+                        elif event_type == "token":
+                            # Content token (backward compatible with old format)
+                            yield f"data: {json.dumps({'content': event['content']})}\n\n"
+                        
+                        elif event_type == "complete":
+                            # Final completion
+                            yield f"data: {json.dumps({'done': True, 'message': event['message']})}\n\n"
+                        
+                        elif event_type == "error":
+                            # Error occurred
+                            yield f"data: {json.dumps(event)}\n\n"
+                
+                # Send completion event if no explicit complete was sent
+                if has_data:
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'content': 'No response generated'})}\n\n"
+                    yield f"data: {json.dumps({'done': True})}\n\n"
             
-            agent.handle_user_input_stream(request.message, collect_chunk)
-            
-            # Stream the collected chunks
-            for chunk in chunks_buffer:
-                if chunk.strip():
-                    has_data = True
-                    yield f"data: {chunk}\n\n"
-            
-            # Send completion event (without session_id in data)
-            if has_data:
-                yield f"event: done\ndata: \n\n"
-            else:
-                yield f"data: No response generated\n\n"
-                yield f"event: done\ndata: \n\n"
+            except Exception as e:
+                logger.error(f"Stream error: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         
         return StreamingResponse(
             event_generator(),

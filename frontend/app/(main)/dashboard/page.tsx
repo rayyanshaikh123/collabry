@@ -23,3 +23,4 @@ export default function DashboardPage() {
 
   return <Dashboard onNavigate={handleNavigate as any} />;
 }
+

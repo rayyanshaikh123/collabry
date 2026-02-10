@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { authService } from '@/src/services/auth.service';
+import { authService } from '@/lib/services/auth.service';
 
 function ResetPasswordForm() {
   const [newPassword, setNewPassword] = useState('');
@@ -229,3 +229,4 @@ export default function ResetPasswordPage() {
     </Suspense>
   );
 }
+

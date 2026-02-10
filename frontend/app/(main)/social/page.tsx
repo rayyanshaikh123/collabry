@@ -7,7 +7,7 @@ import { Users, UsersRound, MessageCircle } from 'lucide-react';
 import FriendsTab from '@/components/social/FriendsTab';
 import GroupsTab from '@/components/social/GroupsTab';
 import ChatTab from '@/components/social/ChatTab';
-import { useAuthStore } from '@/src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 export default function SocialPage() {
   const [activeTab, setActiveTab] = useState('friends');
@@ -82,3 +82,4 @@ export default function SocialPage() {
     </div>
   );
 }
+

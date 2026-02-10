@@ -43,16 +43,22 @@ def ingest_document_background(
     try:
         logger.info(f"Starting background ingestion: task={task_id}, user={user_id}")
         
-        # Update task status
-        ingestion_tasks[task_id] = {
-            "status": "processing",
-            "user_id": user_id,
-            "filename": filename,
-            "started_at": datetime.utcnow()
-        }
+        # Task entry already created in upload_document, just update status
+        if task_id in ingestion_tasks:
+            ingestion_tasks[task_id]["status"] = "processing"
+        else:
+            # Fallback: create entry if somehow missing
+            ingestion_tasks[task_id] = {
+                "status": "processing",
+                "user_id": user_id,
+                "filename": filename,
+                "started_at": datetime.utcnow()
+            }
         
-        # Create RAG retriever for user
-        rag = RAGRetriever(CONFIG, user_id=user_id)
+        # Ingest into the same vector store that tools query (rag/vectorstore).
+        # This avoids writing into a separate FAISS singleton that tools don't see.
+        from rag.vectorstore import add_documents
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
         
         # Create document with metadata
         doc = Document(
@@ -64,9 +70,29 @@ def ingest_document_background(
                 **metadata
             }
         )
-        
-        # Add document to user's RAG index (includes chunking & embedding)
-        rag.add_user_documents([doc], user_id=user_id, save_index=True)
+
+        # IMPORTANT: The /ai/sessions/{session_id}/chat/stream endpoint currently
+        # passes notebook_id=session_id into the agent. To keep ingestion and
+        # retrieval consistent, prefer session_id as the notebook_id key used
+        # in the vectorstore metadata.
+        notebook_id = (metadata or {}).get("session_id") or (metadata or {}).get("notebook_id") or "default"
+
+        # Chunk before writing, so retrieval works well and chunk metadata is preserved.
+        chunk_size = int(CONFIG.get("chunk_size", 1000))
+        chunk_overlap = int(CONFIG.get("chunk_overlap", 200))
+        splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunks = splitter.split_documents([doc])
+
+        # Record processed chunk count for status visibility
+        if task_id in ingestion_tasks:
+            ingestion_tasks[task_id]["chunks_processed"] = len(chunks)
+
+        # Ensure metadata is present on every chunk (splitter should preserve it).
+        for c in chunks:
+            c.metadata.setdefault("user_id", user_id)
+            c.metadata.setdefault("notebook_id", notebook_id)
+
+        add_documents(documents=chunks, user_id=user_id, notebook_id=str(notebook_id))
         
         # Update task status
         ingestion_tasks[task_id]["status"] = "completed"
@@ -76,11 +102,20 @@ def ingest_document_background(
         
     except Exception as e:
         logger.exception(f"Background ingestion failed: task={task_id}, error={e}")
-        ingestion_tasks[task_id] = {
-            "status": "failed",
-            "error": str(e),
-            "failed_at": datetime.utcnow()
-        }
+        # Preserve user_id and other fields when marking as failed
+        if task_id in ingestion_tasks:
+            ingestion_tasks[task_id]["status"] = "failed"
+            ingestion_tasks[task_id]["error"] = str(e)
+            ingestion_tasks[task_id]["failed_at"] = datetime.utcnow()
+        else:
+            # Fallback if task entry is missing
+            ingestion_tasks[task_id] = {
+                "status": "failed",
+                "user_id": user_id,
+                "filename": filename,
+                "error": str(e),
+                "failed_at": datetime.utcnow()
+            }
 
 
 @router.post(
@@ -110,6 +145,16 @@ async def upload_document(
         task_id = str(uuid4())
         
         logger.info(f"Document upload initiated: user={user_id}, file={request.filename}, task={task_id}")
+        
+        # Create task entry immediately (before background task runs) to avoid race condition
+        ingestion_tasks[task_id] = {
+            "status": "processing",
+            "user_id": user_id,
+            "filename": request.filename,
+            "started_at": datetime.utcnow()
+        }
+        
+        logger.info(f"✅ Task created: task_id={task_id}, user_id='{user_id}' (type={type(user_id).__name__})")
         
         # Add background task for ingestion
         background_tasks.add_task(
@@ -172,12 +217,28 @@ async def get_upload_status(
     
     task = ingestion_tasks[task_id]
     
-    # Verify task belongs to current user
-    if task.get("user_id") != user_id:
-        logger.warning(f"User {user_id} tried to access task {task_id} belonging to {task.get('user_id')}")
+    # Verify task belongs to current user (normalize to string for comparison)
+    task_user_id_raw = task.get("user_id")
+    task_user_id = str(task_user_id_raw) if task_user_id_raw else ""
+    current_user_id = str(user_id)
+    
+    logger.info(
+        f"🔍 Status check: task_id={task_id}, "
+        f"stored_user='{task_user_id}' (raw_type={type(task_user_id_raw).__name__}), "
+        f"current_user='{current_user_id}' (type={type(user_id).__name__}), "
+        f"match={task_user_id == current_user_id}"
+    )
+    
+    if task_user_id != current_user_id:
+        logger.error(
+            f"❌ User ID mismatch for task {task_id}:\n"
+            f"  Stored:  '{task_user_id}' (len={len(task_user_id)}, bytes={task_user_id.encode('utf-8')})\n"
+            f"  Current: '{current_user_id}' (len={len(current_user_id)}, bytes={current_user_id.encode('utf-8')})\n"
+            f"  Task data: {task}"
+        )
         raise HTTPException(
             status_code=403,
-            detail="Access denied: task belongs to different user"
+            detail=f"Access denied: task user '{task_user_id}' != current user '{current_user_id}'"
         )
     
     return {
@@ -186,6 +247,7 @@ async def get_upload_status(
         "filename": task.get("filename"),
         "started_at": task.get("started_at"),
         "completed_at": task.get("completed_at"),
+        "chunks_processed": task.get("chunks_processed"),
         "error": task.get("error")
     }
 

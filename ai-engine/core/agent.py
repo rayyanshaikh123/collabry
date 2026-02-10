@@ -1,620 +1,1012 @@
-# core/agent.py
 """
-Collabry Study Copilot Agent - Pedagogical AI learning assistant.
+Study Assistant Agent - LangGraph ReAct agent with dynamic tool calling.
 
-This agent is optimized for helping students learn through:
-- Step-by-step explanations with examples and analogies
-- Concept extraction and structured learning
-- Follow-up question generation for active learning
-- Clarifying questions when context is unclear
-- Source citation (no hallucination)
+This is the main agent that orchestrates LLM reasoning and tool execution.
+Uses LangGraph's create_react_agent for intelligent tool selection.
 
-Flow:
-- Run local NLP pipeline (spell-correct, intent, NER) to enrich prompt.
-- Check if clarification needed (Study Copilot enhancement)
-- Ask LLM to decide: either call a tool or answer directly.
-- LLM returns JSON: {"tool": "<name>", "args": {...}} OR {"tool": null, "answer": "...", "follow_up_questions": [...]}
-- If tool selected: execute tool, synthesize pedagogical answer
-- Add follow-up questions to encourage deeper learning
-- Streaming: prints natural-language tokens as they arrive
+The LLM autonomously decides when and which tools to use based on user queries.
 """
 
+from typing import AsyncGenerator, Optional, Dict, Any, List, Tuple
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import MemorySaver
+from core.llm import get_langchain_llm, get_llm_config, chat_completion
+from core.conversation import get_conversation_manager
+from tools import ALL_TOOLS
 import json
-import logging
-import inspect
-import time
-from typing import Any, Dict, Optional, List
-
-from tools import load_tools
-from core.local_llm import LocalLLM, create_llm
-from core.nlp import analyze
-from core.memory import MemoryManager
-from core.rag_retriever import RAGRetriever
-from core.study_copilot import StudyCopilot
-from core.prompt_templates import SYSTEM_PROMPT, USER_INSTRUCTION
-from config import CONFIG
-from langchain_core.documents import Document
-
-logger = logging.getLogger(__name__)
+import re
+from urllib.parse import urlparse
 
 
-# -------------------------
-# Helpers
-# -------------------------
-def extract_json(text: str) -> Optional[dict]:
-    """Extract first valid JSON object from text, return parsed dict or None."""
-    if not text:
-        return None
-    # direct parse
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
+# System prompt for the study assistant with tool usage guidelines
+STUDY_ASSISTANT_PROMPT = """You are an intelligent study assistant helping students learn effectively.
 
-    # try to locate first {...} block
-    s = text.find("{")
-    e = text.rfind("}")
-    if s != -1 and e != -1 and e > s:
-        sub = text[s : e + 1]
+You have access to these tools (use EXACT names):
+- search_web (EXACT NAME: 'search_web'): Search the internet for courses, tutorials, and current information
+- search_sources (EXACT NAME: 'search_sources'): Search user's uploaded documents and notes
+- generate_quiz (EXACT NAME: 'generate_quiz'): Create practice quizzes on any topic
+- generate_flashcards (EXACT NAME: 'generate_flashcards'): Create flashcards for memorization
+- generate_mindmap (EXACT NAME: 'generate_mindmap'): Create visual concept maps
+- generate_study_plan (EXACT NAME: 'generate_study_plan'): Generate structured study schedules
+- summarize_notes (EXACT NAME: 'summarize_notes'): Condense large documents or topics
+
+**CRITICAL: Tool names are case-sensitive and must match exactly. Do NOT use 'web_search', use 'search_web'.**
+
+**When to use tools:**
+
+Use search_web (name='search_web') when:
+- User asks about online courses, tutorials, or learning resources
+- User wants current information not in their documents
+- User needs course recommendations (Coursera, Udemy, edX, etc.)
+- Examples: "Find Python courses", "Recommend data science tutorials", "Best AI certifications"
+- **CRITICAL: Always use search_web for course/tutorial recommendations - never invent courses!**
+- Tool call: search_web(query="Python courses for beginners")
+
+Use search_sources when:
+- User asks about their uploaded documents, notes, PDFs
+- User wants information from materials they've shared
+- Examples: "What did my biology notes say?", "Find info about X in my documents"
+- Tool call: search_sources(query="photosynthesis definition")
+
+Use generate_quiz when:
+- User wants to test their knowledge
+- User requests practice questions or quizzes
+- Examples: "Make me a quiz on X", "Test me on Y", "Create practice questions"
+- Tool call: generate_quiz(topic="physics")
+
+Use generate_flashcards when:
+- User wants to memorize information
+- User needs study cards for vocabulary or concepts
+- Examples: "Make flashcards for X", "Create cards to memorize Y"
+- Tool call: generate_flashcards(topic="chemistry")
+
+Use generate_mindmap when:
+- User wants to visualize concepts and relationships
+- User needs to see the structure of a topic
+- Examples: "Create a concept map for X", "Visualize Y", "Show me a mind map"
+- Tool call: generate_mindmap(topic="cell biology")
+
+Use generate_study_plan when:
+- User wants to plan their learning journey
+- User needs a structured schedule
+- Examples: "Help me plan studying X", "Create a study schedule", "Make a learning plan"
+- Tool call: generate_study_plan(subject="Mathematics", topics="algebra, calculus")
+
+Use summarize_notes when:
+- User wants to condense long materials
+- User needs key points extracted
+- Examples: "Summarize X", "Give me the main ideas of Y", "TLDR my notes"
+- Tool call: summarize_notes(topic="history")
+
+**When NOT to use tools:**
+- General questions that don't require documents or generation
+- Conversational interactions
+- Clarification questions
+- Just respond normally with your knowledge
+
+**Tool Usage Guidelines:**
+1. Read the user's request carefully
+2. Determine if any tool would help provide a better answer
+3. Use tools when they add clear value
+4. You can use multiple tools in sequence if needed
+5. Always provide context with tool results
+
+**HOW TO CALL TOOLS (CRITICAL):**
+- **ONLY provide the main functional parameter** (query, topic, subject)
+- **DO NOT provide user_id or notebook_id** - these are injected automatically
+- Keep tool calls simple and focused
+
+**Examples of CORRECT tool calls:**
+- search_web(query="Python courses for beginners")
+- generate_quiz(topic="biology")
+- generate_flashcards(topic="French Revolution")
+- generate_mindmap(topic="photosynthesis")
+- search_sources(query="DNA structure")
+
+**WRONG - Don't do this:**
+- search_web(query="...", user_id="123", notebook_id="abc")  ❌
+- generate_quiz(topic="...", user_id="default")  ❌
+
+**Output Style:**
+- Be conversational and supportive
+- Use clear markdown formatting
+- Explain tool results in a friendly way
+- Encourage learning and growth
+- If a tool returns JSON, format it nicely for the user
+
+**Important:**
+- Never expose internal tool mechanics to users
+- Present tool results as if you generated them naturally
+- Be helpful and encouraging in all interactions
+- **CRITICAL: Use exact tool names as listed above. For web search, use 'search_web' NOT 'web_search'**"""
+
+
+def _format_history_for_langchain(history: List[Dict[str, str]]) -> List:
+    """Convert conversation history to LangChain message format."""
+    messages = []
+    for msg in history:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            messages.append(AIMessage(content=msg["content"]))
+    return messages
+
+
+def _create_agent(user_id: str, notebook_id: Optional[str] = None):
+    """
+    Create LangGraph ReAct agent with tools.
+    
+    Tools that need user context (like search_sources) have optional parameters
+    with sensible defaults, so they work without context injection.
+    
+    Args:
+        user_id: User identifier for tool context (passed but not used for injection)
+        notebook_id: Optional notebook context (passed but not used for injection)
+    
+    Returns:
+        Configured agent
+    """
+    # Get LLM with tool binding
+    llm = get_langchain_llm()
+
+    # Some OpenAI-compatible providers/models don't reliably support native tool calling.
+    # LangGraph's v1 agent uses a more prompt-driven ReAct loop that is generally more portable.
+    llm_cfg = get_llm_config()
+    provider = (llm_cfg.provider or "").lower()
+    base_url = (getattr(llm_cfg, "base_url", "") or "").lower()
+    # Native function/tool calling is reliably supported on OpenAI's own API.
+    # Many OpenAI-compatible providers return errors like "Failed to call a function".
+    supports_native_tool_calling = provider == "openai" and (not base_url or "api.openai.com" in base_url)
+    agent_version = "v2" if supports_native_tool_calling else "v1"
+    
+    # Use tools as-is - they have optional parameters with defaults
+    tools = ALL_TOOLS
+    
+    # Create checkpointer for conversation memory
+    checkpointer = MemorySaver()
+    
+    # Debug: Print agent setup
+    print(f"🧠 LLM provider: {provider} | agent version: {agent_version}")
+    print(f"🔧 Agent tools: {[t.name for t in tools]}")
+    
+    # Create ReAct agent (LangGraph signature varies by version)
+    import inspect
+
+    sig = inspect.signature(create_react_agent)
+
+    kwargs: Dict[str, Any] = {
+        "model": llm,
+        "tools": tools,
+    }
+
+    # Optional kwargs (only if supported by this langgraph version)
+    if "checkpointer" in sig.parameters:
+        kwargs["checkpointer"] = checkpointer
+    if "version" in sig.parameters:
+        kwargs["version"] = agent_version
+    if "prompt" in sig.parameters:
+        kwargs["prompt"] = STUDY_ASSISTANT_PROMPT
+    elif "state_modifier" in sig.parameters:
+        kwargs["state_modifier"] = STUDY_ASSISTANT_PROMPT
+    elif "messages_modifier" in sig.parameters:
+        kwargs["messages_modifier"] = STUDY_ASSISTANT_PROMPT
+    else:
+        raise TypeError(
+            "Unsupported create_react_agent signature: expected one of "
+            "'prompt', 'state_modifier', or 'messages_modifier'."
+        )
+
+    agent = create_react_agent(**kwargs)
+    
+    return agent
+
+
+def _extract_topic(message: str) -> str:
+    text = message.strip()
+    lowered = text.lower()
+    # Common patterns: "quiz on X", "flashcards for X", "mind map of X"
+    for token in (" on ", " for ", " of ", ":"):
+        if token in lowered:
+            idx = lowered.find(token)
+            candidate = text[idx + len(token) :].strip()
+            if candidate:
+                return candidate
+    return text
+
+
+def _extract_course_query(message: str) -> str:
+    # Prefer explicit pattern used by the frontend course finder prompt
+    m = re.search(r"courses\s+about\s+\"([^\"]+)\"", message, re.IGNORECASE)
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+
+    # Newer crisp prompt format: a dedicated topic line
+    m2 = re.search(r"^Topic:\s*(.+)$", message, re.IGNORECASE | re.MULTILINE)
+    if m2 and m2.group(1).strip():
+        return m2.group(1).strip()
+
+    # Fallback: use generic topic extraction
+    topic = _extract_topic(message)
+    return topic.strip()
+
+
+def _extract_difficulty(message: str, default: str = "medium") -> str:
+    m = re.search(r"\bdifficulty\s*:\s*(easy|medium|hard)\b", message, re.IGNORECASE)
+    if m:
+        return m.group(1).lower()
+    # Also accept plain words
+    m2 = re.search(r"\b(easy|medium|hard)\b", message, re.IGNORECASE)
+    if m2:
+        return m2.group(1).lower()
+    return default
+
+
+def _extract_count(message: str, kind: str, default: int) -> int:
+    # Primary: "Exactly N questions/cards"
+    m = re.search(rf"\bExactly\s+(\d+)\s+{kind}\b", message, re.IGNORECASE)
+    if m:
         try:
-            return json.loads(sub)
+            return int(m.group(1))
         except Exception:
-            # try to remove trailing non-json content and reparse
-            # as a last-ditch attempt, try to replace newlines and stray quotes
-            try:
-                return json.loads(sub.strip())
-            except Exception:
-                return None
+            pass
+
+    # Secondary: "Create N questions/cards"
+    m2 = re.search(rf"\bCreate\s+(\d+)\s+{kind}\b", message, re.IGNORECASE)
+    if m2:
+        try:
+            return int(m2.group(1))
+        except Exception:
+            pass
+
+    # Tertiary: "N ... questions" anywhere
+    m3 = re.search(rf"\b(\d+)\s+\w*\s*{kind}\b", message, re.IGNORECASE)
+    if m3:
+        try:
+            return int(m3.group(1))
+        except Exception:
+            pass
+
+    return default
+
+
+def _extract_quiz_topic(message: str) -> str:
+    # If this is the crisp artifact prompt, extract just the human topic portion.
+    text = message
+    if "###QUIZ_GENERATION_REQUEST###" in text:
+        text = text.split("###QUIZ_GENERATION_REQUEST###", 1)[1]
+
+    # Strip the JSON schema portion
+    marker = "Return ONLY valid JSON"
+    if marker in text:
+        text = text.split(marker, 1)[0]
+
+    # Prefer content after the last "about:" occurrence
+    lowered = text.lower()
+    idx = lowered.rfind("about:")
+    if idx != -1:
+        candidate = text[idx + len("about:") :].strip()
+        # Take first non-empty line
+        for line in candidate.splitlines():
+            line = line.strip()
+            if line:
+                return line
+
+    # Fallback: last non-empty line
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if line and not line.startswith("###"):
+            return line
+
+    return _extract_topic(message)
+
+
+def _normalize_quiz_topic(topic: str) -> str:
+    t = (topic or "").strip()
+    if not t:
+        return "key concepts"
+    # If the extraction accidentally captured instruction-y text, fall back.
+    lowered = t.lower()
+    if "question" in lowered or "questions" in lowered:
+        return "key concepts"
+    if len(t) < 4:
+        return "key concepts"
+    return t
+
+
+def _normalize_mindmap_topic(topic: str) -> str:
+    t = (topic or "").strip()
+    if not t or len(t) < 4:
+        return "key concepts"
+    lowered = t.lower()
+    # Common follow-up filler that should not become a topic.
+    if any(k in lowered for k in ("simple", "one", "it", "this", "that", "same", "above")) and len(t.split()) <= 4:
+        return "key concepts"
+    # If the extraction captured instruction-y text, fall back.
+    if any(k in lowered for k in ("mind map", "mindmap", "concept map", "create", "make")) and len(t.split()) <= 6:
+        return "key concepts"
+    return t
+
+
+def _coerce_quiz_to_frontend_schema(tool_output: str) -> str:
+    """Convert tool JSON into frontend quiz array schema."""
+    raw = (tool_output or "").strip()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return raw
+
+    # Tool returns { quiz_title, difficulty, questions: [{options:{A..D}, correct_answer:"A"}] }
+    if isinstance(data, dict) and isinstance(data.get("questions"), list):
+        out = []
+        for q in data.get("questions", []):
+            if not isinstance(q, dict):
+                continue
+            options_dict = q.get("options") if isinstance(q.get("options"), dict) else {}
+            options = [
+                options_dict.get("A", ""),
+                options_dict.get("B", ""),
+                options_dict.get("C", ""),
+                options_dict.get("D", ""),
+            ]
+            letter = (q.get("correct_answer") or "A")
+            letter = str(letter).strip().upper()[:1]
+            correct_idx = ord(letter) - 65
+            if correct_idx < 0 or correct_idx > 3:
+                correct_idx = 0
+            out.append(
+                {
+                    "question": q.get("question", "").strip() if isinstance(q.get("question"), str) else "",
+                    "options": [o for o in options],
+                    "correctAnswer": correct_idx,
+                    "explanation": q.get("explanation", "").strip() if isinstance(q.get("explanation"), str) else "",
+                }
+            )
+        if out:
+            return json.dumps(out, ensure_ascii=False)
+
+    return raw
+
+
+def _coerce_flashcards_to_frontend_schema(tool_output: str, fallback_title: str) -> str:
+    """Convert tool JSON into frontend flashcards schema: {title, cards:[{id,front,back,category?}]}"""
+    raw = (tool_output or "").strip()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return raw
+
+    if isinstance(data, dict) and isinstance(data.get("cards"), list):
+        title = data.get("title") if isinstance(data.get("title"), str) else fallback_title
+        cards_out = []
+        for i, card in enumerate(data.get("cards", [])):
+            if not isinstance(card, dict):
+                continue
+            front = card.get("front")
+            back = card.get("back")
+            if not isinstance(front, str) or not isinstance(back, str):
+                continue
+            # map tags -> category (optional)
+            category = None
+            tags = card.get("tags")
+            if isinstance(tags, list) and tags:
+                first = tags[0]
+                if isinstance(first, str) and first.strip():
+                    category = first.strip()[:40]
+            out_card = {
+                "id": f"card-{i+1}",
+                "front": front.strip(),
+                "back": back.strip(),
+            }
+            if category:
+                out_card["category"] = category
+            cards_out.append(out_card)
+        if cards_out:
+            return json.dumps({"title": title, "cards": cards_out}, ensure_ascii=False)
+
+    return raw
+
+
+def _route_tool(message: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Heuristic tool router for providers that don't support native tool calling."""
+    m = message.lower()
+
+    # Course / tutorial / certification lookups
+    if any(k in m for k in ("course", "courses", "tutorial", "certification", "bootcamp", "best course")):
+        topic = _extract_course_query(message)
+        query = f"best online courses for {topic}"
+        return "search_web", {"query": query, "num_results": 5}
+
+    # Notes / documents
+    if any(k in m for k in ("my notes", "my note", "my documents", "my document", "uploaded", "pdf", "in my notes", "in my document")):
+        return "search_sources", {"query": message}
+
+    # RAG / grounded answers (treat as a request to use the user's sources)
+    if any(
+        k in m
+        for k in (
+            "rag",
+            "retrieval augmented",
+            "use sources",
+            "using sources",
+            "with sources",
+            "use my sources",
+            "my sources",
+            "grounded",
+            "based on my notes",
+            "from my notes",
+            "from my documents",
+            "from my notebook",
+        )
+    ):
+        return "search_sources", {"query": message}
+
+    # Quiz / test
+    if any(k in m for k in ("quiz", "test me", "mcq", "multiple choice")):
+        num_questions = _extract_count(message, kind="questions", default=10)
+        difficulty = _extract_difficulty(message, default="medium")
+        topic = _normalize_quiz_topic(_extract_quiz_topic(message))
+        return "generate_quiz", {"topic": topic, "num_questions": num_questions, "difficulty": difficulty}
+
+    # Follow-up quiz refinements (no explicit "quiz" keyword)
+    # Examples: "a more shorter one with like 5 questions", "make it 5 questions", "only 5 questions"
+    if (
+        "questions" in m
+        and any(k in m for k in ("short", "shorter", "only", "just", "make it", "another", "more"))
+        and re.search(r"\b\d+\b", m)
+    ):
+        num_questions = _extract_count(message, kind="questions", default=5)
+        difficulty = _extract_difficulty(message, default="medium")
+        return "generate_quiz", {"topic": "key concepts", "num_questions": num_questions, "difficulty": difficulty}
+
+    # Flashcards
+    if any(k in m for k in ("flashcard", "flash cards", "cards to memorize", "memorize")):
+        num_cards = _extract_count(message, kind="cards", default=10)
+        topic = _extract_topic(message)
+        return "generate_flashcards", {"topic": topic, "num_cards": num_cards}
+
+    # Mind map
+    if any(k in m for k in ("mind map", "mindmap", "concept map")):
+        topic = _normalize_mindmap_topic(_extract_topic(message))
+        # Default to using sources when available; tool will ignore if notebook_id is missing.
+        return "generate_mindmap", {"topic": topic, "include_sources": True}
+
+    # Reports
+    if any(k in m for k in ("report", "study report", "analysis report", "revision report")):
+        topics = _extract_topic(message)
+        return "generate_report", {"topics": topics, "include_sources": True}
+
+    # Infographics
+    if any(k in m for k in ("infographic", "visual summary", "visual cheat sheet", "one-pager")):
+        topics = _extract_topic(message)
+        return "generate_infographic", {"topics": topics, "include_sources": True}
+
+    # Study plan
+    if any(k in m for k in ("study plan", "study schedule", "learning plan", "plan for")):
+        topic = _extract_topic(message)
+        return "generate_study_plan", {"subject": topic, "topics": topic, "duration_days": 7}
+
+    # Summarize (include common misspellings)
+    if any(k in m for k in ("summarize", "summarise", "summraize", "summerize", "summary", "tldr", "tl;dr")):
+        return "summarize_notes", {"topic": _extract_topic(message)}
+
     return None
 
 
-def clean_answer(ans: Any) -> str:
-    """Return a human-friendly string for the answer.
-    If ans is dict -> pretty JSON string; if it's an escaped JSON string -> unescape.
-    Otherwise return str(ans).
-    """
-    if ans is None:
-        return ""
-    if isinstance(ans, dict):
-        try:
-            return json.dumps(ans, indent=2, ensure_ascii=False)
-        except Exception:
-            return str(ans)
-    if isinstance(ans, str):
-        s = ans.strip()
-        # If ans is an escaped JSON string like "{\"price\": 123}"
-        if s.startswith("{") and s.endswith("}"):
-            try:
-                inner = json.loads(s)
-                return json.dumps(inner, indent=2, ensure_ascii=False)
-            except Exception:
-                return s
-        return s
-    return str(ans)
+async def _format_with_llm(user_message: str, tool_name: str, tool_output: str) -> str:
+    """Ask the LLM to present tool output nicely, without tool-calling."""
+    system = (
+        "You are a study assistant. You MUST only use the provided tool output. "
+        "Do not invent links, ratings, or prices. If missing, say 'Not provided'."
+    )
 
+    if tool_name == "search_web":
+        system += (
+            "\n\nFormat as a short markdown list of 3-5 items with clickable links when present. "
+            "For each item include Platform if you can infer it from the title or URL."
+        )
 
-def _typing_print(text: str, speed_ms: int = 30):
-    """Typing-style print with per-character delay."""
+    if tool_name == "search_sources":
+        system += (
+            "\n\nAnswer the user's question using ONLY the excerpts. "
+            "When you use a fact, cite it as (Source N) matching the tool output. "
+            "If the sources are insufficient, say what's missing and ask one clarifying question."
+        )
+
+    resp = await chat_completion(
+        messages=[
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": (
+                    f"User request:\n{user_message}\n\n"
+                    f"Tool used: {tool_name}\n\n"
+                    f"Tool output:\n{tool_output}\n\n"
+                    "Now produce the final answer."
+                ),
+            },
+        ],
+        stream=False,
+    )
+
     try:
-        for ch in text:
-            print(ch, end="", flush=True)
-            time.sleep(speed_ms / 1000.0)
-        print()
+        return resp.choices[0].message.content or tool_output
     except Exception:
-        # fallback to simple print on any problem
-        print(text)
+        return tool_output
 
-# -------------------------
-# Safe tool execution
-# -------------------------
-def safe_execute_tool(tool_entry, args: Optional[Dict[str, Any]], llm: LocalLLM):
-    """
-    Execute a tool safely.
-    Supports:
-      - tool_entry is a callable
-      - tool_entry is a dict { "name":..., "func": callable, ... }
-    Only passes parameters that the tool function accepts.
-    If the tool supports an 'llm' parameter, we inject it.
-    Returns tool result (any python object) or {"error": "..."} dict.
-    """
-    if args is None:
-        args = {}
 
-    target = tool_entry
-    if isinstance(tool_entry, dict):
-        target = tool_entry.get("func") or tool_entry.get("callable")
-        if target is None:
-            return {"error": "Invalid tool entry: missing 'func' key."}
-
-    if not callable(target):
-        return {"error": "Tool target is not callable."}
-
-    sig = inspect.signature(target)
-    accepted = {}
-
-    # Basic argument adaptation layer for common mistakes (LLM robustness)
-    # Map single 'content' or 'text' field into 'contents' if function expects 'contents'.
-    if "contents" in sig.parameters and "contents" not in args:
-        if "content" in args:
-            args["contents"] = args.pop("content")
-        elif "text" in args:
-            args["contents"] = args.pop("text")
-        elif "data" in args:
-            args["contents"] = args.pop("data")
-
-    # Provide a default path if write_file-like tool missing 'path'
-    if "path" in sig.parameters and "path" not in args:
-        # Use a safe default inside workspace
-        args["path"] = "output.txt"
-
-    for p in sig.parameters.values():
-        if p.name in args:
-            accepted[p.name] = args[p.name]
-    if "llm" in sig.parameters:
-        accepted["llm"] = llm
-
+def _infer_platform_from_url(url: str) -> Optional[str]:
     try:
-        return target(**accepted)
-    except Exception as e:
-        logger.exception("Tool execution failed")
-        return {"error": str(e)}
+        host = urlparse(url).netloc.lower()
+    except Exception:
+        host = (url or "").lower()
 
-# -------------------------
-# Collabry Study Copilot Agent
-# -------------------------
-class COLLABRYAgent:
-    """
-    Collabry Study Copilot Agent.
-    
-    Pedagogical AI assistant that helps students learn through:
-    - Step-by-step explanations
-    - Examples and analogies
-    - Concept extraction
-    - Follow-up question generation
-    - Clarifying questions
-    """
-    
-    def __init__(
-        self,
-        llm: LocalLLM,
-        tools: Dict[str, Any],
-        memory: MemoryManager,
-        rag_retriever: RAGRetriever,
-        user_id: Optional[str] = None,
-        session_id: Optional[str] = None
-    ):
-        """
-        Initialize Study Copilot Agent.
-        
-        Args:
-            llm: Language model for generation
-            tools: Available tools for actions
-            memory: Conversation memory manager
-            rag_retriever: RAG retriever for user documents
-            user_id: User identifier for isolation
-            session_id: Session/notebook identifier for isolation
-        """
-        self.llm = llm
-        self.tools = tools or {}
-        self.memory = memory
-        self.rag_retriever = rag_retriever
-        self.study_copilot = StudyCopilot(llm)
-        self.last_tool_called: Optional[str] = None
-        self.user_id = user_id
-        self.session_id = session_id
+    if "coursera" in host:
+        return "Coursera"
+    if "udemy" in host:
+        return "Udemy"
+    if "edx" in host:
+        return "edX"
+    if "codecademy" in host:
+        return "Codecademy"
+    if "pluralsight" in host:
+        return "Pluralsight"
+    if "linkedin" in host:
+        return "LinkedIn Learning"
+    if "udacity" in host:
+        return "Udacity"
+    if "skillshare" in host:
+        return "Skillshare"
+    if "youtube" in host or "youtu.be" in host:
+        return "YouTube"
+    return None
 
-    def _build_instruction(
-        self,
-        user: str,
-        chat_history: str,
-        retrieved_docs: List[Document],
-        entities: List[tuple],
-        intent: Optional[str] = None
-    ) -> str:
-        """
-        Construct pedagogical instruction prompt for the LLM.
-        
-        Args:
-            user: User input
-            chat_history: Previous conversation
-            retrieved_docs: Retrieved documents from RAG
-            entities: Named entities detected
-            intent: Detected intent (optional)
-            
-        Returns:
-            Complete prompt for LLM
-        """
-        # Build tool list with descriptions
-        tool_lines = []
-        for name, t in self.tools.items():
-            func = None
-            if isinstance(t, dict):
-                func = t.get("func") or t.get("callable")
-                desc = t.get("description", "")
-            else:
-                func = t
-                try:
-                    desc = ((t.__doc__ or "").strip().split("\n")[0])
-                except Exception:
-                    desc = ""
 
-            sig_str = ""
-            if callable(func):
-                try:
-                    params = []
-                    for p in inspect.signature(func).parameters.values():
-                        if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY):
-                            params.append(p.name)
-                    if params:
-                        sig_str = f"({', '.join(params)})"
-                except Exception:
-                    sig_str = ""
+def _courses_markdown_from_search_web_output(tool_output: str, max_items: int = 8) -> str:
+    """Convert `search_web` formatted text results into frontend-parsable markdown lines."""
+    text = tool_output or ""
 
-            tool_lines.append(f"- {name}{sig_str}: {desc}")
-        tool_list_txt = "\n".join(tool_lines) if tool_lines else "(no tools available)"
+    # Blocks look like:
+    # **Title**\nSnippet\n🔗 https://...\n
+    pattern = re.compile(
+        r"\*\*(?P<title>[^*]+)\*\*\s*\n(?P<snippet>.*?)\n🔗\s*(?P<url>\S+)",
+        re.DOTALL,
+    )
+    items: List[Dict[str, str]] = []
 
-        # Format retrieved documents with source citation
-        retrieved_context = ""
-        if retrieved_docs:
-            doc_parts = []
-            for i, doc in enumerate(retrieved_docs, 1):
-                source = doc.metadata.get('source', 'N/A')
-                content = doc.page_content[:500]  # Limit length
-                doc_parts.append(f"[Source {i}: {source}]\n{content}")
-            retrieved_context = "\n\n".join(doc_parts)
+    for match in pattern.finditer(text):
+        title = (match.group("title") or "").strip()
+        url = (match.group("url") or "").strip()
+        snippet = (match.group("snippet") or "").strip()
+        if not title or not url:
+            continue
 
-        # Use Study Copilot system prompt
-        system = SYSTEM_PROMPT
+        platform = _infer_platform_from_url(url) or "Unknown"
+        items.append({
+            "title": title,
+            "url": url,
+            "platform": platform,
+            "description": snippet,
+        })
+        if len(items) >= max_items:
+            break
 
-        # Add tool list to user instruction
-        user_instr = USER_INSTRUCTION.replace("{{tool_list}}", tool_list_txt)
+    if not items:
+        return text.strip()
 
-        # Build entity context
-        entity_block = ""
-        if entities:
-            ent_lines = [f"- {text} ({label})" for text, label in entities]
-            entity_block = "\n".join(ent_lines)
-
-        # Construct complete prompt
-        prompt_parts = [system, user_instr]
-        
-        if entity_block:
-            prompt_parts.append(f"\nNamed Entities Detected:\n{entity_block}")
-        
-        if intent and self.study_copilot.is_study_intent(intent):
-            prompt_parts.append(f"\n🎓 Study Intent Detected: {intent}")
-        
-        if retrieved_context:
-            prompt_parts.append(
-                f"\n{'='*70}\n"
-                f"📚 RETRIEVED CONTEXT FROM USER'S DOCUMENTS\n"
-                f"{'='*70}\n"
-                f"{retrieved_context}\n"
-                f"{'='*70}\n\n"
-                f"🚨 CRITICAL INSTRUCTIONS - READ CAREFULLY:\n"
-                f"1. The context above is from the user's actual documents\n"
-                f"2. You MUST answer using ONLY the information from this context\n"
-                f"3. DO NOT use ANY information from your training data or general knowledge\n"
-                f"4. If the question cannot be answered from the context above, say: 'This information is not found in your documents.'\n"
-                f"5. Always cite which source you're using: 'According to Source 1...' or 'Based on Source 2...'\n"
-                f"6. If you find yourself about to mention COLLABRY, Rayyan, or general AI concepts NOT in the context above, STOP and say the info is not available\n"
-                f"{'='*70}\n"
-            )
-        
-        if chat_history:
-            prompt_parts.append(f"\n💬 Chat History:\n{chat_history}")
-        
-        prompt_parts.append(f"\n👤 Student: {user}")
-        prompt_parts.append("\n🤖 Collabry Study Copilot:")
-        
-        return "\n".join(prompt_parts)
-
-    def handle_user_input_stream(self, user_input: str, on_token, source_ids: Optional[List[str]] = None):
-        """
-        Main entry point for handling user input with Study Copilot enhancements.
-        
-        Args:
-            user_input: Student's question or input
-            on_token: Callback for streaming tokens
-            source_ids: Optional list of source IDs to filter RAG retrieval
-        """
-        # 1. NLP analysis (spell correction, intent, entities)
-        # Skip NLP for very long texts (quiz generation with large documents)
-        try:
-            if len(user_input) > 1000000:  # Skip NLP for texts > 1MB
-                logger.info(f"Skipping NLP analysis for long text ({len(user_input)} chars)")
-                analysis = {"corrected": user_input}
-            else:
-                analysis = analyze(user_input)
-        except Exception as e:
-            logger.exception("NLP analyze failed")
-            analysis = {"corrected": user_input}
-        
-        corrected = analysis.get("corrected", user_input)
-        intent = analysis.get("intent")
-        entities = analysis.get("entities", []) or []
-        
-        # 2. Study Copilot: Check if clarification needed
-        clarification = self.study_copilot.needs_clarification(corrected)
-        if clarification:
-            response = f"🤔 {clarification}\n\n(This will help me give you a better explanation!)"
-            on_token(response)  # Use callback instead of print
-            self.memory.save_context({"user_input": corrected}, {"output": response})
-            return
-
-        # 3. Retrieve relevant documents (RAG) - cite sources in answer
-        # Get user's documents across all sessions for better context
-        retrieved_docs = self.rag_retriever.get_relevant_documents(
-            corrected, 
-            user_id=self.user_id
-            # source_ids=source_ids  # Temporarily disabled to allow access to all user documents
+    # IMPORTANT: ChatPanel only triggers course parsing when it sees a markdown link AND 'Platform:'
+    lines: List[str] = []
+    for course in items:
+        lines.append(
+            f"- [{course['title']}]({course['url']}) - Platform: {course['platform']} | Rating: Not provided | Price: Not provided"
         )
-        
-        # 3.5. Safety check: If source_ids were requested but no docs found, warn user
-        if source_ids and len(source_ids) > 0 and len(retrieved_docs) == 0:
-            error_msg = (
-                "⚠️ **No documents found for your selected sources.**\n\n"
-                "This might happen if:\n"
-                "- The sources were uploaded before the latest update\n"
-                "- The documents haven't been processed yet\n\n"
-                "**Solution:** Please delete and re-upload your sources to fix this issue.\n\n"
-                "For now, I'll answer using your general knowledge since no specific documents were found."
-            )
-            on_token(error_msg)
-            self.memory.save_context({"user_input": corrected}, {"output": error_msg})
-            return
-
-        # 4. Load conversational memory
-        memory_vars = self.memory.load_memory_variables({"user_input": corrected})
-        chat_history = self.memory.get_history_string()
-
-        # 5. Build pedagogical prompt
-        prompt = self._build_instruction(corrected, chat_history, retrieved_docs, entities, intent)
-
-        # 6. Generate response from LLM
-        raw_response = ""
-        try:
-            raw_response = self.llm.invoke(prompt)
-        except Exception as e:
-            logger.exception("LLM invocation failed")
-            print(f"[LLM error: {e}]")
-            return
-
-        # 7. Parse JSON decision
-        parsed_json = extract_json(raw_response)
-        if not parsed_json:
-            # Fallback for non-JSON response
-            on_token(raw_response)  # Use callback instead of print
-            self.memory.save_context({"user_input": corrected}, {"output": raw_response})
-            return
-
-        # 8. Handle list responses (e.g., quiz questions array)
-        if isinstance(parsed_json, list):
-            # For list responses, just stream the raw response
-            on_token(raw_response)
-            self.memory.save_context({"user_input": corrected}, {"output": raw_response})
-            return
-
-        # 9. Handle direct answer (no tool)
-        if parsed_json.get("tool") is None:
-            answer = clean_answer(parsed_json.get("answer", ""))
-            
-            # Special handling for mindmap generation requests
-            # If the user input contains mindmap generation marker, output the answer directly (it should be JSON)
-            if "[MINDMAP_GENERATION_REQUEST]" in corrected or "[MINDMAP_GENERATION_REQUEST]" in user_input:
-                # For mindmap, the answer should be raw JSON - output it directly without formatting
-                on_token(answer)  # Output the raw JSON answer
-                self.memory.save_context({"user_input": corrected}, {"output": answer})
-                return
-            
-            follow_ups = parsed_json.get("follow_up_questions", [])
-            
-            # If no follow-ups provided, generate them
-            if not follow_ups:
-                follow_ups = self.study_copilot.generate_follow_up_questions(
-                    corrected,
-                    answer,
-                    count=3
-                )
-            
-            # Format response with follow-up questions
-            full_response = answer
-            if follow_ups:
-                full_response += "\n\n📝 **Follow-up questions to deepen your understanding:**"
-                for i, q in enumerate(follow_ups, 1):
-                    full_response += f"\n{i}. {q}"
-            
-            # Add learning tip
-            full_response += f"\n\n{self.study_copilot._get_learning_tip()}"
-            
-            on_token(full_response)  # Use callback instead of print
-            self.memory.save_context({"user_input": corrected}, {"output": full_response})
-            return
-            
-        # 9. Handle tool call path
-        tool_name = parsed_json.get("tool")
-        args = parsed_json.get("args", {}) or {}
-
-        synonyms = CONFIG.get("tool_synonyms", {})
-        canonical = synonyms.get(tool_name, tool_name)
-        
-        if canonical not in self.tools:
-            msg = f"❌ Tool '{tool_name}' is not available.\n\n"
-            suggestions = self.study_copilot.suggest_study_tools(corrected)
-            if suggestions:
-                msg += "💡 **Suggested tools:**\n"
-                for sug in suggestions:
-                    msg += f"- {sug['tool']}: {sug['reason']}\n"
-            on_token(msg)  # Use callback instead of print
-            self.memory.save_context({"user_input": corrected}, {"output": msg})
-            return
-
-        # Execute tool
-        tool_entry = self.tools[canonical]
-        print(f"[Tool Invocation] {canonical} args={args}")
-        result = safe_execute_tool(tool_entry, args, self.llm)
-        self.last_tool_called = canonical
-
-        # 10. Synthesize pedagogical answer from tool result
-        immediate = None
-        full_content = None
-        
-        if isinstance(result, str) and not result.startswith('{'):
-            # Simple action tool with direct message
-            immediate = result
-        elif isinstance(result, dict):
-            # Extract relevant fields
-            immediate = result.get("short_answer") or result.get("snippet") or result.get("summary")
-            
-            # Store full content for web_scrape
-            if canonical == "web_scrape":
-                full_content = result.get("full_text") or result.get("text")
-        
-        if immediate:
-            # Synthesize pedagogical response
-            follow_prompt = (
-                f"The {canonical} tool returned:\n\n{clean_answer(immediate)}\n\n"
-                f"Student's question: {corrected}\n\n"
-                "Create a pedagogical response that:\n"
-                "1. Answers the student's specific question\n"
-                "2. Explains step-by-step if applicable\n"
-                "3. Cites sources (mention the tool used)\n"
-                "4. Never hallucinate - only use information from the tool result\n\n"
-                "Return JSON with answer and optional follow_up_questions:\n"
-                '{"tool": null, "answer": "<pedagogical response>", "follow_up_questions": ["Q1", "Q2", "Q3"]}'
-            )
-            
-            try:
-                final_raw = self.llm.invoke(follow_prompt)
-                final_json = extract_json(final_raw)
-            except Exception:
-                final_json = None
-            
-            if final_json and final_json.get("tool") is None:
-                final_answer = clean_answer(final_json.get("answer", ""))
-                follow_ups = final_json.get("follow_up_questions", [])
-                
-                # Generate follow-ups if not provided
-                if not follow_ups:
-                    follow_ups = self.study_copilot.generate_follow_up_questions(
-                        corrected,
-                        final_answer,
-                        count=3
-                    )
-                
-                # Format response
-                full_response = final_answer
-                if follow_ups:
-                    full_response += "\n\n📝 **Follow-up questions:**"
-                    for i, q in enumerate(follow_ups, 1):
-                        full_response += f"\n{i}. {q}"
-                
-                on_token(full_response)  # Use callback instead of print
-                
-                # Store with tool tag
-                if full_content:
-                    tagged_answer = f"[tool:{canonical}] {full_response}\n[CONTENT]\n{full_content[:2000]}..."
-                else:
-                    tagged_answer = f"[tool:{canonical}] {full_response}"
-                
-                self.memory.save_context({"user_input": corrected}, {"output": tagged_answer})
-                return
-            else:
-                # Fallback: print immediate result
-                on_token(clean_answer(immediate))  # Use callback instead of print
-                self.memory.save_context(
-                    {"user_input": corrected},
-                    {"output": f"[tool:{canonical}] {clean_answer(immediate)}"}
-                )
-                return
-        
-        # 11. Synthesize from full tool result if no immediate answer
-        follow_prompt = (
-            f"The {canonical} tool returned:\n\n{clean_answer(result)}\n\n"
-            f"Student's question: {corrected}\n\n"
-            "Create a helpful, educational response that:\n"
-            "1. Extracts the specific information requested\n"
-            "2. Explains in a way that helps learning\n"
-            "3. Cites the tool as the source\n"
-            "4. Only uses information from the tool result (no hallucination)\n\n"
-            "Return JSON:\n"
-            '{"tool": null, "answer": "<response>"}'
-        )
-        
-        try:
-            final_raw = self.llm.invoke(follow_prompt)
-            final_json = extract_json(final_raw)
-        except Exception as e:
-            logger.exception("LLM synthesis failed")
-            out = clean_answer(result)
-            on_token(out)  # Use callback instead of print
-            self.memory.save_context({"user_input": corrected}, {"output": f"[tool:{canonical}] {out}"})
-            return
-
-        if final_json and isinstance(final_json, dict):
-            final_answer = clean_answer(final_json.get("answer", ""))
-        else:
-            final_answer = clean_answer(result)
-        
-        on_token(final_answer)  # Use callback instead of print
-        
-        # Store with full content if web_scrape
-        if full_content:
-            tagged_answer = f"[tool:{canonical}] {final_answer}\n[CONTENT]\n{full_content[:2000]}..."
-        else:
-            tagged_answer = f"[tool:{canonical}] {final_answer}"
-        
-        self.memory.save_context({"user_input": corrected}, {"output": tagged_answer})
+    return "\n".join(lines)
 
 
-# -------------------------
-# Factory function
-# -------------------------
-def create_agent(
+async def run_agent(
     user_id: str,
     session_id: str,
-    config: Optional[dict] = None
-):
+    message: str,
+    notebook_id: Optional[str] = None,
+    use_rag: bool = False,
+    source_ids: Optional[List[str]] = None,
+    stream: bool = True
+) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    Create a Study Copilot agent instance with multi-user isolation.
+    Run ReAct agent with user message and stream tool calls + responses.
     
-    The Study Copilot is optimized for helping students learn through:
-    - Step-by-step explanations with examples
-    - Concept extraction and structured learning
-    - Follow-up question generation
-    - Clarifying questions when context is unclear
-    - Source citation (no hallucination)
+    This is the main entry point for chat interactions.
     
     Args:
-        user_id: User identifier (from JWT token)
-        session_id: Session identifier for this chat
-        config: Optional configuration override
-        
-    Returns:
-        Tuple of (agent, llm, tools, memory) with user context initialized
+        user_id: User identifier
+        session_id: Session/conversation identifier
+        message: User's message
+        notebook_id: Optional notebook context
+        stream: Whether to stream response (always True for real-time UX)
+    
+    Yields:
+        Dict events with types:
+        - {"type": "tool_start", "tool": tool_name, "inputs": {...}}
+        - {"type": "tool_end", "tool": tool_name, "output": "..."}
+        - {"type": "token", "content": "..."}  # Text tokens
+        - {"type": "complete", "message": "..."}  # Final message
     """
-    cfg = config or CONFIG
-    llm = create_llm(cfg)
-    tools = load_tools()
-    
-    # User-isolated memory with thread_id format: "user_id:session_id"
-    memory = MemoryManager(user_id=user_id, session_id=session_id, llm=llm)
-    
-    # User-isolated RAG retriever (filters documents by user_id)
-    rag_retriever = RAGRetriever(cfg, user_id=user_id)
-    
-    # Create Study Copilot agent with user and session context
-    agent = COLLABRYAgent(
-        llm, 
-        tools, 
-        memory, 
-        rag_retriever,
-        user_id=user_id,
-        session_id=session_id
-    )
-    
-    logger.info(
-        f"✓ Study Copilot agent created for user_id={user_id}, session_id={session_id}"
-    )
-    return agent, llm, tools, memory
+    llm_cfg = get_llm_config()
+    provider = (llm_cfg.provider or "").lower()
+    base_url = (getattr(llm_cfg, "base_url", "") or "").lower()
+    # Native function/tool calling is reliably supported on OpenAI's own API.
+    # Many OpenAI-compatible providers return errors like "Failed to call a function".
+    # Treat empty base_url as OpenAI default.
+    supports_native_tool_calling = provider == "openai" and (not base_url or "api.openai.com" in base_url)
 
+    # Frontend may omit use_rag but still pass selected source_ids.
+    effective_use_rag = bool(use_rag) or (isinstance(source_ids, list) and len(source_ids) > 0)
+
+    def _inject_context_if_supported(tool_obj: Any, tool_inputs: Any) -> Any:
+        """Inject user_id/notebook_id into tool inputs when the tool supports them."""
+        if not isinstance(tool_inputs, dict):
+            return tool_inputs
+
+        supported: set[str] = set()
+        schema = getattr(tool_obj, "args_schema", None)
+        if schema is not None:
+            try:
+                # Pydantic v2
+                supported = set(getattr(schema, "model_fields", {}).keys())
+            except Exception:
+                supported = set()
+
+        # Fallback: if no schema is available, don't risk passing extra keys.
+        if not supported:
+            return tool_inputs
+
+        if "user_id" in supported and tool_inputs.get("user_id") in (None, ""):
+            tool_inputs["user_id"] = user_id
+        if "notebook_id" in supported and tool_inputs.get("notebook_id") in (None, ""):
+            # Only inject if we actually have one; some requests are not notebook-scoped.
+            if notebook_id:
+                tool_inputs["notebook_id"] = notebook_id
+
+        if (
+            "source_ids" in supported
+            and tool_inputs.get("source_ids") in (None, "")
+            and isinstance(source_ids, list)
+            and source_ids
+        ):
+            tool_inputs["source_ids"] = source_ids
+        return tool_inputs
+
+    # If the frontend explicitly requests RAG and no specific tool intent is detected,
+    # treat this as a request to answer from the selected sources.
+    routed = _route_tool(message)
+    if routed is None and effective_use_rag:
+        routed = ("search_sources", {"query": message})
+
+    # For non-OpenAI providers (or OpenAI-compatible endpoints), native tool calling can be unreliable.
+    # Use a deterministic router + direct tool invocation instead.
+    if not supports_native_tool_calling:
+        if routed is not None:
+            tool_name, tool_inputs = routed
+            tool_obj = next((t for t in ALL_TOOLS if getattr(t, "name", None) == tool_name), None)
+            if tool_obj is None:
+                yield {
+                    "type": "error",
+                    "message": f"Tool '{tool_name}' is not registered.",
+                    "details": {"tool": tool_name},
+                }
+                return
+
+            tool_inputs = _inject_context_if_supported(tool_obj, tool_inputs)
+            print(f"🛠️ Routed tool for provider={provider}: {tool_name} inputs={tool_inputs}")
+            yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs}
+            try:
+                if hasattr(tool_obj, "ainvoke"):
+                    tool_output = await tool_obj.ainvoke(tool_inputs)
+                else:
+                    tool_output = tool_obj.invoke(tool_inputs)
+            except Exception as e:
+                yield {
+                    "type": "error",
+                    "message": f"I encountered an error running tool '{tool_name}': {str(e)}",
+                    "details": {"tool": tool_name, "error": str(e)},
+                }
+                return
+
+            yield {"type": "tool_end", "tool": tool_name, "output": tool_output}
+
+            if tool_name == "search_web":
+                course_list = _courses_markdown_from_search_web_output(str(tool_output), max_items=8)
+                final_text = json.dumps({"tool": None, "answer": course_list}, ensure_ascii=False)
+            elif tool_name == "summarize_notes":
+                # Tool already returns Markdown; preserve it as-is.
+                final_text = str(tool_output)
+            elif tool_name == "generate_mindmap":
+                # Tool returns JSON; preserve it as-is so the frontend parser/viewer can render it.
+                final_text = str(tool_output)
+            elif tool_name in ("generate_report", "generate_infographic"):
+                # Preserve tool output verbatim (markdown for reports, JSON for infographics).
+                final_text = str(tool_output)
+            elif tool_name == "generate_quiz":
+                # Frontend expects a JSON array of questions with numeric correctAnswer index.
+                final_text = _coerce_quiz_to_frontend_schema(str(tool_output))
+            elif tool_name == "generate_flashcards":
+                # Frontend expects {title, cards:[{id,front,back,category?}]}
+                fallback_title = tool_inputs.get("topic") if isinstance(tool_inputs, dict) else "Flashcards"
+                final_text = _coerce_flashcards_to_frontend_schema(str(tool_output), fallback_title=str(fallback_title))
+            else:
+                final_text = await _format_with_llm(message, tool_name, str(tool_output))
+
+            yield {"type": "token", "content": final_text}
+            yield {"type": "complete", "message": final_text}
+            return
+
+        # No routed tool: do a plain chat completion WITHOUT tool calling.
+        # This avoids OpenAI-compatible providers (e.g., Groq) attempting native function calls.
+        resp = await chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a study assistant. Answer clearly and concisely.",
+                },
+                {"role": "user", "content": message},
+            ],
+            stream=True,
+        )
+
+        full_text = ""
+        try:
+            async for chunk in resp:
+                delta = None
+                try:
+                    delta = chunk.choices[0].delta.content
+                except Exception:
+                    delta = None
+                if delta:
+                    full_text += delta
+                    yield {"type": "token", "content": delta}
+        except Exception:
+            # If streaming fails for some provider, fall back to non-streaming.
+            resp2 = await chat_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a study assistant. Answer clearly and concisely.",
+                    },
+                    {"role": "user", "content": message},
+                ],
+                stream=False,
+            )
+            try:
+                full_text = resp2.choices[0].message.content or ""
+            except Exception:
+                full_text = ""
+            if full_text:
+                yield {"type": "token", "content": full_text}
+
+        yield {"type": "complete", "message": full_text}
+        return
+
+    # OpenAI native tool-calling path is allowed, but when the frontend asks for RAG,
+    # prefer deterministic retrieval to ensure the answer is grounded in the selected sources.
+    if effective_use_rag and routed is not None:
+        tool_name, tool_inputs = routed
+        tool_obj = next((t for t in ALL_TOOLS if getattr(t, "name", None) == tool_name), None)
+        if tool_obj is not None:
+            tool_inputs = _inject_context_if_supported(tool_obj, tool_inputs)
+            yield {"type": "tool_start", "tool": tool_name, "inputs": tool_inputs}
+            try:
+                if hasattr(tool_obj, "ainvoke"):
+                    tool_output = await tool_obj.ainvoke(tool_inputs)
+                else:
+                    tool_output = tool_obj.invoke(tool_inputs)
+            except Exception as e:
+                yield {
+                    "type": "error",
+                    "message": f"I encountered an error running tool '{tool_name}': {str(e)}",
+                    "details": {"tool": tool_name, "error": str(e)},
+                }
+                return
+            yield {"type": "tool_end", "tool": tool_name, "output": tool_output}
+
+            if tool_name in ("generate_mindmap", "generate_report", "generate_infographic"):
+                final_text = str(tool_output)
+            elif tool_name == "search_web":
+                course_list = _courses_markdown_from_search_web_output(str(tool_output), max_items=8)
+                final_text = json.dumps({"tool": None, "answer": course_list}, ensure_ascii=False)
+            else:
+                final_text = await _format_with_llm(message, tool_name, str(tool_output))
+
+            yield {"type": "token", "content": final_text}
+            yield {"type": "complete", "message": final_text}
+            return
+
+    # Load conversation history
+    conv_manager = get_conversation_manager()
+    history = conv_manager.get_history(user_id, session_id, limit=10)
+    langchain_history = _format_history_for_langchain(history)
+    
+    # Create agent
+    agent = _create_agent(user_id, notebook_id)
+    
+    # Prepare configuration with user context for tool injection
+    config = {
+        "configurable": {
+            "thread_id": f"{user_id}:{session_id}",
+            "user_id": user_id,
+            "notebook_id": notebook_id
+        }
+    }
+    
+    # Prepare input with history
+    agent_input = {
+        "messages": langchain_history + [HumanMessage(content=message)]
+    }
+    
+    full_response = ""
+    tool_calls = []
+    preserve_verbatim_tools = {
+        # Artifacts that the frontend expects to be parseable as-is.
+        "generate_report",       # markdown
+        "generate_infographic",  # JSON
+        "generate_mindmap",      # JSON
+    }
+    force_verbatim_output = False
+    verbatim_output: Optional[str] = None
+    verbatim_emitted = False
+    
+    try:
+        # Stream agent execution
+        async for event in agent.astream(agent_input, config=config, stream_mode="values"):
+            messages = event.get("messages", [])
+            if not messages:
+                continue
+            
+            # Get the last message in this event
+            last_msg = messages[-1]
+            
+            # Handle different message types
+            if isinstance(last_msg, AIMessage):
+                # Check for tool calls
+                if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
+                    for tool_call in last_msg.tool_calls:
+                        tool_name = tool_call.get('name', 'unknown')
+                        tool_inputs = tool_call.get('args', {})
+
+                        if tool_name in preserve_verbatim_tools:
+                            force_verbatim_output = True
+                        
+                        # Emit tool start event
+                        yield {
+                            "type": "tool_start",
+                            "tool": tool_name,
+                            "inputs": tool_inputs
+                        }
+                        
+                        tool_calls.append({
+                            "tool": tool_name,
+                            "inputs": tool_inputs
+                        })
+                
+                # Check for content (final response or reasoning)
+                if hasattr(last_msg, 'content') and last_msg.content and isinstance(last_msg.content, str):
+                    # If we're generating a structured artifact, ignore any post-tool rewriting.
+                    if force_verbatim_output:
+                        continue
+
+                    # This is the final response text
+                    if last_msg.content not in full_response:
+                        # Stream tokens
+                        new_content = last_msg.content[len(full_response):]
+                        full_response = last_msg.content
+                        
+                        if new_content:
+                            yield {
+                                "type": "token",
+                                "content": new_content
+                            }
+            
+            elif isinstance(last_msg, ToolMessage):
+                # Tool execution completed
+                tool_name = last_msg.name if hasattr(last_msg, 'name') else "unknown"
+                tool_output = last_msg.content
+                
+                yield {
+                    "type": "tool_end",
+                    "tool": tool_name,
+                    "output": tool_output
+                }
+
+                if tool_name in preserve_verbatim_tools:
+                    verbatim_output = str(tool_output)
+                    full_response = verbatim_output
+                    if not verbatim_emitted and verbatim_output:
+                        verbatim_emitted = True
+                        yield {"type": "token", "content": verbatim_output}
+        
+        # Emit completion event
+        final_message = verbatim_output if verbatim_output is not None else full_response
+        yield {
+            "type": "complete",
+            "message": final_message
+        }
+        
+        # Save conversation turn
+        conv_manager.save_turn(
+            user_id=user_id,
+            session_id=session_id,
+            user_message=message,
+            assistant_message=final_message,
+            notebook_id=notebook_id,
+            metadata={"tool_calls": tool_calls} if tool_calls else None
+        )
+    
+    except Exception as e:
+        import traceback
+        import os
+
+        # Log full details server-side to help debug tool-calling failures.
+        print("❌ Agent exception:", repr(e))
+        traceback.print_exc()
+
+        include_debug = os.getenv("DEBUG_AGENT_ERRORS", "false").lower() == "true"
+
+        debug_details: Dict[str, Any] = {
+            "error_type": type(e).__name__,
+            "error": str(e),
+        }
+        if include_debug:
+            for attr in ("body", "response", "status_code", "message"):
+                if hasattr(e, attr):
+                    try:
+                        debug_details[attr] = getattr(e, attr)
+                    except Exception:
+                        pass
+
+        error_msg = (
+            f"I encountered an error: {str(e)}\n\n"
+            "Please try rephrasing your question."
+        )
+
+        yield {
+            "type": "error",
+            "message": error_msg,
+            "details": debug_details if include_debug else str(e),
+        }
+        
+        # Save error turn
+        conv_manager.save_turn(
+            user_id=user_id,
+            session_id=session_id,
+            user_message=message,
+            assistant_message=error_msg,
+            notebook_id=notebook_id,
+            metadata={"error": debug_details}
+        )
+
+
+async def chat(
+    user_id: str,
+    session_id: str,
+    message: str,
+    notebook_id: Optional[str] = None
+) -> str:
+    """
+    Non-streaming chat interface (collects all events and returns final message).
+    
+    Args:
+        user_id: User identifier
+        session_id: Session identifier
+        message: User message
+        notebook_id: Optional notebook context
+    
+    Returns:
+        Complete assistant response
+    """
+    response = ""
+    async for event in run_agent(user_id, session_id, message, notebook_id, stream=True):
+        if event["type"] == "token":
+            response += event["content"]
+        elif event["type"] == "complete":
+            response = event["message"]
+    return response

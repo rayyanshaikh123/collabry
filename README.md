@@ -295,7 +295,7 @@ Recommended Image Hosting Options:
 │  │   React 19      │   │   Node.js       │   │   Python 3.10+  │ │
 │  │   Port 3000     │   │   Port 5000     │   │   Port 8000     │ │
 │  │                 │   │                 │   │                 │ │
-│  │  • TypeScript   │   │  • JWT Auth     │   │  • Google Gemini│ │
+│  │  • TypeScript   │   │  • JWT Auth     │   │  • Hugging Face │ │
 │  │  • Zustand      │   │  • Socket.IO    │   │  • LangChain    │ │
 │  │  • TanStack Q   │   │  • Mongoose     │   │  • FAISS RAG    │ │
 │  │  • Tailwind     │   │  • Razorpay     │   │  • HuggingFace  │ │
@@ -369,7 +369,7 @@ vector_store.similarity_search(
 | **Backend** | Express 5, Mongoose, JWT, bcrypt | API, DB access, auth, security |
 | **Real-time** | Socket.IO Server | WebSocket management |
 | **Payments** | Razorpay | Subscriptions, invoices |
-| **AI Engine** | FastAPI, Google Gemini, LangChain | AI orchestration |
+| **AI Engine** | FastAPI, Hugging Face Inference API, LangChain | AI orchestration |
 | **RAG** | FAISS, HuggingFace Embeddings | Vector search, similarity |
 | **Tools** | Web search, OCR, document generation | Multi-agent capabilities |
 | **Database** | MongoDB Atlas | Unified data store |
@@ -437,7 +437,7 @@ npm run dev
 # ✅ Frontend running on http://localhost:3000
 ```
 
-#### 4️⃣ AI Engine Setup (FastAPI + Gemini)
+#### 4️⃣ AI Engine Setup (FastAPI + Hugging Face)
 
 ```bash
 cd ../ai-engine
@@ -609,7 +609,7 @@ collabry/
 └── 🤖 ai-engine/               # Python FastAPI AI Engine
     ├── core/                   # Core AI components
     │   ├── agent.py            # LangChain multi-tool agent
-    │   ├── gemini_service.py   # Google Gemini integration
+    │   ├── huggingface_service.py   # Hugging Face integration
     │   ├── local_llm.py        # LLM wrapper
     │   ├── memory.py           # Conversation memory
     │   ├── mongo_store.py      # MongoDB persistence
@@ -1028,7 +1028,7 @@ npm run test:coverage     # Coverage report
 ```bash
 cd ai-engine
 python test_complete_fix.py      # Integration tests
-python test_gemini_migration.py  # AI service tests
+python test_ollama_migration.py  # AI service tests (Hugging Face)
 python verify_study_notebook.py  # RAG tests
 ```
 

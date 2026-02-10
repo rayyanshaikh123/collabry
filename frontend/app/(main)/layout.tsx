@@ -10,11 +10,11 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import { ICONS } from '../../constants';
-import { useAuthStore } from '../../src/stores/auth.store';
-import { useUIStore } from '../../src/stores/ui.store';
-import { useSocket } from '../../src/hooks/useCollaboration';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { useUIStore } from '@/lib/stores/ui.store';
+import { useSocket } from '@/hooks/useCollaboration';
 import { AppRoute } from '../../types';
-import { DarkModeToggle } from '../../src/components/DarkModeToggle';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
@@ -25,6 +25,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/dashboard': 'dashboard',
     '/study-board': 'study-board',
     '/study-notebook': 'study-notebook',
+    '/voice-tutor': 'voice-tutor',
     '/planner': 'planner',
     '/focus': 'focus',
     '/flashcards': 'flashcards',
@@ -39,6 +40,7 @@ const getAppRouteFromPath = (path: string): string => {
   // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
   if (path.startsWith('/study-board')) return 'study-board';
+  if (path.startsWith('/voice-tutor')) return 'voice-tutor';
   return routeMap[path] || 'dashboard';
 };
 
@@ -145,6 +147,7 @@ export default function MainLayout({
       'dashboard': '/dashboard',
       'study-board': '/study-board',
       'study-notebook': '/study-notebook',
+      'voice-tutor': '/voice-tutor',
       'planner': '/planner',
       'focus': '/focus',
       'flashcards': '/flashcards',
@@ -228,3 +231,5 @@ export default function MainLayout({
     </div>
   );
 }
+
+

@@ -9,8 +9,8 @@ import {
   useMarkAllAsRead,
   useDeleteNotification,
   useRealtimeNotifications,
-} from '../src/hooks/useNotifications';
-import { type Notification } from '../src/services/notification.service';
+} from '@/hooks/useNotifications';
+import { type Notification } from '@/lib/services/notification.service';
 import { useRouter } from 'next/navigation';
 
 const NotificationDropdown: React.FC = () => {
@@ -174,9 +174,9 @@ const NotificationDropdown: React.FC = () => {
               </div>
             ) : (
               <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                {notifications.map((notification) => (
+                {notifications.map((notification, idx) => (
                   <div
-                    key={notification.id}
+                    key={notification.id || `notification-${idx}-${notification.createdAt}`}
                     onClick={() => handleNotificationClick(notification)}
                     className={`p-4 transition-all cursor-pointer group relative ${
                       !notification.isRead

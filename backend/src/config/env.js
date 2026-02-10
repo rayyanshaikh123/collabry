@@ -1,9 +1,25 @@
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
-// Load environment variables from .env file, then override with .env.local
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-dotenv.config({ path: path.join(__dirname, '../../.env.local'), override: true });
+// Load environment variables from .env file
+// Primary: backend/.env
+// Fallback: repo-root .env (for legacy setups)
+// __dirname is: backend/src/config
+const backendEnvPath = path.join(__dirname, '../../.env');
+const rootEnvPath = path.join(__dirname, '../../../.env');
+
+if (fs.existsSync(backendEnvPath)) {
+  dotenv.config({ path: backendEnvPath });
+  console.log(`ℹ️  Loaded environment from: ${backendEnvPath}`);
+} else if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+  console.log(`ℹ️  Loaded environment from: ${rootEnvPath}`);
+} else {
+  console.warn('⚠️  No .env file found. Expected one of:');
+  console.warn(`   - ${backendEnvPath}`);
+  console.warn(`   - ${rootEnvPath}`);
+}
 
 // Environment validation function
 const validateEnvironment = () => {

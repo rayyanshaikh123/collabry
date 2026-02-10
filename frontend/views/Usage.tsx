@@ -3,19 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Badge, ProgressBar } from '../components/UIElements';
 import { ICONS } from '../constants';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-  CartesianGrid,
-} from 'recharts';
-import { apiClient } from '../src/lib/api';
-import { useAuthStore } from '../src/stores/auth.store';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { usageService, type UsageStats } from '@/lib/services/usage.service';
+import { useAuthStore } from '@/lib/stores/auth.store';
+import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
 /* ────────────────────────────────────────── */

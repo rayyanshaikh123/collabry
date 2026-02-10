@@ -70,7 +70,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full border-2 border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">

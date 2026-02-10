@@ -8,8 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Paperclip, Smile, Reply, Edit2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { showConfirm } from '@/src/lib/alert';
-import chatSocketClient from '@/src/lib/chatSocket';
+import { showConfirm } from '@/lib/alert';
+import chatSocketClient from '@/lib/chatSocket';
 
 interface GroupChatProps {
   groupId: string;

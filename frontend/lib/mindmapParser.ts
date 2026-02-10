@@ -368,6 +368,10 @@ export function extractMindMapFromMarkdown(markdownText: string): {
   const jsonObjectRegex = /\{[\s\S]*"nodes"[\s\S]*"edges"[\s\S]*\}/i;
   cleanMarkdown = cleanMarkdown.replace(jsonObjectRegex, '');
 
+  // Also remove hierarchical tree JSON objects (label/children format)
+  const treeJsonRegex = /\{[\s\S]*"label"[\s\S]*"children"[\s\S]*\}/i;
+  cleanMarkdown = cleanMarkdown.replace(treeJsonRegex, '');
+
   return { cleanMarkdown: cleanMarkdown.trim(), mindmap };
 }
 

@@ -101,6 +101,14 @@ const mindMapSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  mermaidCode: {
+    type: String,
+    required: false
+  },
+  svgBase64: {
+    type: String,
+    required: false
+  },
   metadata: {
     layout: {
       type: String,

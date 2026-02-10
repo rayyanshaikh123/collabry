@@ -1,68 +1,61 @@
-# tools/__init__.py
-
 """
-Dynamic Tool Loader for Collabry AI Engine
-Automatically discovers all study-platform-relevant tools with a TOOL={} export.
+Tool Registry - LangChain tools for the study assistant.
 
-Legacy tools (browser_control, system_automation, task_scheduler) are excluded.
-Active tools: web_search, web_scraper, read_file, write_file, doc_generator, 
-              ppt_generator
+All tools follow the LangChain @tool decorator pattern.
+Tools are automatically discovered and registered with the agent.
 """
 
-import pkgutil
-import importlib
-import inspect
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Tools excluded from loading (moved to legacy_tools/)
-EXCLUDED_TOOLS = {
-    "browser_control",
-    "system_automation", 
-    "task_scheduler",
-    "tool_loader",  # Internal module, not a tool
-    "tool_manager",  # Internal module
-}
+from tools.search_sources import search_sources
+from tools.search_web import search_web
+from tools.summarize import summarize_notes
+from tools.generate_quiz import generate_quiz
+from tools.generate_flashcards import generate_flashcards
+from tools.generate_mindmap import generate_mindmap
+from tools.generate_study_plan import generate_study_plan
+from tools.generate_report import generate_report
+from tools.generate_infographic import generate_infographic
 
 
-def load_tools():
+# All tools available to the agent
+ALL_TOOLS = [
+    search_web,           # Web search for courses, tutorials, current info
+    search_sources,       # Search user's uploaded documents
+    summarize_notes,
+    generate_quiz,
+    generate_flashcards,
+    generate_mindmap,
+    generate_study_plan,
+    generate_report,
+    generate_infographic,
+]
+
+
+def get_tools(user_id: str, notebook_id: str = None):
     """
-    Returns dict[str, dict] where each dict has {name, func, description}.
-    Used by agent.py's create_agent().
+    Get tools with context injection.
+    
+    Args:
+        user_id: User identifier to inject into tool context
+        notebook_id: Optional notebook identifier
+    
+    Returns:
+        List of tools with context bound
     """
-    tools = {}
-
-    # Scan this package (tools/)
-    for module_info in pkgutil.iter_modules(__path__):
-        module_name = module_info.name
-        
-        # Skip excluded modules
-        if module_name in EXCLUDED_TOOLS or module_name.startswith("_"):
-            continue
-
-        try:
-            module = importlib.import_module(f"tools.{module_name}")
-
-            # Only register modules that expose a TOOL dict
-            if hasattr(module, "TOOL"):
-                tool_def = module.TOOL
-                name = tool_def.get("name")
-                func = tool_def.get("func")
-
-                if name and callable(func):
-                    tools[name] = tool_def
-                    logger.info(f"Loaded tool: {name}")
-        except Exception as e:
-            logger.error(f"Failed to load tool '{module_name}': {e}")
-
-    return tools
+    # For now, return tools as-is
+    # Context injection will be handled in agent.py
+    return ALL_TOOLS
 
 
-def get_tools():
-    """
-    Returns list[dict] for backward compatibility with tool_manager.
-    Each dict has {name, func, description}.
-    """
-    tools_dict = load_tools()
-    return list(tools_dict.values())
+__all__ = [
+    'ALL_TOOLS',
+    'get_tools',
+    'search_web',
+    'search_sources',
+    'summarize_notes',
+    'generate_quiz',
+    'generate_flashcards',
+    'generate_mindmap',
+    'generate_study_plan',
+    'generate_report',
+    'generate_infographic',
+]

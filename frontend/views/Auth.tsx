@@ -3,8 +3,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Card, Button, Input } from '../components/UIElements';
-import { useAuthStore } from '../src/stores/auth.store';
+import {  Button, Input } from '../components/UIElements';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { authService } from '../src/services/auth.service';
 
 const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> = ({ type, onAuthSuccess }) => {

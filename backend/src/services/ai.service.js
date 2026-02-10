@@ -293,38 +293,100 @@ class AIService {
    */
   async generateMindMap(topic, options = {}, userToken) {
     try {
-      const result = await this.forwardToAI(
+      const mapTopic = topic || 'Concept';
+      
+      // Call AI engine to generate mindmap structure
+      console.log('Calling AI engine /ai/mindmap with topic:', mapTopic);
+      
+      // Calculate depth: ensure it's between 1-4 (AI engine validation requirement)
+      let depth = 3; // Default
+      if (options.maxNodes) {
+        depth = Math.max(1, Math.min(Math.ceil(options.maxNodes / 5), 4));
+      }
+      
+      console.log('Mind map generation params:', {
+        topic: mapTopic,
+        use_documents: options.useRag || false,
+        depth: depth,
+        maxNodes: options.maxNodes
+      });
+      
+      const response = await this.client.post(
         '/ai/mindmap',
         {
-          topic: topic || 'Concept',
-          depth: options.depth || 2,
-          use_documents: options.use_documents ?? false,
+          topic: mapTopic,
+          use_documents: options.useRag || false,
+          depth: depth
         },
-        userToken
+        {
+          headers: {
+            Authorization: `Bearer ${userToken}`
+          }
+        }
       );
 
-      // Transform AI engine response to frontend-expected format
+      const mindmapData = response.data;
+      console.log('AI engine mindmap response:', {
+        topic: mindmapData.topic,
+        totalNodes: mindmapData.total_nodes
+      });
+
+      // Convert the tree structure to flat nodes and edges for frontend
       const nodes = [];
       const edges = [];
+      let nodeCounter = 0;
 
-      const flattenNode = (node, parentId = null, x = 0, y = 0, spread = 300) => {
-        const id = node.id || `node_${nodes.length}`;
+      function traverseTree(node, parentId = null, level = 0) {
+        const currentId = node.id || `node_${nodeCounter++}`;
+        
         nodes.push({
-          id,
+          id: currentId,
           label: node.label,
-          type: parentId ? 'branch' : 'root',
-          position: { x, y },
+          type: level === 0 ? 'root' : 'branch',
+          level: level
         });
+
         if (parentId) {
-          edges.push({ id: `edge_${edges.length}`, from: parentId, to: id });
-        }
-        if (node.children && node.children.length > 0) {
-          const childSpread = spread / node.children.length;
-          const startX = x - (spread / 2);
-          node.children.forEach((child, i) => {
-            flattenNode(child, id, startX + childSpread * i + childSpread / 2, y + 120, childSpread);
+          edges.push({
+            id: `edge_${edges.length}`,
+            from: parentId,
+            to: currentId
           });
         }
+
+        if (node.children && node.children.length > 0) {
+          node.children.forEach(child => traverseTree(child, currentId, level + 1));
+        }
+      }
+
+      traverseTree(mindmapData.root);
+
+      // Now render the mindmap to get Mermaid code
+      console.log('Calling AI engine /ai/mindmap/render');
+      const renderResponse = await this.client.post(
+        '/ai/mindmap/render',
+        mindmapData.root,
+        {
+          headers: {
+            Authorization: `Bearer ${userToken}`
+          },
+          params: {
+            format: 'both'
+          }
+        }
+      );
+
+      const renderData = renderResponse.data;
+      console.log('AI engine render response:', {
+        hasMermaid: !!renderData.mermaid,
+        hasSvg: !!renderData.svg_base64
+      });
+
+      return {
+        nodes,
+        edges,
+        mermaidCode: renderData.mermaid,
+        svgBase64: renderData.svg_base64
       };
 
       if (result.root) {
@@ -333,8 +395,8 @@ class AIService {
 
       return { nodes, edges };
     } catch (error) {
-      console.error('AI generateMindMap error:', error.message);
-      throw new Error('Failed to generate mind map from AI engine');
+      console.error('AI generateMindMap error:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.detail || 'Failed to generate mind map from AI engine');
     }
   }
 

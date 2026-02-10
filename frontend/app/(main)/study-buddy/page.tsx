@@ -6,3 +6,4 @@ import StudyBuddyNew from '../../../views/StudyBuddyNew';
 export default function StudyBuddyPage() {
   return <StudyBuddyNew />;
 }
+

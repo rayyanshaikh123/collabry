@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Card, Button, Badge, Input } from '../components/UIElements';
 import Calendar from '../components/Calendar';
 import { ICONS } from '../constants';
+import { PlannerSidebar } from '../components/planner/PlannerSidebar';
+import { TasksList } from '../components/planner/TasksList';
 import {
   usePlans,
   useTodayTasks,
@@ -17,10 +19,10 @@ import {
   useGeneratePlan,
   useCreatePlan,
   useCreateBulkTasks,
-} from '../src/hooks/useStudyPlanner';
-import { StudyPlan, StudyTask, CreatePlanData, AIGeneratedPlan, studyPlannerService } from '../src/services/studyPlanner.service';
+} from '@/hooks/useStudyPlanner';
+import { StudyPlan, StudyTask, CreatePlanData, AIGeneratedPlan, studyPlannerService } from '@/lib/services/studyPlanner.service';
 import AlertModal from '../components/AlertModal';
-import { useAlert } from '../src/hooks/useAlert';
+import { useAlert } from '@/hooks/useAlert';
 
 // Helper: format date
 const formatDate = (dateStr: string) => {
@@ -427,77 +429,32 @@ const Planner: React.FC = () => {
       {/* Main Content */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Sidebar: Plans */}
-        <div className="md:col-span-4 lg:col-span-3 space-y-4">
-          <Card>
-            <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg mb-4">My Plans</h3>
-            <div className="space-y-2">
-              {loadingPlans && <p className="text-sm text-slate-400 dark:text-slate-500">Loading plans...</p>}
-              {plans.length === 0 && !loadingPlans && (
-                <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-8">
-                  No plans yet.
-                  <br />
-                  Create your first AI plan! 🚀
-                </p>
-              )}
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className={`relative group w-full text-left p-3 rounded-xl border-2 transition-all ${
-                    selectedPlan.includes(plan.id)
-                      ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30'
-                      : 'border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <button
-                    onClick={() => {
-                      // Toggle selection: add or remove from array
-                      if (selectedPlan.includes(plan.id)) {
-                        setSelectedPlan(selectedPlan.filter(id => id !== plan.id));
-                      } else {
-                        setSelectedPlan([...selectedPlan, plan.id]);
-                      }
-                    }}
-                    className="w-full text-left"
-                  >
-                    <p className="font-bold text-sm text-slate-800 dark:text-slate-200">{plan.title}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{plan.subject}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="indigo" className="text-[10px]">
-                        {plan.completionPercentage}%
-                      </Badge>
-                      <Badge variant="emerald" className="text-[10px]">
-                        {plan.completedTasks}/{plan.totalTasks} tasks
-                      </Badge>
-                    </div>
-                  </button>
-                  {/* Delete button - shows on hover */}
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (confirm(`Delete "${plan.title}"? This will remove all associated tasks.`)) {
-                        try {
-                          await studyPlannerService.deletePlan(plan.id);
-                          if (selectedPlan.includes(plan.id)) {
-                            setSelectedPlan(selectedPlan.filter(id => id !== plan.id));
-                          }
-                          showAlert({ message: '✅ Plan deleted successfully', type: 'success' });
-                          // Force reload to refresh all queries
-                          setTimeout(() => window.location.reload(), 500);
-                        } catch (error: any) {
-                          showAlert({ message: `❌ ${error.message || 'Failed to delete plan'}`, type: 'error' });
-                        }
-                      }
-                    }}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-rose-100 hover:bg-rose-200 rounded-lg"
-                    title="Delete plan"
-                  >
-                    <ICONS.Plus size={14} className="text-rose-600 rotate-45" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+        <PlannerSidebar
+          plans={plans}
+          loading={loadingPlans}
+          selectedPlan={selectedPlan}
+          onPlanToggle={(planId) => {
+            if (selectedPlan.includes(planId)) {
+              setSelectedPlan(selectedPlan.filter((id) => id !== planId));
+            } else {
+              setSelectedPlan([...selectedPlan, planId]);
+            }
+          }}
+          onPlanDelete={async (plan) => {
+            if (confirm(`Delete "${plan.title}"? This will remove all associated tasks.`)) {
+              try {
+                await studyPlannerService.deletePlan(plan.id);
+                if (selectedPlan.includes(plan.id)) {
+                  setSelectedPlan(selectedPlan.filter((id) => id !== plan.id));
+                }
+                showAlert({ message: '✅ Plan deleted successfully', type: 'success' });
+                setTimeout(() => window.location.reload(), 500);
+              } catch (error: any) {
+                showAlert({ message: `❌ ${error.message || 'Failed to delete plan'}`, type: 'error' });
+              }
+            }
+          }}
+        />
 
         {/* Main Tasks Area */}
         <div className="md:col-span-8 lg:col-span-9 space-y-4">
@@ -569,176 +526,29 @@ const Planner: React.FC = () => {
               }}
             />
           ) : (
-            <Card>
-              <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg mb-4">
-                {selectedView === 'today' && '📅 Today\'s Tasks'}
-                {selectedView === 'upcoming' && '🔮 Upcoming Tasks (7 days)'}
-                {selectedView === 'plans' && '📚 All Plans'}
-              </h3>
-
-            {loadingToday || loadingUpcoming ? (
-              <p className="text-center py-8 text-slate-400 dark:text-slate-500">Loading tasks...</p>
-            ) : tasksToShow.length === 0 ? (
-              <p className="text-center py-12 text-slate-400 dark:text-slate-500">
-                No tasks for this view.
-                <br />
-                {selectedView === 'today' && '✨ Enjoy your free day!'}
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {tasksToShow.map((task) => (
-                  <React.Fragment key={task.id}>
-                    {editingTask === task.id ? (
-                      // Edit Mode
-                      <div className="p-4 rounded-2xl border-2 border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/30">
-                      <div className="space-y-3">
-                        <Input
-                          value={editForm.title || ''}
-                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                          placeholder="Task title"
-                          className="font-bold"
-                        />
-                        <Input
-                          value={editForm.description || ''}
-                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          placeholder="Description"
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <Input
-                            type="date"
-                            value={editForm.scheduledDate?.split('T')[0] || ''}
-                            onChange={(e) => setEditForm({ ...editForm, scheduledDate: e.target.value })}
-                          />
-                          <select
-                            value={editForm.priority || 'medium'}
-                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as any })}
-                            className="px-3 py-2 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-200"
-                          >
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                            <option value="urgent">Urgent</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={async () => {
-                              await updateTask.mutateAsync({
-                                taskId: task.id,
-                                data: editForm,
-                              });
-                              setEditingTask(null);
-                              setEditForm({});
-                            }}
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditingTask(null);
-                              setEditForm({});
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    // View Mode
-                    <div
-                      className={`p-4 rounded-2xl border-2 transition-all ${
-                      task.status === 'completed'
-                        ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 opacity-60'
-                        : task.isOverdue
-                        ? 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800'
-                        : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-700 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => {
-                          if (task.status !== 'completed') {
-                            setTaskToComplete(task.id);
-                          }
-                        }}
-                        disabled={task.status === 'completed'}
-                        className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                          task.status === 'completed'
-                            ? 'bg-emerald-500 dark:bg-emerald-600 border-emerald-500 dark:border-emerald-600'
-                            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-indigo-600'
-                        }`}
-                      >
-                        {task.status === 'completed' && (
-                          <ICONS.Plus size={16} className="text-white rotate-45" strokeWidth={4} />
-                        )}
-                      </button>
-
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="font-bold text-slate-800 dark:text-slate-200">{task.title}</h4>
-                            {task.description && (
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{task.description}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-2 flex-wrap">
-                              <Badge variant="slate" className="text-[10px]">
-                                {formatDate(task.scheduledDate)}
-                              </Badge>
-                              {task.scheduledTime && (
-                                <Badge variant="slate" className="text-[10px]">
-                                  {formatTime(task.scheduledTime)}
-                                </Badge>
-                              )}
-                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${priorityColors[task.priority]}`}>
-                                {task.priority}
-                              </span>
-                              <Badge variant="slate" className="text-[10px]">
-                                {task.duration} min
-                              </Badge>
-                              {task.topic && (
-                                <Badge variant="indigo" className="text-[10px]">
-                                  {task.topic}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-
-                          {task.status !== 'completed' && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingTask(task.id);
-                                  setEditForm(task);
-                                }}
-                                className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
-                                title="Edit task"
-                              >
-                                <ICONS.Dashboard size={16} className="text-indigo-600" />
-                              </button>
-                              <button
-                                onClick={() => deleteTask.mutate(task.id)}
-                                className="p-2 hover:bg-rose-100 rounded-lg transition-colors"
-                                title="Delete task"
-                              >
-                                <ICONS.Plus size={16} className="text-rose-400 rotate-45" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  )}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </Card>
+            <TasksList
+              tasks={tasksToShow}
+              selectedView={selectedView as any}
+              loading={loadingToday || loadingUpcoming}
+              editingTaskId={editingTask}
+              editForm={editForm}
+              onStartEdit={(task) => {
+                setEditingTask(task.id);
+                setEditForm(task);
+              }}
+              onEditFormChange={(updates) => setEditForm({ ...editForm, ...updates })}
+              onSaveEdit={async (taskId) => {
+                await updateTask.mutateAsync({ taskId, data: editForm });
+                setEditingTask(null);
+                setEditForm({});
+              }}
+              onCancelEdit={() => {
+                setEditingTask(null);
+                setEditForm({});
+              }}
+              onRequestComplete={(taskId) => setTaskToComplete(taskId)}
+              onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
+            />
           )}
         </div>
       </div>

@@ -7,13 +7,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RoleGuard } from '../../src/guards/RoleGuard';
-import { useAuthStore } from '../../src/stores/auth.store';
+import { RoleGuard } from '@/lib/guards/RoleGuard';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import Sidebar from '../../components/Sidebar';
-import { useUIStore } from '../../src/stores/ui.store';
+import { useUIStore } from '@/lib/stores/ui.store';
 import { ICONS } from '../../constants';
 import { AppRoute } from '../../types';
-import { DarkModeToggle } from '../../src/components/DarkModeToggle';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -161,3 +161,5 @@ export default function AdminLayout({
     </RoleGuard>
   );
 }
+
+

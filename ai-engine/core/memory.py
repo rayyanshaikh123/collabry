@@ -28,7 +28,7 @@ import logging
 import uuid
 from typing import Dict, List, Any, Optional
 
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.memory import MemorySaver
 from core.mongo_store import MongoMemoryStore
 from config import CONFIG
 
@@ -80,7 +80,7 @@ class MemoryManager:
         self._history_by_thread: Dict[str, List[Dict[str, Any]]] = {}
 
         # In-memory checkpointer instance (ready to be used by langgraph-based flows)
-        self.checkpointer = InMemorySaver()
+        self.checkpointer = MemorySaver()
 
         # Initialize MongoDB persistence (REQUIRED)
         mongo_uri = CONFIG["mongo_uri"]
