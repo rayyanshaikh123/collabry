@@ -15,6 +15,23 @@ class EmailService {
    */
   initialize() {
     try {
+      const hasAuth = Boolean(config.email.user && config.email.password);
+      const isProd = process.env.NODE_ENV === 'production';
+
+      // In local/dev environments, allow running without SMTP creds.
+      // We fall back to a log-only transport so auth flows still work.
+      if (!hasAuth) {
+        if (isProd) {
+          console.error('❌ Email service initialization failed: Missing EMAIL_USER/EMAIL_PASSWORD');
+          this.transporter = null;
+          return;
+        }
+
+        this.transporter = nodemailer.createTransport({ jsonTransport: true });
+        console.warn('⚠️ Email credentials missing — using jsonTransport (emails will be logged, not delivered)');
+        return;
+      }
+
       // Create transporter based on environment
       if (config.email.service === 'gmail') {
         this.transporter = nodemailer.createTransport({
@@ -277,6 +294,11 @@ class EmailService {
    */
   async sendEmailVerification(email, name, verificationToken) {
     const verifyUrl = `${config.frontendUrl}/verify-email?token=${verificationToken}`;
+
+    // Helpful for local/dev when jsonTransport is used.
+    if (this.transporter?.options?.jsonTransport) {
+      console.log('📩 [DEV] Email verification link:', verifyUrl);
+    }
 
     const html = `
       <!DOCTYPE html>
