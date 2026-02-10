@@ -9,7 +9,7 @@ import type {
   FocusSettings,
   FocusStats,
   ApiResponse,
-} from '../types';
+} from '@/types';
 
 export const focusService = {
   /**

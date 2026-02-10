@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@/lib/stores/auth.store';
-import type { UserRole } from '../types';
+import type { UserRole } from '@/types';
 
 interface RoleGuardProps {
   children: React.ReactNode;

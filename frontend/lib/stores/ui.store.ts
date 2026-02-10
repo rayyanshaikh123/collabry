@@ -5,7 +5,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ThemeType } from '../types';
+import type { ThemeType } from '@/types';
 
 interface UIState {
   // State

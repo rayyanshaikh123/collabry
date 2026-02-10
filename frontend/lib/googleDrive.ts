@@ -144,9 +144,10 @@ class GoogleDriveService {
     const searchData = await searchResponse.json();
     
     if (searchData.files && searchData.files.length > 0) {
-      this.folderId = searchData.files[0].id;
-      localStorage.setItem('gdrive_folder_id', this.folderId);
-      return this.folderId;
+      const folderId = String(searchData.files[0].id);
+      this.folderId = folderId;
+      localStorage.setItem('gdrive_folder_id', folderId);
+      return folderId;
     }
 
     // Create new folder

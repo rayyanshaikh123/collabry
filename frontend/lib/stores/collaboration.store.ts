@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { CollaborationUser, PresenceStatus } from '../types';
+import type { CollaborationUser, PresenceStatus } from '@/types';
 import { socketClient } from '@/lib/socket';
 
 interface CollaborationState {

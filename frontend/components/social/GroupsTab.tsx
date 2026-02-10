@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import GroupChat from './GroupChat';
-import { useAuthStore } from '@/src/stores/auth.store';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 export default function GroupsTab() {
   const { user: authUser, accessToken } = useAuthStore();

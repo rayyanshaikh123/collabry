@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useStudyBoardStore } from '@/lib/stores/studyBoard.store';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
-import type { StudyBoard, BoardElement } from '../types';
+import type { StudyBoard, BoardElement } from '@/types';
 
 /**
  * Hook to access study board state and actions

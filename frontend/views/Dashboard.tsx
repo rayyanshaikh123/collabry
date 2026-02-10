@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/UIElements';
-import { AppRoute } from '../types';
+import { AppRoute } from '@/types';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { gamificationService, GamificationStats, LeaderboardEntry } from '@/lib/services/gamification.service';
 import { studyPlannerService, StudyPlan, StudyTask } from '@/lib/services/studyPlanner.service';

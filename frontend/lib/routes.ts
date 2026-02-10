@@ -3,8 +3,8 @@
  * Centralized route definitions with protection rules
  */
 
-import { AppRoute } from '../types';
-import type { UserRole } from '../types';
+import { AppRoute } from '@/types';
+import type { UserRole } from '@/types';
 
 export interface RouteConfig {
   route: AppRoute;

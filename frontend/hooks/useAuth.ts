@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { authService } from '@/lib/services/auth.service';
-import type { LoginCredentials, RegisterData, User } from '../types';
+import type { LoginCredentials, RegisterData, User } from '@/types/user.types';
 
 /**
  * Hook to access auth state and actions

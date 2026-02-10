@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Badge, ProgressBar } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, BarChart, Bar, CartesianGrid } from 'recharts';
 import { usageService, type UsageStats } from '@/lib/services/usage.service';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { apiClient } from '@/lib/api';

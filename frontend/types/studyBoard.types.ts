@@ -33,6 +33,8 @@ export interface StudyBoard {
   title: string;
   description?: string;
   ownerId: string;
+  owner?: any;
+  members?: any[];
   elements: BoardElement[];
   participants: BoardParticipant[];
   isPublic: boolean;

@@ -700,7 +700,7 @@ const VisualAidsView: React.FC = () => {
               onClick={() => {
                 generateMindMap.mutate({
                   topic: 'Sample Topic',
-                  save: true,
+                  saveToLibrary: true,
                 });
               }}
               disabled={generateMindMap.isPending}
@@ -758,7 +758,7 @@ const VisualAidsView: React.FC = () => {
                 onClick={() => {
                   generateMindMap.mutate({
                     topic: 'Getting Started',
-                    save: true,
+                    saveToLibrary: true,
                   });
                 }}
               >

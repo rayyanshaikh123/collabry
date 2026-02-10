@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
-import { authService } from '@/src/services/auth.service';
+import { authService } from '@/lib/services/auth.service';
 import type { Session } from '@/types/user.types';
 import { 
   User, 

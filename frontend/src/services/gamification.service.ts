@@ -1,6 +1,4 @@
-import { apiClient } from '../lib/api';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://colab-back.onrender.com/api';
+import { apiClient } from '@/lib/api';
 
 export interface GamificationStats {
   xp: number;

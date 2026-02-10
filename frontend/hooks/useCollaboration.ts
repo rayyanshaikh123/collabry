@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { useCollaborationStore } from '@/lib/stores/collaboration.store';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { socketClient } from '@/lib/socket';
-import type { PresenceStatus } from '../types';
+import type { PresenceStatus } from '@/types';
 
 /**
  * Hook to access collaboration state and actions

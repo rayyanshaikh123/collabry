@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { FocusSession, FocusSettings, FocusStats } from '../types';
+import type { FocusSession, FocusSettings, FocusStats } from '@/types';
 import { focusService } from '@/lib/services/focus.service';
 
 interface FocusModeState {
@@ -281,7 +281,8 @@ export const useFocusModeStore = create<FocusModeState>((set, get) => ({
   // Fetch stats
   fetchStats: async (period?: 'day' | 'week' | 'month' | 'year') => {
     try {
-      const stats = await focusService.getStats(period);
+      const normalizedPeriod = period === 'day' ? 'today' : period;
+      const stats = await focusService.getStats(normalizedPeriod);
       set({ stats });
     } catch (error: any) {
       set({ error: error.message || 'Failed to fetch stats' });

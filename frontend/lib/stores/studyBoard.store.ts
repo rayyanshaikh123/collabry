@@ -9,7 +9,7 @@ import type {
   BoardElement,
   BoardParticipant,
   CursorPosition,
-} from '../types';
+} from '@/types';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { socketClient } from '@/lib/socket';
 

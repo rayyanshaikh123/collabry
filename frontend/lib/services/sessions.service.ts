@@ -44,7 +44,8 @@ class SessionsService {
     // Use absolute URL to call AI engine while still benefiting
     // from the centralized token handling in apiClient.
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
-    return apiClient.get(url);
+    const response = await apiClient.getClient().get<SessionsListResponse>(url);
+    return response.data;
   }
 
   /**
@@ -52,7 +53,8 @@ class SessionsService {
    */
   async createSession(title: string = 'New Chat Session'): Promise<ChatSession> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
-    return apiClient.post(url, { title });
+    const response = await apiClient.getClient().post<ChatSession>(url, { title });
+    return response.data;
   }
 
   /**
@@ -60,7 +62,8 @@ class SessionsService {
    */
   async getSessionMessages(sessionId: string): Promise<Message[]> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    return apiClient.get(url);
+    const response = await apiClient.getClient().get<Message[]>(url);
+    return response.data;
   }
 
   /**
@@ -68,7 +71,8 @@ class SessionsService {
    */
   async saveMessage(sessionId: string, message: Message): Promise<Message> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    return apiClient.post(url, message);
+    const response = await apiClient.getClient().post<Message>(url, message);
+    return response.data;
   }
 
   /**
@@ -76,7 +80,7 @@ class SessionsService {
    */
   async deleteSession(sessionId: string): Promise<void> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}`;
-    return apiClient.delete(url);
+    await apiClient.getClient().delete(url);
   }
 
   /**
@@ -84,7 +88,8 @@ class SessionsService {
    */
   async clearSessionMessages(sessionId: string): Promise<{ message: string; deleted_count: number }> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    return apiClient.delete(url);
+    const response = await apiClient.getClient().delete<{ message: string; deleted_count: number }>(url);
+    return response.data;
   }
 }
 

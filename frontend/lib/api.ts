@@ -4,8 +4,8 @@
  */
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
-import type { ApiResponse } from '../types';
-import { useAuthStore } from '../stores/auth.store';
+import type { ApiResponse } from '@/types';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 // Base URL from environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://colab-back.onrender.com/api';

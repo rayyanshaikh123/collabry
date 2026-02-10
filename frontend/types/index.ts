@@ -1,4 +1,3 @@
-
 export enum AppRoute {
   LANDING = 'landing',
   ROLE_SELECTION = 'role-selection',
@@ -29,30 +28,14 @@ export enum AppRoute {
   SOCIAL = 'social'
 }
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar: string;
-  role: 'student' | 'admin' | 'mentor';
-}
+export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';
 
-export interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-  dueDate: string;
-  category: 'Exam' | 'Reading' | 'Assignment' | 'Other';
-}
-
-export interface StudyBoard {
-  id: string;
-  title: string;
-  lastActive: string;
-  participants: number;
-  color: string;
-  progress: number;
-}
+export * from './user.types';
+export * from './planner.types';
+export * from './studyBoard.types';
+export * from './focus.types';
+export * from './collaboration.types';
+export * from './visualAids.types';
 
 export interface Activity {
   id: string;

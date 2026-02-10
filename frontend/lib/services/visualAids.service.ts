@@ -27,7 +27,7 @@ import type {
   GenerateMindMapResponse,
   GenerateQuizRequest,
   GenerateQuizResponse,
-} from '../types/visualAids.types';
+} from '@/types';
 
 export const visualAidsService = {
   // ============= FLASHCARDS =============

@@ -155,10 +155,7 @@ export default function VoiceTutorPage() {
       
       if (!accessToken) {
         console.warn('No access token for ending session')
-        setConnected(false)
-        setRoomName(undefined)
-        setSessionId(undefined)
-        setStatus('Session ended')
+        resetSessionState()
         return
       }
 

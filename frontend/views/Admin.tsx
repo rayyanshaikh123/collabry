@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/UIElements';
 import { ICONS } from '../constants';
-import { AppRoute } from '../types';
+import { AppRoute } from '@/types';
 import { adminService, type UserFormData } from '@/lib/services/admin.service';
 import { usageService, type GlobalUsage, type RealtimeStats } from '@/lib/services/usage.service';
 import { reportService, type Report, type ReportStats } from '@/lib/services/report.service';
@@ -20,7 +20,7 @@ import ModerationPanel from '../components/admin/ModerationPanel';
 import ReportActionModal from '../components/admin/ReportActionModal';
 import AIMonitoring from '../components/admin/AIMonitoring';
 import BoardGovernance from '../components/admin/BoardGovernance';
-import PlatformSettings from '../components/admin/PlatformSettings';
+import PlatformSettingsPanel from '../components/admin/PlatformSettings';
 
 interface AdminDashboardProps {
   currentSubRoute: AppRoute;
@@ -748,7 +748,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
       case AppRoute.ADMIN_SETTINGS:
         return (
-          <PlatformSettings
+          <PlatformSettingsPanel
             settings={settings}
             settingsFormData={settingsFormData}
             settingsLoading={settingsLoading}

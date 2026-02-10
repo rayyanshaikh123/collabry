@@ -11,6 +11,7 @@ import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
 import { ICONS } from '@/constants';
 import type { BoardParticipant } from '@/types/studyBoard.types';
+import type { StudyBoard } from '@/types';
 
 // Modals
 import InviteMemberModal from '@/components/InviteMemberModal';
@@ -43,13 +44,6 @@ interface CursorData {
   y: number;
 }
 
-interface Board {
-  id: string;
-  title: string;
-  description?: string;
-  createdBy: string;
-}
-
 /**
  * CollaborativeBoard - Real-time collaborative whiteboard using tldraw
  * 
@@ -67,7 +61,7 @@ const CollaborativeBoard = () => {
   const { user, accessToken } = useAuthStore();
 
   // State
-  const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
+  const [currentBoard, setCurrentBoard] = useState<StudyBoard | null>(null);
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }));
   const [editor, setEditor] = useState<Editor | null>(null);
   const [isConnected, setIsConnected] = useState(false);

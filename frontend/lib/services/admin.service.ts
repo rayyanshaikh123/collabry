@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '@/lib/api';
-import type { User, ApiResponse } from '../types';
+import type { User, ApiResponse } from '@/types';
 
 export interface UserFormData {
   name: string;

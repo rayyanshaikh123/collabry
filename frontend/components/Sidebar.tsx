@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ICONS } from '../constants';
-import { AppRoute } from '../types';
+import { AppRoute } from '@/types';
 
 interface NavItemProps {
   id: AppRoute;

@@ -7,7 +7,7 @@ import { useUIStore } from '@/lib/stores/ui.store';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { Check, X, AlertCircle, CreditCard, Calendar, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '../src/lib/api';
+import { apiClient } from '@/lib/api';
 
 interface Subscription {
   plan: string;

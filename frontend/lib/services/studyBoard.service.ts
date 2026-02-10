@@ -7,10 +7,7 @@ import { apiClient } from '@/lib/api';
 import type {
   StudyBoard,
   BoardElement,
-  BoardUpdate,
-  ApiResponse,
-  PaginatedResponse,
-} from '../types';
+} from '@/types';
 
 export const studyBoardService = {
   /**

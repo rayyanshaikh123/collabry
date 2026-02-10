@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '../src/lib/api';
+import { apiClient } from '@/lib/api';
 import AlertModal from '../components/AlertModal';
 
 // Type definitions

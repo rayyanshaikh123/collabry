@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFocusModeStore } from '@/lib/stores/focusMode.store';
 import { focusService } from '@/lib/services/focus.service';
-import type { FocusSession, FocusSettings } from '../types';
+import type { FocusSession, FocusSettings } from '@/types';
 
 /**
  * Hook to access focus mode state and actions
@@ -205,9 +205,11 @@ export const useUpdateFocusSettings = () => {
 /**
  * Hook to fetch focus statistics
  */
-export const useFocusStats = (period?: 'day' | 'week' | 'month' | 'year') => {
+export const useFocusStats = (period?: 'day' | 'today' | 'week' | 'month' | 'year' | 'all') => {
+  const normalizedPeriod = period === 'day' ? 'today' : period;
+
   return useQuery({
-    queryKey: ['focus', 'stats', period],
-    queryFn: () => focusService.getStats(period),
+    queryKey: ['focus', 'stats', normalizedPeriod],
+    queryFn: () => focusService.getStats(normalizedPeriod),
   });
 };
