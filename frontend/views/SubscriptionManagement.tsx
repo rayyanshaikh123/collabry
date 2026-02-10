@@ -7,6 +7,7 @@ import { useUIStore } from '../src/stores/ui.store';
 import { useAuthStore } from '../src/stores/auth.store';
 import { Check, X, AlertCircle, CreditCard, Calendar, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '../src/lib/api';
 
 interface Subscription {
   plan: string;
@@ -41,22 +42,14 @@ const SubscriptionManagementView: React.FC = () => {
 
   const loadSubscriptionData = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      
       // Fetch subscription
-      const subResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/current`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const subData = await subResponse.json();
+      const subData = await apiClient.get('/subscriptions/current');
       if (subData.success) {
         setSubscription(subData.data);
       }
 
       // Fetch payment history
-      const payResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/payment-history`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const payData = await payResponse.json();
+      const payData = await apiClient.get('/subscriptions/payment-history');
       if (payData.success) {
         setPayments(payData.data);
       }
@@ -76,12 +69,7 @@ const SubscriptionManagementView: React.FC = () => {
       cancelText: 'No',
       onConfirm: async () => {
         try {
-          const token = localStorage.getItem('accessToken');
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/cancel`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          const data = await response.json();
+          const data = await apiClient.post('/subscriptions/cancel');
           if (data.success) {
             showAlert({
               type: 'success',
@@ -90,7 +78,7 @@ const SubscriptionManagementView: React.FC = () => {
             });
             loadSubscriptionData();
           } else {
-            throw new Error(data.error);
+            throw new Error(String(data.error || 'Operation failed'));
           }
         } catch (error: any) {
           showAlert({
@@ -105,12 +93,7 @@ const SubscriptionManagementView: React.FC = () => {
 
   const handleReactivate = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/reactivate`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await response.json();
+      const data = await apiClient.post('/subscriptions/reactivate');
       if (data.success) {
         showAlert({
           type: 'success',
@@ -119,7 +102,7 @@ const SubscriptionManagementView: React.FC = () => {
         });
         loadSubscriptionData();
       } else {
-        throw new Error(data.error);
+        throw new Error(String(data.error || 'Operation failed'));
       }
     } catch (error: any) {
       showAlert({

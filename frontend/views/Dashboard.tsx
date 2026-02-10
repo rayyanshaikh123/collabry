@@ -26,34 +26,51 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load all data
+  // Load all data with a hard timeout to prevent infinite loading
   useEffect(() => {
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        console.warn('Dashboard data loading timeout — showing dashboard with defaults');
+        setLoading(false);
+      }
+    }, 10000); // 10s hard timeout
+
+    const loadDashboardData = async () => {
+      try {
+        // Each call is individually wrapped so one failure doesn't block others
+        const [stats, progress, plans, tasks, leaderboardData] = await Promise.all([
+          gamificationService.getUserStats().catch(() => null),
+          gamificationService.getPersonalProgress().catch(() => null),
+          studyPlannerService.getPlans({ status: 'active' }).catch(() => []),
+          studyPlannerService.getTodayTasks().catch(() => []),
+          gamificationService.getFriendLeaderboard().catch(() => []),
+        ]);
+
+        if (!cancelled) {
+          setGamificationStats(stats);
+          setPersonalProgress(progress);
+          setStudyPlans((plans as StudyPlan[]).slice(0, 4));
+          setTodayTasks((tasks as StudyTask[]).slice(0, 5));
+          setLeaderboard(leaderboardData as LeaderboardEntry[]);
+        }
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      } finally {
+        if (!cancelled) {
+          clearTimeout(timeoutId);
+          setLoading(false);
+        }
+      }
+    };
+
     loadDashboardData();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      // Services now handle their own errors and return null/empty arrays
-      const [stats, progress, plans, tasks, leaderboardData] = await Promise.all([
-        gamificationService.getUserStats(),
-        gamificationService.getPersonalProgress(),
-        studyPlannerService.getPlans({ status: 'active' }).catch(() => []),
-        studyPlannerService.getTodayTasks().catch(() => []),
-        gamificationService.getFriendLeaderboard(),
-      ]);
-
-      setGamificationStats(stats);
-      setPersonalProgress(progress);
-      setStudyPlans(plans.slice(0, 4)); // Show top 4 plans
-      setTodayTasks(tasks.slice(0, 5)); // Show top 5 tasks
-      setLeaderboard(leaderboardData);
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getColorForPlan = (index: number) => {
     const colors = [
@@ -66,14 +83,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     ];
     return colors[index % colors.length];
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
   
   return (
     <div className="space-y-8 pb-10 text-slate-800 dark:text-slate-200">
@@ -149,7 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       {/* Stats Cards */}
       {gamificationStats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 border-blue-100 dark:border-blue-800">
             <div className="text-center space-y-2">
               <div className="text-3xl font-black text-blue-600 dark:text-blue-400">{gamificationStats.stats.tasksCompleted}</div>

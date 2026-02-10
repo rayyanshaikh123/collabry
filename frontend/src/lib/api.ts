@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse } from '../types';
+import { useAuthStore } from '../stores/auth.store';
 
 // Base URL from environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://colab-back.onrender.com/api';
@@ -17,7 +18,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 300000, // 5 minutes for large quiz generation
+      timeout: 30000, // 30 seconds default (individual routes can override)
       headers: {
         'Content-Type': 'application/json',
       },
@@ -28,12 +29,18 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor - attach access token
+    // Request interceptor - attach access token and CSRF token
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
         const token = this.getAccessToken();
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        // Attach CSRF token from cookie for state-mutating requests
+        const csrfToken = this.getCsrfToken();
+        if (csrfToken && config.headers) {
+          config.headers['x-csrf-token'] = csrfToken;
         }
         
         // If data is FormData, remove Content-Type to let browser set it
@@ -63,8 +70,10 @@ class ApiClient {
           });
         }
 
-        // Handle 401 Unauthorized
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Handle 401 Unauthorized — skip for auth endpoints to prevent refresh loops
+        const requestUrl = originalRequest.url || '';
+        const isAuthEndpoint = requestUrl.includes('/auth/');
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           if (this.refreshing) {
             // Queue requests while refreshing
             return new Promise((resolve, reject) => {
@@ -116,37 +125,43 @@ class ApiClient {
   }
 
   private getAccessToken(): string | null {
-    // TODO: Get from Zustand auth store
-    return localStorage.getItem('accessToken');
+    return useAuthStore.getState().accessToken;
   }
 
-  private getRefreshToken(): string | null {
-    // TODO: Get from Zustand auth store
-    return localStorage.getItem('refreshToken');
+  /**
+   * Read the CSRF token from the csrfToken cookie.
+   * This cookie is non-httpOnly so JS can read it.
+   */
+  private getCsrfToken(): string | null {
+    if (typeof document === 'undefined') return null; // SSR safety
+    const match = document.cookie.match(/(?:^|;\s*)csrfToken=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
   }
 
   private async refreshAccessToken(): Promise<string> {
-    const refreshToken = this.getRefreshToken();
-    
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     try {
-      // Call refresh endpoint
-      const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-        refreshToken,
-      });
-
-      // Backend returns: { success: true, data: { accessToken, refreshToken } }
-      const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-      
-      // Update both tokens in localStorage
-      localStorage.setItem('accessToken', accessToken);
-      if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken);
+      // POST /auth/refresh — refresh token is sent automatically via httpOnly cookie
+      const csrfToken = this.getCsrfToken();
+      const headers: Record<string, string> = {};
+      if (csrfToken) {
+        headers['x-csrf-token'] = csrfToken;
       }
-      
+
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/refresh`,
+        {},
+        {
+          withCredentials: true,
+          headers,
+          timeout: 10000, // 10s timeout for token refresh
+        }
+      );
+
+      const { accessToken } = response.data.data;
+
+      // Update access token in Zustand store (memory only)
+      useAuthStore.getState().setAccessToken(accessToken);
+
       return accessToken;
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -155,12 +170,17 @@ class ApiClient {
   }
 
   private handleAuthError() {
-    // Clear tokens and redirect to login
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    
-    // TODO: Dispatch to auth store logout action
-    window.location.href = '/login';
+    // Clear auth state directly — do NOT call logout() which would make another
+    // API call that could 401 and re-trigger this handler (infinite loop).
+    const store = useAuthStore.getState();
+    store.setUser(null as any);
+    useAuthStore.setState({
+      user: null,
+      accessToken: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    });
   }
 
   // Public API methods

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient } from '../lib/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://colab-back.onrender.com/api';
 
@@ -51,71 +51,34 @@ export interface LeaderboardEntry {
 }
 
 class GamificationService {
-  private getAuthHeaders() {
-    // Get token from Zustand persist storage (same as aiEngine.service.ts and sessions.service.ts)
-    const authStorage = localStorage.getItem('auth-storage');
-    let token = '';
-    
-    console.log('[Gamification] Auth storage:', authStorage ? 'Found' : 'Not found');
-    
-    if (authStorage) {
-      try {
-        const { state } = JSON.parse(authStorage);
-        token = state?.accessToken || '';
-        console.log('[Gamification] Token extracted:', token ? `${token.substring(0, 20)}...` : 'None');
-      } catch (e) {
-        console.error('[Gamification] Failed to parse auth storage:', e);
-      }
-    } else {
-      console.warn('[Gamification] No auth-storage in localStorage');
-    }
-    
-    console.log('[Gamification] API URL:', API_URL);
-    
-    return {
-      Authorization: token ? `Bearer ${token}` : '',
-    };
-  }
-
   async getUserStats(): Promise<GamificationStats | null> {
     try {
-      const response = await axios.get(`${API_URL}/gamification/stats`, {
-        headers: this.getAuthHeaders(),
-      });
-      console.log('[Gamification] Stats fetched successfully:', response.data);
-      return response.data.data;
+      const response = await apiClient.get<GamificationStats>('/gamification/stats');
+      return response.data ?? null;
     } catch (error: any) {
-      console.error('[Gamification] Error fetching stats:');
-      console.error('  Status:', error.response?.status);
-      console.error('  Data:', error.response?.data);
-      console.error('  Message:', error.message);
-      console.error('  Full error:', error);
-      // Return null instead of throwing to prevent dashboard crash
+      console.error('[Gamification] Error fetching stats:', error.message);
       return null;
     }
   }
 
   async getLeaderboard(type: 'xp' | 'level' | 'streak' | 'tasks' = 'xp', limit = 10): Promise<LeaderboardEntry[]> {
     try {
-      const response = await axios.get(`${API_URL}/gamification/leaderboard`, {
+      const response = await apiClient.get<LeaderboardEntry[]>('/gamification/leaderboard', {
         params: { type, limit },
-        headers: this.getAuthHeaders(),
       });
-      return response.data.data;
+      return response.data ?? [];
     } catch (error: any) {
-      console.error('Error fetching leaderboard:', error.response?.data || error.message);
+      console.error('Error fetching leaderboard:', error.message);
       return [];
     }
   }
 
   async getFriendLeaderboard(): Promise<LeaderboardEntry[]> {
     try {
-      const response = await axios.get(`${API_URL}/gamification/leaderboard/friends`, {
-        headers: this.getAuthHeaders(),
-      });
-      return response.data.data;
+      const response = await apiClient.get<LeaderboardEntry[]>('/gamification/leaderboard/friends');
+      return response.data ?? [];
     } catch (error: any) {
-      console.error('Error fetching friend leaderboard:', error.response?.data || error.message);
+      console.error('Error fetching friend leaderboard:', error.message);
       return [];
     }
   }
@@ -136,12 +99,10 @@ class GamificationService {
     hasHistory: boolean;
   } | null> {
     try {
-      const response = await axios.get(`${API_URL}/gamification/personal-progress`, {
-        headers: this.getAuthHeaders(),
-      });
-      return response.data.data;
+      const response = await apiClient.get('/gamification/personal-progress');
+      return response.data ?? null;
     } catch (error: any) {
-      console.error('Error fetching personal progress:', error.response?.data || error.message);
+      console.error('Error fetching personal progress:', error.message);
       return null;
     }
   }

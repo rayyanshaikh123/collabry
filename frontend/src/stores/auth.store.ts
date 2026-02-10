@@ -1,32 +1,38 @@
 /**
  * Authentication Store (Zustand)
  * Manages authentication state and user session
+ *
+ * Security:
+ * - accessToken is kept in memory only (NOT persisted to localStorage)
+ * - refreshToken lives in an httpOnly cookie (never touched by JS)
+ * - Only `user` and `isAuthenticated` are persisted for UX continuity
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, AuthTokens, LoginCredentials, RegisterData } from '../types';
+import type { User, LoginCredentials, RegisterData } from '../types';
 import { authService } from '../services/auth.service';
 import { socketClient } from '../lib/socket';
 
 interface AuthState {
   // State
   user: User | null;
-  accessToken: string | null;
-  refreshToken: string | null;
+  accessToken: string | null; // in-memory only — NOT persisted
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  _hasHydrated: boolean; // tracks Zustand persist hydration
 
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  register: (data: RegisterData) => Promise<string>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
-  setTokens: (tokens: AuthTokens) => void;
+  setAccessToken: (token: string) => void;
   refreshSession: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => Promise<void>;
+  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -35,10 +41,10 @@ export const useAuthStore = create<AuthState>()(
       // Initial state
       user: null,
       accessToken: null,
-      refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      _hasHydrated: false,
 
       // Login action
       login: async (credentials: LoginCredentials) => {
@@ -50,7 +56,6 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: response.user,
             accessToken: response.tokens.accessToken,
-            refreshToken: response.tokens.refreshToken,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -66,23 +71,17 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Register action
+      // Register action — returns message (email verification required, no auto-login)
       register: async (data: RegisterData) => {
         set({ isLoading: true, error: null });
         
         try {
           const response = await authService.register(data);
           
-          set({
-            user: response.user,
-            accessToken: response.tokens.accessToken,
-            refreshToken: response.tokens.refreshToken,
-            isAuthenticated: true,
-            isLoading: false,
-          });
+          set({ isLoading: false });
 
-          // Connect socket with auth token
-          socketClient.connect(response.tokens.accessToken);
+          // Return the message so UI can display "check your email"
+          return response.message;
         } catch (error: any) {
           set({
             error: error.message || 'Registration failed',
@@ -98,23 +97,19 @@ export const useAuthStore = create<AuthState>()(
           // Disconnect socket first
           socketClient.disconnect();
           
-          // Call backend logout
+          // Call backend logout (revokes token + clears cookie)
           await authService.logout();
         } catch (error) {
           console.error('Logout error:', error);
         } finally {
-          // Clear state
+          // Clear in-memory state
           set({
             user: null,
             accessToken: null,
-            refreshToken: null,
             isAuthenticated: false,
             error: null,
             isLoading: false,
           });
-          
-          // Clear persisted storage
-          localStorage.removeItem('auth-storage');
         }
       },
 
@@ -123,41 +118,52 @@ export const useAuthStore = create<AuthState>()(
         set({ user });
       },
 
-      // Set tokens
-      setTokens: (tokens: AuthTokens) => {
-        set({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-        });
+      // Set access token (called by api.ts after refresh)
+      setAccessToken: (token: string) => {
+        set({ accessToken: token });
       },
 
-      // Refresh session
+      // Refresh session — uses httpOnly cookie automatically
       refreshSession: async () => {
-        const { refreshToken } = get();
-        
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
         try {
-          const newAccessToken = await authService.refreshToken(refreshToken);
+          const newAccessToken = await authService.refreshToken();
           
-          set({
-            accessToken: newAccessToken,
-          });
+          set({ accessToken: newAccessToken });
         } catch (error) {
-          // Refresh failed, logout user
-          get().logout();
+          // Refresh failed — clear state directly (don't call logout() which
+          // makes another API call that could also fail and loop)
+          socketClient.disconnect();
+          set({
+            user: null,
+            accessToken: null,
+            isAuthenticated: false,
+            error: null,
+            isLoading: false,
+          });
           throw error;
         }
       },
 
       // Check authentication status
       checkAuth: async () => {
-        const { accessToken } = get();
+        const { accessToken, isAuthenticated } = get();
+
+        set({ isLoading: true });
+
+        // If persisted state says authenticated but no in-memory token,
+        // proactively refresh before calling /auth/me
+        if (isAuthenticated && !accessToken) {
+          try {
+            await get().refreshSession();
+          } catch {
+            set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false });
+            return;
+          }
+        }
         
-        if (!accessToken) {
-          set({ isAuthenticated: false });
+        const currentToken = get().accessToken;
+        if (!currentToken) {
+          set({ isAuthenticated: false, isLoading: false });
           return;
         }
 
@@ -166,19 +172,20 @@ export const useAuthStore = create<AuthState>()(
           set({
             user,
             isAuthenticated: true,
+            isLoading: false,
           });
 
           // Reconnect socket if disconnected
           if (!socketClient.isConnected()) {
-            socketClient.connect(accessToken);
+            socketClient.connect(currentToken);
           }
-        } catch (error) {
+        } catch {
           // Token invalid, clear auth
           set({
             user: null,
             accessToken: null,
-            refreshToken: null,
             isAuthenticated: false,
+            isLoading: false,
           });
         }
       },
@@ -187,15 +194,25 @@ export const useAuthStore = create<AuthState>()(
       clearError: () => {
         set({ error: null });
       },
+
+      // Called by onRehydrateStorage when Zustand finishes reading localStorage
+      setHasHydrated: (v: boolean) => {
+        set({ _hasHydrated: v });
+      },
     }),
     {
       name: 'auth-storage',
+      // Only persist user identity — tokens stay in memory for XSS protection
       partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => {
+        return () => {
+          // Called once Zustand has finished reading from localStorage
+          useAuthStore.getState().setHasHydrated(true);
+        };
+      },
     }
   )
 );

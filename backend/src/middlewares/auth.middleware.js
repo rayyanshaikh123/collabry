@@ -36,6 +36,11 @@ const protect = asyncHandler(async (req, res, next) => {
       throw new AppError('User account is deactivated', 401);
     }
 
+    // Check if password was changed after this token was issued
+    if (user.changedPasswordAfter(decoded.iat)) {
+      throw new AppError('Password recently changed. Please login again.', 401);
+    }
+
     // Attach user to request object
     req.user = user;
     next();

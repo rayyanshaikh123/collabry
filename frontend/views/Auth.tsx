@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Card, Button, Input } from '../components/UIElements';
 import { useAuthStore } from '../src/stores/auth.store';
+import { authService } from '../src/services/auth.service';
 
 const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> = ({ type, onAuthSuccess }) => {
   const [isRegister, setIsRegister] = useState(type === 'register');
@@ -15,6 +16,11 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
   
   const { login, register } = useAuthStore();
 
@@ -43,8 +49,11 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role: getSelectedRole(), // Use selected role from role selection
+          role: getSelectedRole(),
         });
+        // Registration successful — show verification message (no redirect)
+        setVerificationEmail(formData.email);
+        setVerificationSent(true);
       } else {
         if (!formData.email || !formData.password) {
           setError('Please fill in all fields');
@@ -55,10 +64,17 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
           email: formData.email,
           password: formData.password,
         });
+        onAuthSuccess();
       }
-      onAuthSuccess();
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please try again.');
+      // If login returns 403 — email not verified
+      if (!isRegister && err.status === 403) {
+        setNeedsVerification(true);
+        setVerificationEmail(formData.email);
+        setError('');
+      } else {
+        setError(err.message || 'Authentication failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -66,8 +82,74 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setError(''); // Clear error when user types
+    setError('');
+    setNeedsVerification(false);
+    setResendMessage('');
   };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    setResendMessage('');
+    try {
+      const msg = await authService.resendVerification(verificationEmail);
+      setResendMessage(msg);
+    } catch (err: any) {
+      setResendMessage(err.message || 'Failed to resend. Please try again.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  // Show verification sent screen after successful registration
+  if (verificationSent) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-3">Check your email</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-2">
+            We sent a verification link to
+          </p>
+          <p className="text-indigo-600 dark:text-indigo-400 font-semibold mb-6">{verificationEmail}</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mb-8">
+            Click the link in your email to verify your account. The link expires in 24 hours.
+          </p>
+
+          {resendMessage && (
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 px-4 py-3 rounded-xl text-sm mb-4">
+              {resendMessage}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resendLoading}
+            className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {resendLoading ? 'Sending...' : "Didn't receive it? Resend email"}
+          </button>
+
+          <div className="mt-8">
+            <button
+              type="button"
+              onClick={() => {
+                setVerificationSent(false);
+                setIsRegister(false);
+              }}
+              className="text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+            >
+              ← Back to Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex bg-white dark:bg-slate-950 font-sans">
@@ -124,6 +206,34 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
                 {error}
               </div>
             )}
+
+            {/* Inline verification banner when login returns 403 */}
+            {needsVerification && !isRegister && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-4 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">Email not verified</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Please check your inbox for a verification link. You must verify your email before signing in.
+                    </p>
+                    {resendMessage && (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">{resendMessage}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendLoading}
+                      className="mt-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                    >
+                      {resendLoading ? 'Sending...' : 'Resend verification email'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {isRegister && (
               <div className="space-y-1.5">
@@ -163,6 +273,31 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
                 disabled={loading}
               />
             </div>
+
+            {/* Password strength indicators (register only) */}
+            {isRegister && formData.password && (
+              <div className="space-y-1.5 px-1">
+                <p className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500">Password strength</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${formData.password.length >= 8 ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    <span className={`text-xs ${formData.password.length >= 8 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>8+ characters</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(formData.password) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    <span className={`text-xs ${/[A-Z]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>Uppercase</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(formData.password) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    <span className={`text-xs ${/[a-z]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>Lowercase</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${/[0-9]/.test(formData.password) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    <span className={`text-xs ${/[0-9]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>Number</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Button 
               type="submit" 

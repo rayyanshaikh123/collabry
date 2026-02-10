@@ -3,6 +3,7 @@ const subscriptionService = require('../services/subscription.service');
 const { verifyWebhookSignature } = require('../config/razorpay');
 const Subscription = require('../models/Subscription');
 const Payment = require('../models/Payment');
+const WebhookEvent = require('../models/WebhookEvent');
 
 /**
  * @desc    Handle Razorpay webhooks
@@ -23,13 +24,8 @@ const handleRazorpayWebhook = asyncHandler(async (req, res) => {
   // Get raw body as string
   const rawBody = req.body.toString();
   
-  // Verify webhook signature
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  const isValid = verifyWebhookSignature(
-    rawBody,
-    webhookSignature,
-    webhookSecret
-  );
+  // Verify webhook signature (function reads RAZORPAY_WEBHOOK_SECRET from env internally)
+  const isValid = verifyWebhookSignature(rawBody, webhookSignature);
 
   if (!isValid) {
     console.error('Invalid webhook signature');
@@ -43,6 +39,26 @@ const handleRazorpayWebhook = asyncHandler(async (req, res) => {
   const webhookBody = JSON.parse(rawBody);
   const event = webhookBody.event;
   const payload = webhookBody.payload;
+
+  // Build a unique event ID for idempotency
+  const entityId =
+    payload?.payment?.entity?.id ||
+    payload?.subscription?.entity?.id ||
+    webhookBody.id ||
+    webhookSignature.slice(0, 32);
+  const eventId = `${event}:${entityId}`;
+
+  // Check if we already processed this event
+  try {
+    await WebhookEvent.create({ eventId, event });
+  } catch (err) {
+    if (err.code === 11000) {
+      // Duplicate — already processed
+      console.log(`[webhook] Duplicate event skipped: ${eventId}`);
+      return res.status(200).json({ success: true, duplicate: true });
+    }
+    throw err;
+  }
 
   console.log(`Received webhook: ${event}`);
 
@@ -88,8 +104,8 @@ const handleRazorpayWebhook = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Webhook processing error:', error);
-    // Still return 200 to prevent retries for processing errors
-    res.status(200).json({ success: true });
+    // Return 500 so Razorpay retries the webhook
+    res.status(500).json({ success: false, error: 'Internal processing error' });
   }
 });
 
@@ -188,16 +204,10 @@ async function handleSubscriptionCancelled(subscription) {
   });
 
   if (dbSubscription) {
-    // Update subscription and user tier
+    // Mark for cancellation — the cron job handles the actual downgrade at period end
     await Subscription.findByIdAndUpdate(dbSubscription._id, {
-      status: 'cancelled',
+      cancelAtPeriodEnd: true,
       cancelledAt: new Date(),
-    });
-
-    // Downgrade user to free tier
-    const User = require('../models/User');
-    await User.findByIdAndUpdate(dbSubscription.user, {
-      subscriptionTier: 'free',
     });
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/src/stores/auth.store';
 import { useUIStore } from '@/src/stores/ui.store';
+import { authService } from '@/src/services/auth.service';
+import type { Session } from '@/src/types';
 import { 
   User, 
   Bell, 
@@ -21,7 +23,11 @@ import {
   Sun,
   Monitor,
   Save,
-  AlertCircle
+  AlertCircle,
+  Smartphone,
+  Laptop,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 
 type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';
@@ -75,6 +81,70 @@ export default function SettingsPage() {
   });
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Session management state
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState('');
+
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    setSessionError('');
+    try {
+      const data = await authService.getActiveSessions();
+      setSessions(data);
+    } catch (err: any) {
+      setSessionError(err.message || 'Failed to load sessions');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    setRevokingSessionId(sessionId);
+    try {
+      await authService.revokeSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (err: any) {
+      setSessionError(err.message || 'Failed to revoke session');
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
+  const getDeviceIcon = (userAgent: string) => {
+    if (!userAgent) return <Globe size={18} />;
+    const ua = userAgent.toLowerCase();
+    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) {
+      return <Smartphone size={18} />;
+    }
+    return <Laptop size={18} />;
+  };
+
+  const getDeviceName = (userAgent: string) => {
+    if (!userAgent) return 'Unknown device';
+    const ua = userAgent;
+    // Extract browser
+    let browser = 'Unknown browser';
+    if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+    else if (ua.includes('Firefox')) browser = 'Firefox';
+    else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Edg')) browser = 'Edge';
+    // Extract OS
+    let os = '';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Mac')) os = 'macOS';
+    else if (ua.includes('Linux')) os = 'Linux';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    return `${browser}${os ? ' on ' + os : ''}`;
+  };
+
+  // Fetch sessions when Security tab loads
+  useEffect(() => {
+    fetchSessions();
+  }, []);
 
   const handleSave = () => {
     setSaveStatus('saving');
@@ -465,6 +535,80 @@ export default function SettingsPage() {
                   <Button variant="outline" className="w-full font-bold">
                     Update Password
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Active Sessions */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="font-black">Active Sessions</CardTitle>
+                      <CardDescription>Devices where you&apos;re currently logged in</CardDescription>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={fetchSessions}
+                      disabled={sessionsLoading}
+                      className="font-semibold"
+                    >
+                      <RefreshCw size={14} className={`mr-1.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {sessionError && (
+                    <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 mb-4">
+                      <AlertCircle size={14} />
+                      {sessionError}
+                    </div>
+                  )}
+
+                  {sessionsLoading && sessions.length === 0 ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400" />
+                    </div>
+                  ) : sessions.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">No active sessions found</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {sessions.map((session) => (
+                        <div
+                          key={session.id}
+                          className="flex items-center justify-between p-3 rounded-xl border-2 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                              {getDeviceIcon(session.userAgent)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+                                {getDeviceName(session.userAgent)}
+                              </p>
+                              <p className="text-xs text-slate-400 dark:text-slate-500">
+                                {session.ipAddress || 'Unknown IP'} &middot; {new Date(session.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRevokeSession(session.id)}
+                            disabled={revokingSessionId === session.id}
+                            className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-bold shrink-0 ml-2"
+                          >
+                            {revokingSessionId === session.id ? (
+                              <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-rose-300 border-t-rose-600" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

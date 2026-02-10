@@ -100,51 +100,20 @@ subscriptionSchema.virtual('isInTrial').get(function () {
   return new Date() < this.trialEnd;
 });
 
-// Virtual for checking if subscription is active
+// Virtual for checking if subscription is active (includes grace period)
 subscriptionSchema.virtual('isActive').get(function () {
-  return this.status === 'active' && (!this.currentPeriodEnd || new Date() <= this.currentPeriodEnd);
+  if (this.status !== 'active') return false;
+  if (!this.currentPeriodEnd) return true;
+  const { GRACE_PERIOD_DAYS } = require('../config/plans');
+  const graceEnd = new Date(this.currentPeriodEnd);
+  graceEnd.setDate(graceEnd.getDate() + GRACE_PERIOD_DAYS);
+  return new Date() <= graceEnd;
 });
 
 // Method to check if user can access a feature
 subscriptionSchema.methods.canAccessFeature = function (feature) {
-  const planFeatures = {
-    free: {
-      aiQuestionsPerDay: 10,
-      boards: 1,
-      groupMembers: 5,
-      storageGB: 0.1,
-      aiModels: ['basic'],
-      prioritySupport: false,
-    },
-    basic: {
-      aiQuestionsPerDay: 100,
-      boards: 5,
-      groupMembers: 20,
-      storageGB: 5,
-      aiModels: ['basic', 'advanced'],
-      prioritySupport: false,
-    },
-    pro: {
-      aiQuestionsPerDay: -1, // unlimited
-      boards: -1, // unlimited
-      groupMembers: 50,
-      storageGB: 50,
-      aiModels: ['basic', 'advanced', 'premium'],
-      prioritySupport: true,
-    },
-    enterprise: {
-      aiQuestionsPerDay: -1,
-      boards: -1,
-      groupMembers: -1,
-      storageGB: 500,
-      aiModels: ['basic', 'advanced', 'premium', 'custom'],
-      prioritySupport: true,
-      customIntegrations: true,
-      dedicatedSupport: true,
-    },
-  };
-
-  const features = planFeatures[this.plan] || planFeatures.free;
+  const { getLimitsForTier } = require('../config/plans');
+  const features = getLimitsForTier(this.plan);
   return features[feature];
 };
 

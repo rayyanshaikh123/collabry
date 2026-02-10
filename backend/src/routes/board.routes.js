@@ -98,7 +98,7 @@ router.post('/:id/invite',
 );
 
 router.patch('/:id/archive', validateObjectId, boardController.archiveBoard);
-router.post('/:id/duplicate', validateObjectId, boardController.duplicateBoard);
+router.post('/:id/duplicate', validateObjectId, checkBoardLimit, boardController.duplicateBoard);
 
 // Member management
 router.route('/:id/members')

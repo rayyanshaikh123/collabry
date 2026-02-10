@@ -293,35 +293,45 @@ class AIService {
    */
   async generateMindMap(topic, options = {}, userToken) {
     try {
-      // For now, return a simple structure
-      // TODO: Call ai-engine when mind map generation endpoint is ready
-      const mapTopic = topic || 'Concept';
-      return {
-        nodes: [
-          {
-            id: 'root',
-            label: mapTopic,
-            type: 'root',
-            position: { x: 0, y: 0 }
-          },
-          {
-            id: 'node1',
-            label: 'Branch 1',
-            type: 'branch',
-            position: { x: -200, y: 100 }
-          },
-          {
-            id: 'node2',
-            label: 'Branch 2',
-            type: 'branch',
-            position: { x: 200, y: 100 }
-          }
-        ],
-        edges: [
-          { id: 'edge1', from: 'root', to: 'node1' },
-          { id: 'edge2', from: 'root', to: 'node2' }
-        ]
+      const result = await this.forwardToAI(
+        '/ai/mindmap',
+        {
+          topic: topic || 'Concept',
+          depth: options.depth || 2,
+          use_documents: options.use_documents ?? false,
+        },
+        userToken
+      );
+
+      // Transform AI engine response to frontend-expected format
+      const nodes = [];
+      const edges = [];
+
+      const flattenNode = (node, parentId = null, x = 0, y = 0, spread = 300) => {
+        const id = node.id || `node_${nodes.length}`;
+        nodes.push({
+          id,
+          label: node.label,
+          type: parentId ? 'branch' : 'root',
+          position: { x, y },
+        });
+        if (parentId) {
+          edges.push({ id: `edge_${edges.length}`, from: parentId, to: id });
+        }
+        if (node.children && node.children.length > 0) {
+          const childSpread = spread / node.children.length;
+          const startX = x - (spread / 2);
+          node.children.forEach((child, i) => {
+            flattenNode(child, id, startX + childSpread * i + childSpread / 2, y + 120, childSpread);
+          });
+        }
       };
+
+      if (result.root) {
+        flattenNode(result.root);
+      }
+
+      return { nodes, edges };
     } catch (error) {
       console.error('AI generateMindMap error:', error.message);
       throw new Error('Failed to generate mind map from AI engine');

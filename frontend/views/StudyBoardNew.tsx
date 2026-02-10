@@ -133,7 +133,7 @@ const CollaborativeBoard: React.FC = () => {
   const params = useParams();
   const boardId = params?.id as string;
   
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const { 
     currentBoard, 
     participants, 
@@ -442,11 +442,13 @@ const CollaborativeBoard: React.FC = () => {
       try {
         setIsLoading(true);
         
-        const token = localStorage.getItem('accessToken');
-        if (!token) {
-          router.push('/login');
+        if (!accessToken) {
+          // Token not yet available (still refreshing) — bail; the layout
+          // will handle the auth redirect if the session is truly expired.
           return;
         }
+
+        const token = accessToken;
 
         socketClient.connectBoards(token);
 
@@ -511,7 +513,7 @@ const CollaborativeBoard: React.FC = () => {
         socketClient.leaveBoard(boardId);
       }
     };
-  }, [boardId, user, router, setCurrentBoard, addParticipant, handleUserJoined, handleUserLeft, handleCursorMove]);
+  }, [boardId, user, accessToken, router, setCurrentBoard, addParticipant, handleUserJoined, handleUserLeft, handleCursorMove]);
 
   // Setup element event listeners
   useEffect(() => {

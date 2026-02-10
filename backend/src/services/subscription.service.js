@@ -11,6 +11,7 @@ const {
   planIdToTier,
   getIntervalFromPlanId,
 } = require('../config/razorpay');
+const { isTierAtLeast, GRACE_PERIOD_DAYS } = require('../config/plans');
 
 class SubscriptionService {
   /**
@@ -52,6 +53,17 @@ class SubscriptionService {
     let discountApplied = 0;
     let couponData = null;
     const tier = planIdToTier(planId);
+
+    // Prevent downgrades via direct purchase — user should cancel first
+    const currentSub = await Subscription.findOne({ user: userId, status: 'active' });
+    if (currentSub && currentSub.plan !== 'free') {
+      if (isTierAtLeast(currentSub.plan, tier) && currentSub.plan !== tier) {
+        throw new AppError(
+          `You are already on the ${currentSub.plan} plan. Cancel your current subscription first to switch to a lower plan.`,
+          400
+        );
+      }
+    }
 
     // Apply coupon if provided
     if (couponCode) {
@@ -236,7 +248,9 @@ class SubscriptionService {
   }
 
   /**
-   * Cancel subscription at period end
+   * Cancel subscription at period end.
+   * The user keeps full access until currentPeriodEnd.
+   * A cron job (see jobs/subscriptionExpiry.js) handles the actual downgrade.
    */
   async cancelSubscription(userId) {
     const subscription = await Subscription.findOne({ user: userId });
@@ -249,18 +263,20 @@ class SubscriptionService {
       throw new AppError('Cannot cancel free plan', 400);
     }
 
-    subscription.cancelAtPeriodEnd = true;
-    subscription.status = 'cancelled';
-    await subscription.save();
+    if (subscription.cancelAtPeriodEnd) {
+      throw new AppError('Subscription is already scheduled for cancellation', 400);
+    }
 
-    // Update user tier to free (will take effect at period end)
-    await User.findByIdAndUpdate(userId, { subscriptionTier: 'free' });
+    // Mark for cancellation — do NOT change status or tier yet
+    subscription.cancelAtPeriodEnd = true;
+    await subscription.save();
 
     return subscription;
   }
 
   /**
-   * Reactivate cancelled subscription
+   * Reactivate a subscription that was scheduled for cancellation.
+   * Only works if the billing period hasn't expired yet.
    */
   async reactivateSubscription(userId) {
     const subscription = await Subscription.findOne({ user: userId });
@@ -269,16 +285,19 @@ class SubscriptionService {
       throw new AppError('No subscription found', 404);
     }
 
-    if (subscription.status !== 'cancelled') {
-      throw new AppError('Subscription is not cancelled', 400);
+    if (!subscription.cancelAtPeriodEnd) {
+      throw new AppError('Subscription is not pending cancellation', 400);
+    }
+
+    // Cannot reactivate if the period already expired
+    if (subscription.currentPeriodEnd && new Date() > new Date(subscription.currentPeriodEnd)) {
+      throw new AppError('Subscription period has already expired. Please purchase a new plan.', 400);
     }
 
     subscription.cancelAtPeriodEnd = false;
+    // Status should already be 'active'; ensure it is
     subscription.status = 'active';
     await subscription.save();
-
-    // Restore user tier
-    await User.findByIdAndUpdate(userId, { subscriptionTier: subscription.plan });
 
     return subscription;
   }

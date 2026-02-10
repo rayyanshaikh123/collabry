@@ -1,41 +1,6 @@
 const Usage = require('../models/Usage');
 const Subscription = require('../models/Subscription');
-
-// Plan limits configuration
-const PLAN_LIMITS = {
-  free: {
-    aiQuestionsPerDay: 10,
-    boardsTotal: 1,
-    groupMembers: 5,
-    storageGB: 0.1,
-    fileUploadsPerDay: 5,
-    aiModels: ['basic'],
-  },
-  basic: {
-    aiQuestionsPerDay: 100,
-    boardsTotal: 5,
-    groupMembers: 20,
-    storageGB: 5,
-    fileUploadsPerDay: 50,
-    aiModels: ['basic', 'advanced'],
-  },
-  pro: {
-    aiQuestionsPerDay: -1, // unlimited
-    boardsTotal: -1, // unlimited
-    groupMembers: 50,
-    storageGB: 50,
-    fileUploadsPerDay: -1,
-    aiModels: ['basic', 'advanced', 'premium'],
-  },
-  enterprise: {
-    aiQuestionsPerDay: -1,
-    boardsTotal: -1,
-    groupMembers: -1,
-    storageGB: 500,
-    fileUploadsPerDay: -1,
-    aiModels: ['basic', 'advanced', 'premium', 'custom'],
-  },
-};
+const { PLAN_LIMITS, getLimitsForTier, isUnlimited } = require('../config/plans');
 
 // Get user's current plan
 const getUserPlan = async (userId) => {
@@ -103,8 +68,10 @@ const checkAIUsageLimit = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Error checking AI usage limit:', error);
-    // Allow request to proceed on error (fail open for better UX)
-    next();
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
   }
 };
 
@@ -125,7 +92,7 @@ const checkBoardLimit = async (req, res, next) => {
     const { plan, limits } = await getPlanLimits(userId);
     
     // Unlimited plans can proceed
-    if (limits.boardsTotal === -1) {
+    if (limits.boards === -1) {
       req.userPlan = plan;
       req.planLimits = limits;
       return next();
@@ -135,14 +102,14 @@ const checkBoardLimit = async (req, res, next) => {
     const Board = require('../models/Board');
     const boardCount = await Board.countDocuments({ owner: userId });
     
-    if (boardCount >= limits.boardsTotal) {
+    if (boardCount >= limits.boards) {
       return res.status(429).json({
         success: false,
         error: 'Board limit reached',
-        message: `You've reached the maximum of ${limits.boardsTotal} boards for your ${plan} plan. Upgrade for more boards.`,
+        message: `You've reached the maximum of ${limits.boards} boards for your ${plan} plan. Upgrade for more boards.`,
         limitReached: true,
         currentCount: boardCount,
-        limit: limits.boardsTotal,
+        limit: limits.boards,
         plan,
         upgradeUrl: '/pricing',
       });
@@ -151,12 +118,15 @@ const checkBoardLimit = async (req, res, next) => {
     req.userPlan = plan;
     req.planLimits = limits;
     req.boardCount = boardCount;
-    req.remainingBoards = limits.boardsTotal - boardCount;
+    req.remainingBoards = limits.boards - boardCount;
     
     next();
   } catch (error) {
     console.error('Error checking board limit:', error);
-    next();
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
   }
 };
 
@@ -207,7 +177,10 @@ const checkFileUploadLimit = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Error checking file upload limit:', error);
-    next();
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
   }
 };
 
@@ -253,48 +226,66 @@ const checkStorageLimit = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Error checking storage limit:', error);
-    next();
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
   }
 };
 
 /**
- * Middleware to check if user can use a specific AI model
+ * Middleware to check notebook creation limits
  */
-const checkAIModelAccess = (requiredModel = 'basic') => {
-  return async (req, res, next) => {
-    try {
-      const userId = req.user?.id || req.user?._id;
-      
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          error: 'Authentication required',
-        });
-      }
-      
-      const { plan, limits } = await getPlanLimits(userId);
-      
-      if (!limits.aiModels.includes(requiredModel)) {
-        return res.status(403).json({
-          success: false,
-          error: 'Model not available',
-          message: `The ${requiredModel} AI model is not available on your ${plan} plan. Upgrade to access it.`,
-          requiredModel,
-          availableModels: limits.aiModels,
-          plan,
-          upgradeUrl: '/pricing',
-        });
-      }
-      
+const checkNotebookLimit = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+      });
+    }
+
+    const { plan, limits } = await getPlanLimits(userId);
+
+    // Unlimited plans can proceed
+    if (limits.notebooks === -1) {
       req.userPlan = plan;
       req.planLimits = limits;
-      
-      next();
-    } catch (error) {
-      console.error('Error checking AI model access:', error);
-      next();
+      return next();
     }
-  };
+
+    // Count existing notebooks
+    const Notebook = require('../models/Notebook');
+    const notebookCount = await Notebook.countDocuments({ userId });
+
+    if (notebookCount >= limits.notebooks) {
+      return res.status(429).json({
+        success: false,
+        error: 'Notebook limit reached',
+        message: `You've reached the maximum of ${limits.notebooks} notebooks for your ${plan} plan. Upgrade for more notebooks.`,
+        limitReached: true,
+        currentCount: notebookCount,
+        limit: limits.notebooks,
+        plan,
+        upgradeUrl: '/pricing',
+      });
+    }
+
+    req.userPlan = plan;
+    req.planLimits = limits;
+    req.notebookCount = notebookCount;
+    req.remainingNotebooks = limits.notebooks - notebookCount;
+
+    next();
+  } catch (error) {
+    console.error('Error checking notebook limit:', error);
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
+  }
 };
 
 /**
@@ -340,6 +331,10 @@ const getUsageSummary = async (userId) => {
     // Get board count
     const Board = require('../models/Board');
     const boardCount = await Board.countDocuments({ owner: userId });
+
+    // Get notebook count
+    const Notebook = require('../models/Notebook');
+    const notebookCount = await Notebook.countDocuments({ userId });
     
     // Get storage usage
     const User = require('../models/User');
@@ -364,8 +359,13 @@ const getUsageSummary = async (userId) => {
       totals: {
         boards: {
           used: boardCount,
-          limit: limits.boardsTotal,
-          remaining: limits.boardsTotal === -1 ? 'unlimited' : Math.max(0, limits.boardsTotal - boardCount),
+          limit: limits.boards,
+          remaining: limits.boards === -1 ? 'unlimited' : Math.max(0, limits.boards - boardCount),
+        },
+        notebooks: {
+          used: notebookCount,
+          limit: limits.notebooks,
+          remaining: limits.notebooks === -1 ? 'unlimited' : Math.max(0, limits.notebooks - notebookCount),
         },
         storage: {
           used: formatBytes(storageUsed),
@@ -375,7 +375,14 @@ const getUsageSummary = async (userId) => {
           percentUsed: Math.round((storageUsed / storageLimit) * 100),
         },
       },
-      monthly: monthlyStats,
+      monthly: {
+        totalQuestions: monthlyStats.totalAIQuestions || 0,
+        totalTokens: monthlyStats.totalTokensUsed || 0,
+        totalFileUploads: monthlyStats.totalFileUploads || 0,
+        avgDailyQuestions: monthlyStats.daysActive
+          ? Math.round((monthlyStats.totalAIQuestions || 0) / monthlyStats.daysActive * 10) / 10
+          : 0,
+      },
       limits,
       resetTime: getNextResetTime(),
     };
@@ -408,9 +415,9 @@ module.exports = {
   getPlanLimits,
   checkAIUsageLimit,
   checkBoardLimit,
+  checkNotebookLimit,
   checkFileUploadLimit,
   checkStorageLimit,
-  checkAIModelAccess,
   trackAIUsage,
   trackFileUpload,
   getUsageSummary,

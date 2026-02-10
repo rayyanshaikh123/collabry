@@ -2,6 +2,48 @@ const asyncHandler = require('../utils/asyncHandler');
 const authService = require('../services/auth.service');
 
 /**
+ * Cookie options for the httpOnly refresh token cookie.
+ * - httpOnly: not accessible via JavaScript (XSS protection)
+ * - secure: only sent over HTTPS in production
+ * - sameSite: CSRF protection
+ * - path: only sent to auth endpoints that need it
+ */
+const REFRESH_COOKIE_NAME = 'refreshToken';
+const getRefreshCookieOptions = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  path: '/api/auth', // only sent to auth routes
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+});
+
+/**
+ * Helper: extract request metadata for token audit trail
+ */
+const getRequestMeta = (req) => ({
+  userAgent: req.headers['user-agent'] || null,
+  ipAddress: req.ip || req.connection?.remoteAddress || null,
+});
+
+/**
+ * Helper: set refresh token cookie and send response
+ */
+const sendAuthResponse = (res, statusCode, message, { user, accessToken, refreshToken }) => {
+  // Set refresh token as httpOnly cookie
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
+
+  // Only send accessToken in the JSON body (NOT the refresh token)
+  res.status(statusCode).json({
+    success: true,
+    message,
+    data: {
+      user,
+      accessToken,
+    },
+  });
+};
+
+/**
  * @desc    Register a new user
  * @route   POST /api/auth/register
  * @access  Public
@@ -9,24 +51,17 @@ const authService = require('../services/auth.service');
 const register = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
-  // Validate input
-  if (!name || !email || !password) {
-    return res.status(400).json({
-      success: false,
-      error: 'Please provide name, email, and password',
-    });
-  }
+  const result = await authService.registerUser(
+    { name, email, password },
+    getRequestMeta(req)
+  );
 
-  // Register user via service
-  const result = await authService.registerUser({ name, email, password });
-
+  // No tokens issued — user must verify email first
   res.status(201).json({
     success: true,
-    message: 'User registered successfully',
+    message: result.message,
     data: {
       user: result.user,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     },
   });
 });
@@ -39,54 +74,78 @@ const register = asyncHandler(async (req, res) => {
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Login user via service
-  const result = await authService.loginUser(email, password);
+  const result = await authService.loginUser(email, password, getRequestMeta(req));
 
-  res.status(200).json({
-    success: true,
-    message: 'Login successful',
-    data: {
-      user: result.user,
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
-    },
-  });
+  sendAuthResponse(res, 200, 'Login successful', result);
 });
 
 /**
  * @desc    Refresh access token
  * @route   POST /api/auth/refresh
- * @access  Public
+ * @access  Public (uses httpOnly cookie)
  */
 const refresh = asyncHandler(async (req, res) => {
-  const { refreshToken } = req.body;
+  // Read refresh token from httpOnly cookie (primary) or body (fallback for migration)
+  const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
 
-  // Refresh tokens via service
-  const result = await authService.refreshTokens(refreshToken);
+  const result = await authService.refreshTokens(rawRefreshToken, getRequestMeta(req));
+
+  // Set the new refresh token cookie
+  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
 
   res.status(200).json({
     success: true,
     message: 'Tokens refreshed successfully',
     data: {
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
     },
   });
 });
 
 /**
- * @desc    Logout user
+ * @desc    Logout user (revokes refresh token)
  * @route   POST /api/auth/logout
  * @access  Public
- * @note    Placeholder for refresh token invalidation (e.g., token blacklist)
  */
 const logout = asyncHandler(async (req, res) => {
-  // TODO: Implement token blacklist/invalidation in future
-  // For now, client should remove tokens from storage
-  
+  const rawRefreshToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
+
+  // Revoke the refresh token in DB
+  await authService.logoutUser(rawRefreshToken);
+
+  // Clear the cookie
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    path: '/api/auth',
+  });
+
   res.status(200).json({
     success: true,
     message: 'Logout successful',
+  });
+});
+
+/**
+ * @desc    Logout from all devices
+ * @route   POST /api/auth/logout-all
+ * @access  Private (requires auth)
+ */
+const logoutAll = asyncHandler(async (req, res) => {
+  await authService.logoutAll(req.user.id);
+
+  // Clear the cookie on this device too
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    path: '/api/auth',
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Logged out from all devices',
   });
 });
 
@@ -116,6 +175,76 @@ const resetPassword = asyncHandler(async (req, res) => {
 
   const result = await authService.resetPassword(token, newPassword);
 
+  // Clear any existing refresh cookie (force re-login)
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    path: '/api/auth',
+  });
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+  });
+});
+
+/**
+ * @desc    Verify email with token
+ * @route   POST /api/auth/verify-email
+ * @access  Public
+ */
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+
+  const result = await authService.verifyEmail(token);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+  });
+});
+
+/**
+ * @desc    Resend verification email
+ * @route   POST /api/auth/resend-verification
+ * @access  Public
+ */
+const resendVerification = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const result = await authService.resendVerificationEmail(email);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+  });
+});
+
+/**
+ * @desc    Get active sessions for current user
+ * @route   GET /api/auth/sessions
+ * @access  Private
+ */
+const getSessions = asyncHandler(async (req, res) => {
+  const sessions = await authService.getActiveSessions(req.user.id);
+
+  res.status(200).json({
+    success: true,
+    data: { sessions },
+  });
+});
+
+/**
+ * @desc    Revoke a specific session
+ * @route   DELETE /api/auth/sessions/:sessionId
+ * @access  Private
+ */
+const revokeSession = asyncHandler(async (req, res) => {
+  const { sessionId } = req.params;
+
+  const result = await authService.revokeSession(req.user.id, sessionId);
+
   res.status(200).json({
     success: true,
     message: result.message,
@@ -127,6 +256,11 @@ module.exports = {
   login,
   refresh,
   logout,
+  logoutAll,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendVerification,
+  getSessions,
+  revokeSession,
 };

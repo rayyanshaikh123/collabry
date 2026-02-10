@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const notebookController = require('../controllers/notebook.controller');
 const { protect } = require('../middlewares/auth.middleware');
+const { checkFileUploadLimit, checkStorageLimit, checkNotebookLimit } = require('../middleware/usageEnforcement');
 
 // Configure multer for file uploads
 const upload = multer({ 
@@ -15,7 +16,7 @@ const upload = multer({
 // ============================================================================
 
 router.get('/notebooks', protect, notebookController.getNotebooks);
-router.post('/notebooks', protect, notebookController.createNotebook);
+router.post('/notebooks', protect, checkNotebookLimit, notebookController.createNotebook);
 router.get('/notebooks/:id', protect, notebookController.getNotebook);
 router.put('/notebooks/:id', protect, notebookController.updateNotebook);
 router.delete('/notebooks/:id', protect, notebookController.deleteNotebook);
@@ -24,7 +25,7 @@ router.delete('/notebooks/:id', protect, notebookController.deleteNotebook);
 // SOURCE MANAGEMENT
 // ============================================================================
 
-router.post('/notebooks/:id/sources', protect, upload.single('file'), notebookController.addSource);
+router.post('/notebooks/:id/sources', protect, checkFileUploadLimit, checkStorageLimit, upload.single('file'), notebookController.addSource);
 router.delete('/notebooks/:id/sources/:sourceId', protect, notebookController.removeSource);
 router.patch('/notebooks/:id/sources/:sourceId', protect, notebookController.toggleSource);
 router.get('/notebooks/:id/sources/:sourceId/content', protect, notebookController.getSourceContent);

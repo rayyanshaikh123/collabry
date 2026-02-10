@@ -152,12 +152,12 @@ const checkAction = async (req, res) => {
       case 'create_board':
         const Board = require('../models/Board');
         const boardCount = await Board.countDocuments({ owner: userId });
-        if (limits.boardsTotal !== -1 && boardCount >= limits.boardsTotal) {
+        if (limits.boards !== -1 && boardCount >= limits.boards) {
           canPerform = false;
           reason = 'Board limit reached';
           remaining = 0;
         } else {
-          remaining = limits.boardsTotal === -1 ? 'unlimited' : limits.boardsTotal - boardCount;
+          remaining = limits.boards === -1 ? 'unlimited' : limits.boards - boardCount;
         }
         break;
         
@@ -171,10 +171,15 @@ const checkAction = async (req, res) => {
         }
         break;
         
-      case 'use_model':
-        if (model && !limits.aiModels.includes(model)) {
+      case 'create_notebook':
+        const Notebook = require('../models/Notebook');
+        const notebookCount = await Notebook.countDocuments({ userId });
+        if (limits.notebooks !== -1 && notebookCount >= limits.notebooks) {
           canPerform = false;
-          reason = `Model ${model} not available on ${plan} plan`;
+          reason = 'Notebook limit reached';
+          remaining = 0;
+        } else {
+          remaining = limits.notebooks === -1 ? 'unlimited' : limits.notebooks - notebookCount;
         }
         break;
         
@@ -182,7 +187,7 @@ const checkAction = async (req, res) => {
         return res.status(400).json({
           success: false,
           error: 'Invalid action',
-          validActions: ['ai_question', 'create_board', 'upload_file', 'use_model'],
+          validActions: ['ai_question', 'create_board', 'upload_file', 'create_notebook'],
         });
     }
     

@@ -113,7 +113,16 @@ const downloadInvoice = asyncHandler(async (req, res) => {
     });
   }
 
-  const filePath = path.join(__dirname, '../..', payment.invoiceUrl);
+  const invoicesDir = path.resolve(__dirname, '../..', 'invoices');
+  const filePath = path.resolve(__dirname, '../..', payment.invoiceUrl);
+
+  // Prevent path traversal — resolved path must stay within the invoices directory
+  if (!filePath.startsWith(invoicesDir)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid invoice path',
+    });
+  }
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({

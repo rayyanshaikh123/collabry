@@ -47,30 +47,15 @@ class SessionsService {
   }
 
   private setupInterceptors() {
-    // Request interceptor - attach JWT token
+    // Request interceptor - attach JWT token from Zustand in-memory state
     this.client.interceptors.request.use(
       (config) => {
-        const authStorage = localStorage.getItem('auth-storage');
-        console.log('🔑 [Sessions Service] Auth storage:', authStorage ? 'Found' : 'Not found');
-        
-        if (authStorage) {
-          try {
-            const { state } = JSON.parse(authStorage);
-            const token = state?.accessToken;
-            console.log('🔑 [Sessions Service] Token:', token ? `${token.substring(0, 20)}...` : 'None');
-            
-            if (token && config.headers) {
-              config.headers.Authorization = `Bearer ${token}`;
-              console.log('✅ [Sessions Service] Authorization header set');
-            }
-          } catch (e) {
-            console.error('❌ [Sessions Service] Failed to parse auth storage:', e);
-          }
-        } else {
-          console.warn('⚠️ [Sessions Service] No auth-storage in localStorage');
+        // Lazy import to avoid circular dependency
+        const { useAuthStore } = require('../stores/auth.store');
+        const token = useAuthStore.getState().accessToken;
+        if (token && config.headers) {
+          config.headers.Authorization = `Bearer ${token}`;
         }
-        
-        console.log('📤 [Sessions Service] Request:', config.method?.toUpperCase(), config.url);
         return config;
       },
       (error) => Promise.reject(error)
