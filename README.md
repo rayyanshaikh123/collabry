@@ -408,7 +408,7 @@ cp .env.example .env
 
 # Edit .env with your values:
 # - MONGODB_URI (your MongoDB connection string)
-# - JWT_SECRET (generate random string)
+# - JWT_ACCESS_SECRET / JWT_REFRESH_SECRET (generate secure random secrets)
 # - RAZORPAY credentials (optional for payments)
 
 # Create admin user (optional)
@@ -426,16 +426,27 @@ cd ../frontend
 npm install
 
 # Create environment file
-cp .env.example .env.local
+# (This repo does not ship a frontend .env.example. Create .env.local manually.)
+# Windows PowerShell:
+#   New-Item -Path .env.local -ItemType File
+# Mac/Linux:
+#   touch .env.local
 
-# Edit .env.local:
+# Edit frontend/.env.local (local dev defaults):
 # - NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
+# - NEXT_PUBLIC_API_URL=http://localhost:5000
 # - NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+# - NEXT_PUBLIC_AI_ENGINE_URL=http://localhost:8000
 
 # Start development server
 npm run dev
 # ✅ Frontend running on http://localhost:3000
 ```
+
+Troubleshooting (dev):
+- If you see: `Unable to acquire lock ... frontend/.next/dev/lock`
+  - Stop any other `next dev` processes, then delete `frontend/.next/dev/lock`.
+  - You can also use `npm run dev:clean` (removes the lock) or `npm run dev:reset` (deletes `.next`).
 
 #### 4️⃣ AI Engine Setup (FastAPI + Hugging Face)
 
@@ -461,8 +472,9 @@ cp .env.example .env
 
 # Edit .env:
 # - MONGO_URI (match backend MongoDB)
-# - JWT_SECRET_KEY (match backend JWT_SECRET)
-# - GOOGLE_API_KEY (get from Google AI Studio)
+# - JWT_SECRET_KEY (must match backend JWT_ACCESS_SECRET)
+# - LLM_PROVIDER (openai/groq/ollama/together)
+# - OPENAI_API_KEY (or GROQ_API_KEY / Together / Ollama local)
 
 # Start the AI server
 python run_server.py
@@ -654,9 +666,14 @@ NODE_ENV=development
 # Database
 MONGODB_URI=mongodb://localhost:27017/collabry
 
-# JWT
-JWT_SECRET=your-super-secret-key
-JWT_EXPIRE=7d
+# CORS - Allow both Next.js dev server ports
+CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+
+# JWT Secrets (must match AI engine JWT_SECRET_KEY)
+JWT_ACCESS_SECRET=GENERATE_A_SECURE_RANDOM_SECRET_HERE_AT_LEAST_32_CHARS
+JWT_REFRESH_SECRET=GENERATE_A_DIFFERENT_SECURE_RANDOM_SECRET_HERE_AT_LEAST_32_CHARS
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
 
 # AI Engine
 AI_ENGINE_URL=http://localhost:8000
@@ -676,9 +693,19 @@ SMTP_PASS=your-app-password
 ### Frontend (.env.local)
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=https://colab-back.onrender.com/api
-NEXT_PUBLIC_SOCKET_URL=https://colab-back.onrender.com
-NEXT_PUBLIC_AI_URL=http://localhost:8000
+# Backend base (used by most REST calls)
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
+
+# Backend host (some features call non-/api routes)
+NEXT_PUBLIC_API_URL=http://localhost:5000
+
+# Socket.IO host
+NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+
+# AI Engine host (used by some direct AI calls like Voice Tutor)
+NEXT_PUBLIC_AI_ENGINE_URL=http://localhost:8000
+
+# Optional
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
 ```
 
@@ -688,6 +715,10 @@ NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
 # MongoDB
 MONGO_URI=mongodb://localhost:27017
 MONGO_DB=collabry
+
+# LLM provider
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your-openai-api-key-here
 
 # Ollama
 OLLAMA_BASE_URL=http://localhost:11434
@@ -726,7 +757,9 @@ SERPER_API_KEY=xxx
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/ai/chat` | AI chat conversation |
+| POST | `/api/ai/chat/stream` | Streaming AI chat (SSE) |
 | POST | `/api/ai/summarize` | Summarize text |
+| POST | `/api/ai/summarize/stream` | Streaming summarization (SSE) |
 | POST | `/api/ai/quiz` | Generate quiz |
 | POST | `/api/ai/mindmap` | Generate mind map |
 | POST | `/api/ai/upload` | Upload document for RAG |
@@ -959,13 +992,15 @@ cd ai-engine
 
 **Frontend:**
 - ✅ `NEXT_PUBLIC_API_BASE_URL`
+- ✅ `NEXT_PUBLIC_API_URL` (optional but used by some features)
 - ✅ `NEXT_PUBLIC_SOCKET_URL`
-- ✅ `NEXT_PUBLIC_AI_URL` (optional, defaults to backend proxy)
+- ✅ `NEXT_PUBLIC_AI_ENGINE_URL` (optional, defaults vary by feature)
 
 **AI Engine:**
 - ✅ `MONGO_URI`
 - ✅ `JWT_SECRET_KEY`
-- ✅ `GOOGLE_API_KEY`
+- ✅ `LLM_PROVIDER`
+- ✅ Provider key (one of): `OPENAI_API_KEY`, `GROQ_API_KEY`, `TOGETHER_API_KEY` (or use local Ollama)
 
 ---
 
