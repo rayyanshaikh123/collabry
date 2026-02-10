@@ -163,6 +163,10 @@ const CollaborativeBoard: React.FC = () => {
     return `${prefix}:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   };
 
+  const generateAssetId = () => {
+    return `asset:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  };
+
   const buildInfographicShapes = (infographic: any) => {
     if (!infographic) return [];
     const title = String(infographic.title || 'Infographic');
@@ -232,6 +236,7 @@ const CollaborativeBoard: React.FC = () => {
           w: 330,
           h: 200,
           color: 'blue',
+          labelColor: 'black',
           fill: 'semi',
           dash: 'draw',
           size: 'm',
@@ -247,6 +252,7 @@ const CollaborativeBoard: React.FC = () => {
           },
           align: 'start',
           verticalAlign: 'start',
+          scale: 1,
           growY: 0,
           url: '',
         },
@@ -257,63 +263,116 @@ const CollaborativeBoard: React.FC = () => {
   };
 
   const buildMindmapShapes = (payload: any) => {
-    if (!payload) return [];
+    if (!payload) return { shapes: [], assets: [] };
     
     const title = payload.title || 'Mind Map';
     const data = payload.data || payload;
     const nodeCount = data?.nodes?.length || 0;
-    const svgBase64 = data?.svgBase64;
+    const svgBase64 = payload.svgBase64 || data?.svgBase64;
     
     const originX = 120;
     const originY = 160;
     const shapes: any[] = [];
+    const assets: any[] = [];
 
-    // Create a simple card representing the mindmap
-    shapes.push({
-      id: generateShapeId('shape'),
-      typeName: 'shape',
-      type: 'geo',
-      x: originX,
-      y: originY,
-      parentId: 'page:page',
-      index: 'a1',
-      rotation: 0,
-      isLocked: false,
-      opacity: 1,
-      meta: { mindmapData: data, svgBase64 },
-      props: {
-        geo: 'rectangle',
-        w: 500,
-        h: 300,
-        color: 'violet',
-        fill: 'semi',
-        dash: 'draw',
-        size: 'm',
-        font: 'sans',
-        richText: {
-          type: 'doc',
-          content: [
-            {
-              type: 'paragraph',
-              content: [{ type: 'text', text: `🧠 ${title}\n\nMindmap with ${nodeCount} nodes\n\n💡 View in Study Notebook to see full diagram\n📊 This is a visual representation placeholder` }]
-            }
-          ]
+    // If we have SVG data, create an image shape with asset
+    if (svgBase64) {
+      const assetId = generateAssetId();
+      const svgDataUri = `data:image/svg+xml;base64,${svgBase64}`;
+      
+      // Create image asset
+      assets.push({
+        id: assetId,
+        type: 'image',
+        typeName: 'asset',
+        props: {
+          name: `${title}.svg`,
+          src: svgDataUri,
+          w: 800,
+          h: 600,
+          mimeType: 'image/svg+xml',
+          isAnimated: false,
         },
-        align: 'middle',
-        verticalAlign: 'middle',
-        growY: 0,
-        url: '',
-      },
-    });
+        meta: {},
+      });
 
-    return shapes;
+      // Create image shape
+      shapes.push({
+        id: generateShapeId('shape'),
+        typeName: 'shape',
+        type: 'image',
+        x: originX,
+        y: originY,
+        parentId: 'page:page',
+        index: 'a1',
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        meta: {},
+        props: {
+          w: 800,
+          h: 600,
+          assetId: assetId,
+          playing: true,
+          url: '',
+          crop: null,
+          flipX: false,
+          flipY: false,
+          altText: title,
+        },
+      });
+    } else {
+      // Fallback: Create a placeholder card if no SVG
+      shapes.push({
+        id: generateShapeId('shape'),
+        typeName: 'shape',
+        type: 'geo',
+        x: originX,
+        y: originY,
+        parentId: 'page:page',
+        index: 'a1',
+        rotation: 0,
+        isLocked: false,
+        opacity: 1,
+        meta: {},
+        props: {
+          geo: 'rectangle',
+          w: 500,
+          h: 300,
+          color: 'violet',
+          labelColor: 'black',
+          fill: 'semi',
+          dash: 'draw',
+          size: 'm',
+          font: 'sans',
+          richText: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: `🧠 ${title}\n\nMindmap with ${nodeCount} nodes\n\n💡 View in Study Notebook to see full diagram\n📊 This is a visual representation placeholder` }]
+              }
+            ]
+          },
+          align: 'middle',
+          verticalAlign: 'middle',
+          scale: 1,
+          growY: 0,
+          url: '',
+        },
+      });
+    }
+
+    return { shapes, assets };
   };
 
   const buildShapesFromImport = (payload: any) => {
-    if (!payload || typeof payload !== 'object') return [];
+    if (!payload || typeof payload !== 'object') return { shapes: [], assets: [] };
     if (payload.kind === 'mindmap') return buildMindmapShapes(payload);
-    if (payload.kind === 'infographic') return buildInfographicShapes(payload.data);
-    return [];
+    if (payload.kind === 'infographic') {
+      return { shapes: buildInfographicShapes(payload.data), assets: [] };
+    }
+    return { shapes: [], assets: [] };
   };
 
   // Handle tldraw editor mount
@@ -740,9 +799,10 @@ const CollaborativeBoard: React.FC = () => {
       }
 
       try {
-        const shapes = buildShapesFromImport(importPayloadRef.current);
-        if (shapes.length > 0) {
-          editor.store.put(shapes);
+        const { shapes, assets } = buildShapesFromImport(importPayloadRef.current);
+        const records = [...assets, ...shapes];
+        if (records.length > 0) {
+          editor.store.put(records);
         }
       } catch (e) {
         console.error('Failed to apply imported shapes:', e);

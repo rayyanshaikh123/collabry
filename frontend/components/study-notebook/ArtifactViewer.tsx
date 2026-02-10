@@ -12,6 +12,7 @@ import InfographicViewer from './InfographicViewer';
 import CourseCard, { CourseInfo } from './CourseCard';
 import { extractCoursesFromMarkdown } from '../../lib/courseParser';
 import BoardPickerModal from '../study-board/BoardPickerModal';
+import renderMindmap from '../../src/lib/mindmapClient';
 
 interface ArtifactViewerProps {
   artifact: Artifact;
@@ -54,37 +55,117 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
     router.push(`/study-board/${boardId}`);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setIsExporting(true);
+    
+    console.log('=== EXPORT DEBUG ===');
+    console.log('Artifact type:', artifact.type);
+    console.log('Artifact data:', artifact.data);
+    console.log('Has data.svgBase64:', !!artifact.data?.svgBase64);
+    console.log('Has data.mermaidCode:', !!artifact.data?.mermaidCode);
+    
     try {
-      // For mindmaps, export as SVG image if available
-      if (artifact.type === 'mindmap' && artifact.data?.svgBase64) {
-        // Convert base64 SVG to blob
-        const svgData = atob(artifact.data.svgBase64);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(svgBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.svg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } else {
-        // For other artifacts, export as JSON
-        const dataStr = JSON.stringify(artifact, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      // For mindmaps, export as SVG image
+      if (artifact.type === 'mindmap') {
+        let svgBase64 = artifact.data?.svgBase64;
+        
+        // If we have mermaid code but no SVG, render it with mermaid library
+        if (!svgBase64 && artifact.data?.mermaidCode) {
+          console.log('Have mermaid code, rendering to SVG with mermaid library...');
+          try {
+            const mermaidModule = await import('mermaid');
+            const mermaid = (mermaidModule as any).default || mermaidModule;
+            if (mermaid) {
+              mermaid.initialize({ startOnLoad: false });
+              const id = 'export_' + Math.random().toString(36).slice(2, 9);
+              const { svg } = await mermaid.render(id, artifact.data.mermaidCode);
+              
+              // Convert SVG string to base64
+              svgBase64 = btoa(svg);
+              console.log('Successfully rendered mermaid to SVG, length:', svgBase64.length);
+            }
+          } catch (mermaidError) {
+            console.error('Mermaid rendering failed:', mermaidError);
+          }
+        }
+        
+        // If still no SVG, try rendering from mindmap data
+        if (!svgBase64 && artifact.data) {
+          console.log('No cached SVG or mermaid, rendering mindmap from data...');
+          console.log('Mindmap data structure:', {
+            hasNodes: !!artifact.data.nodes,
+            hasEdges: !!artifact.data.edges,
+            nodeCount: artifact.data.nodes?.length,
+            edgeCount: artifact.data.edges?.length
+          });
+          
+          try {
+            console.log('Calling renderMindmap with data:', artifact.data);
+            const result = await renderMindmap(artifact.data, 'svg');
+            console.log('Render result:', result);
+            svgBase64 = result.svg_base64;
+            console.log('Extracted SVG:', { 
+              hasSvg: !!result.svg_base64, 
+              hasMermaid: !!result.mermaid,
+              svgLength: result.svg_base64?.length,
+              svgPreview: result.svg_base64?.substring(0, 100)
+            });
+          } catch (renderError) {
+            console.error('Failed to render mindmap:', renderError);
+            const errorMsg = renderError instanceof Error ? renderError.message : String(renderError);
+            console.error('Full error:', errorMsg);
+            
+            // Check if it's a network error
+            if (errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('ECONNREFUSED')) {
+              alert('Cannot connect to AI engine. Make sure the AI backend is running on port 8000. Error: ' + errorMsg);
+            } else {
+              alert('Failed to render mindmap. Error: ' + errorMsg + '. Check console for details.');
+            }
+          }
+        }
+        
+        if (svgBase64) {
+          console.log('Exporting SVG, length:', svgBase64.length);
+          try {
+            // Convert base64 SVG to blob
+            const svgData = atob(svgBase64);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(svgBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            console.log('SVG exported successfully');
+            setIsExporting(false);
+            return;
+          } catch (exportError) {
+            console.error('Failed to export SVG:', exportError);
+            alert('Failed to create SVG file. Exporting as JSON instead.');
+          }
+        } else {
+          console.warn('No SVG data available after all attempts');
+          alert('Could not generate SVG image. Exporting as JSON instead.');
+        }
       }
+      
+      // For other artifacts or mindmaps without SVG, export as JSON
+      console.log('Exporting as JSON');
+      const dataStr = JSON.stringify(artifact, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${artifact.title.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
+      alert('Export failed: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsExporting(false);
     }

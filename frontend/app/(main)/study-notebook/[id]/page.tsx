@@ -887,6 +887,31 @@ Output ONLY the JSON object.`;
     if (!notebook || !('title' in notebook)) return;
 
     try {
+      // First, render the mindmap to get the SVG
+      console.log('Rendering mindmap before save...', mindmap);
+      const renderMindmapModule = await import('../../../../src/lib/mindmapClient');
+      const renderMindmap = renderMindmapModule.default;
+      
+      let svgBase64 = null;
+      let mermaidCode = null;
+      
+      try {
+        const renderResult = await renderMindmap(mindmap, 'both');
+        svgBase64 = renderResult.svg_base64;
+        mermaidCode = renderResult.mermaid;
+        console.log('Mindmap rendered successfully:', { 
+          hasSvg: !!svgBase64, 
+          hasMermaid: !!mermaidCode,
+          svgLength: svgBase64?.length,
+          result: renderResult
+        });
+      } catch (renderError) {
+        console.error('Failed to render mindmap:', renderError);
+        const errorMsg = renderError instanceof Error ? renderError.message : String(renderError);
+        console.error('Render error details:', errorMsg);
+        showWarning(`Could not render mindmap image: ${errorMsg}. Saving structure only.`);
+      }
+
       const result = await generateMindMap.mutateAsync({
         topic: `${notebook.title} - Study Notes`,
         maxNodes: mindmap.nodes.length,
@@ -898,13 +923,25 @@ Output ONLY the JSON object.`;
       const savedId = (result && (result.savedMapId || (result as any)._id || (result as any).data?._id)) || null;
 
       if (savedId) {
+        // Use the rendered SVG we just got, or fallback to result
+        const finalSvgBase64 = svgBase64 || (result as any)?.svgBase64 || (result as any)?.data?.svgBase64;
+        const finalMermaidCode = mermaidCode || (result as any)?.mermaidCode || (result as any)?.data?.mermaidCode;
+
+        console.log('Saving mindmap with data:', {
+          hasNodes: !!mindmap.nodes,
+          hasSvg: !!finalSvgBase64,
+          hasMermaid: !!finalMermaidCode
+        });
+
         await linkArtifact.mutateAsync({
           type: 'mindmap',
           referenceId: savedId,
           title: `Mind Map - ${notebook.title}`,
           data: {
             nodes: mindmap.nodes,
-            edges: mindmap.edges
+            edges: mindmap.edges,
+            svgBase64: finalSvgBase64,
+            mermaidCode: finalMermaidCode
           }
         });
         showSuccess('Mind map saved to Studio successfully!');
