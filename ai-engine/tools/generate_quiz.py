@@ -14,11 +14,11 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def generate_quiz(
-    notebook_id: str,
-    user_id: str,
+    topic: str,
     num_questions: int = 10,
     difficulty: str = "medium",
-    topic: Optional[str] = None
+    notebook_id: Optional[str] = None,
+    user_id: str = "default"
 ) -> str:
     """
     Generate a quiz based on study materials.
@@ -31,11 +31,11 @@ async def generate_quiz(
     - "Create 5 questions about photosynthesis"
     
     Args:
-        notebook_id: Target notebook
-        user_id: User identifier (injected by agent)
+        topic: The topic for the quiz (REQUIRED)
         num_questions: Number of questions (default 10)
         difficulty: easy, medium, or hard
-        topic: Optional specific topic filter
+        notebook_id: Target notebook (optional, auto-injected)
+        user_id: User identifier (optional, auto-injected)
     
     Returns:
         JSON quiz with questions, options, and correct answers
@@ -54,7 +54,7 @@ async def generate_quiz(
         
         # Retrieve relevant documents
         query = topic if topic else "all topics and concepts"
-        docs = retriever.get_relevant_documents(query)
+        docs = retriever.invoke(query)
         
         if not docs:
             return "No documents found. Please upload study materials first."

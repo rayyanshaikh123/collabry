@@ -100,23 +100,45 @@ async def chat_stream(
         logger.info(f"Streaming chat request from user={user_id}, session={session_id}")
         
         async def event_generator():
-            """Generate SSE events that stream in real-time from new agent."""
+            """Generate SSE events that stream tool calls and responses from ReAct agent."""
             has_data = False
             
             try:
-                # Use new agent with streaming
-                async for chunk in run_agent(
+                # Use new agent with streaming (returns event dicts)
+                async for event in run_agent(
                     user_id=user_id,
                     session_id=session_id,
                     message=request.message,
                     notebook_id=None,
+                    use_rag=bool(request.use_rag) or bool(request.source_ids),
+                    source_ids=request.source_ids,
                     stream=True
                 ):
-                    if chunk:
+                    if event:
                         has_data = True
-                        yield f"data: {json.dumps({'content': chunk})}\n\n"
+                        event_type = event.get("type")
+                        
+                        if event_type == "tool_start":
+                            # Tool invocation started
+                            yield f"data: {json.dumps(event)}\n\n"
+                        
+                        elif event_type == "tool_end":
+                            # Tool completed
+                            yield f"data: {json.dumps(event)}\n\n"
+                        
+                        elif event_type == "token":
+                            # Content token (backward compatible with old format)
+                            yield f"data: {json.dumps({'content': event['content']})}\n\n"
+                        
+                        elif event_type == "complete":
+                            # Final completion
+                            yield f"data: {json.dumps({'done': True, 'message': event['message']})}\n\n"
+                        
+                        elif event_type == "error":
+                            # Error occurred
+                            yield f"data: {json.dumps(event)}\n\n"
                 
-                # Send completion event
+                # Send completion event if no explicit complete was sent
                 if has_data:
                     yield f"data: {json.dumps({'done': True})}\n\n"
                 else:
@@ -125,7 +147,7 @@ async def chat_stream(
             
             except Exception as e:
                 logger.error(f"Stream error: {e}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         
         return StreamingResponse(
             event_generator(),

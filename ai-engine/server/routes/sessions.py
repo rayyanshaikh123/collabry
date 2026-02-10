@@ -430,22 +430,71 @@ async def session_chat_stream(
         async def event_generator():
             """Generate SSE events that stream in real-time from agent."""
             full_response = ""
+            max_tool_output_chars = 4000
             
             try:
                 # Stream from new agent architecture
-                async for chunk in run_agent(
+                async for event in run_agent(
                     user_id=user_id,
                     session_id=session_id,
                     message=request.message,
                     notebook_id=session_id,  # Use session_id as notebook_id for now
+                    use_rag=bool(request.use_rag) or bool(request.source_ids),
+                    source_ids=request.source_ids,
                     stream=True
                 ):
-                    if chunk:
-                        full_response += chunk
-                        # Send chunk as JSON so leading spaces/newlines are preserved.
-                        # (SSE parsers can drop a single leading space after `data:`.)
-                        payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
+                    if not event:
+                        continue
+                    
+                    event_type = event.get("type")
+                    
+                    # Handle token events (streaming text)
+                    if event_type == "token":
+                        content = event.get("content", "")
+                        full_response += content
+                        payload = json.dumps(
+                            {"type": "token", "content": content},
+                            ensure_ascii=False,
+                        )
                         yield f"data: {payload}\n\n"
+                    
+                    # Handle tool execution events
+                    elif event_type == "tool_start":
+                        tool_info = json.dumps({
+                            "type": "tool_start",
+                            "tool": event.get("tool"),
+                            "inputs": event.get("inputs")
+                        })
+                        yield f"data: {tool_info}\n\n"
+                    
+                    elif event_type == "tool_end":
+                        output = event.get("output")
+                        output_text = "" if output is None else str(output)
+                        output_preview = output_text[:max_tool_output_chars]
+                        truncated = len(output_text) > max_tool_output_chars
+
+                        tool_info = json.dumps({
+                            "type": "tool_end",
+                            "tool": event.get("tool"),
+                            "output": output_preview,
+                            "output_truncated": truncated,
+                            "output_len": len(output_text),
+                        })
+                        yield f"data: {tool_info}\n\n"
+                    
+                    # Handle completion
+                    elif event_type == "complete":
+                        full_response = event.get("message", full_response)
+                    
+                    # Handle errors
+                    elif event_type == "error":
+                        error_payload = json.dumps({
+                            "type": "error",
+                            "message": event.get("message"),
+                            "details": event.get("details")
+                        })
+                        yield f"data: {error_payload}\n\n"
+                        full_response = event.get("message", "An error occurred.")
                 
                 # Send completion event
                 yield f"event: done\ndata: \n\n"

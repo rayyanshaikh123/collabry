@@ -17,6 +17,45 @@ if env_file.exists():
     load_dotenv(env_file)
 
 
+def _first_non_empty_env(*keys: str) -> str | None:
+    """Return the first non-empty environment variable value among keys."""
+    for key in keys:
+        val = os.getenv(key)
+        if val is None:
+            continue
+        val = val.strip()
+        if val:
+            return val
+    return None
+
+
+def _mongo_uri_from_env() -> str | None:
+    """Resolve MongoDB URI from common env var names.
+
+    Supports both backend-style `MONGO_URI` and standard `MONGODB_URI`.
+    Also considers `DATABASE_URL` if it looks like a Mongo URI.
+    """
+    uri = _first_non_empty_env(
+        "MONGODB_URI",
+        "MONGO_URI",
+        "MONGO_URL",
+        "MONGODB_URL",
+        "DATABASE_URL",
+    )
+    if not uri:
+        return None
+    # Avoid accidentally treating non-mongo DATABASE_URLs as Mongo
+    if not uri.lower().startswith("mongodb"):
+        return None
+    return uri
+
+
+# Normalize Mongo URI env var for any modules that directly read MONGODB_URI.
+_resolved_mongo_uri = _mongo_uri_from_env()
+if _resolved_mongo_uri and not (os.getenv("MONGODB_URI") or "").strip():
+    os.environ["MONGODB_URI"] = _resolved_mongo_uri
+
+
 class Config:
     """Application configuration from environment variables."""
     
@@ -33,6 +72,10 @@ class Config:
     OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
     OPENAI_MAX_TOKENS = int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
     OPENAI_STREAMING = os.getenv("OPENAI_STREAMING", "true").lower() == "true"
+    
+    # Fine-tuned model configuration
+    OPENAI_FINETUNED_MODEL = os.getenv("OPENAI_FINETUNED_MODEL")
+    USE_FINETUNED_MODEL = os.getenv("USE_FINETUNED_MODEL", "false").lower() == "true"
     
     # ========== Embeddings Configuration ==========
     EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai").lower()
@@ -65,8 +108,8 @@ class Config:
     QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "documents")
     
     # ========== Database Configuration ==========
-    MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-    MONGODB_DB = os.getenv("MONGODB_DB", "study_assistant")
+    MONGODB_URI = _mongo_uri_from_env() or os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+    MONGODB_DB = _first_non_empty_env("MONGODB_DB", "MONGO_DB", "DB_NAME") or "study_assistant"
     MEMORY_COLLECTION = os.getenv("MEMORY_COLLECTION", "conversations")
     
     # ========== Documents/RAG Storage ==========

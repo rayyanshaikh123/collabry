@@ -14,28 +14,74 @@ Provider switching requires only environment variable changes.
 """
 
 import os
+import time
+import asyncio
 from typing import Optional
 from openai import OpenAI, AsyncOpenAI
-try:
-    from langchain_openai import ChatOpenAI
-except ImportError:
-    # Fallback for older langchain installations
-    from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
+
+
+# Rate limiting
+_last_request_time = 0
+_min_request_interval = 1.0  # Minimum seconds between requests
 
 
 class LLMConfig:
-    """Configuration for OpenAI-compatible LLM client."""
+    """Configuration for OpenAI-compatible LLM client with multi-provider support."""
     
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY", "dummy")
-        self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        self.temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
-        self.max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "4096"))
-        self.streaming = os.getenv("OPENAI_STREAMING", "true").lower() == "true"
+        # Determine provider
+        provider = os.getenv("LLM_PROVIDER", "openai").lower()
+        
+        # Provider-specific configurations
+        provider_configs = {
+            "openai": {
+                "api_key": os.getenv("OPENAI_API_KEY", "dummy"),
+                "base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+                "model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            },
+            "groq": {
+                "api_key": os.getenv("GROQ_API_KEY", ""),
+                "base_url": os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+                "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            },
+            "ollama": {
+                "api_key": "ollama",  # Ollama doesn't need a real key
+                "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+                "model": os.getenv("OLLAMA_MODEL", "llama3.2"),
+            },
+            "together": {
+                "api_key": os.getenv("TOGETHER_API_KEY", ""),
+                "base_url": os.getenv("TOGETHER_BASE_URL", "https://api.together.xyz/v1"),
+                "model": os.getenv("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+            }
+        }
+        
+        # Get provider config or default to OpenAI
+        config = provider_configs.get(provider, provider_configs["openai"])
+        
+        self.provider = provider
+        self.api_key = config["api_key"]
+        self.base_url = config["base_url"]
+        self.model = config["model"]
+        
+        # Support fine-tuned models (OpenAI only)
+        if provider == "openai":
+            self.finetuned_model = os.getenv("OPENAI_FINETUNED_MODEL")
+            self.use_finetuned = os.getenv("USE_FINETUNED_MODEL", "false").lower() == "true"
+            if self.use_finetuned and self.finetuned_model:
+                self.model = self.finetuned_model
+        
+        # Shared parameters (work with all providers)
+        self.temperature = float(os.getenv("LLM_TEMPERATURE", os.getenv("OPENAI_TEMPERATURE", "0.7")))
+        self.max_tokens = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OPENAI_MAX_TOKENS", "4096")))
+        self.streaming = os.getenv("LLM_STREAMING", os.getenv("OPENAI_STREAMING", "true")).lower() == "true"
+        
+        # Rate limiting
+        self.request_delay = float(os.getenv("LLM_REQUEST_DELAY", os.getenv("OPENAI_REQUEST_DELAY", "1.0")))
     
     def __repr__(self):
-        return f"LLMConfig(base_url={self.base_url}, model={self.model})"
+        return f"LLMConfig(provider={self.provider}, base_url={self.base_url}, model={self.model})"
 
 
 # Singleton instance
@@ -100,6 +146,7 @@ def get_langchain_llm() -> ChatOpenAI:
     Get LangChain-compatible LLM for agent orchestration.
     
     This is used by the agent executor for tool calling.
+    Rate-limited to prevent 429 errors.
     
     Returns:
         ChatOpenAI instance configured with environment variables
@@ -108,9 +155,20 @@ def get_langchain_llm() -> ChatOpenAI:
         >>> llm = get_langchain_llm()
         >>> agent = create_openai_tools_agent(llm, tools, prompt)
     """
-    global _langchain_client
+    global _langchain_client, _last_request_time
+    
+    # Apply rate limiting
+    config = get_llm_config()
+    current_time = time.time()
+    time_since_last = current_time - _last_request_time
+    
+    if time_since_last < config.request_delay:
+        # Sleep to respect rate limit
+        time.sleep(config.request_delay - time_since_last)
+    
+    _last_request_time = time.time()
+    
     if _langchain_client is None:
-        config = get_llm_config()
         try:
             # Try newer parameter names first
             _langchain_client = ChatOpenAI(

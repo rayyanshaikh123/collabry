@@ -13,9 +13,9 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def summarize_notes(
-    notebook_id: str,
-    user_id: str,
-    topic: Optional[str] = None
+    topic: str = "all notes",
+    notebook_id: Optional[str] = None,
+    user_id: str = "default"
 ) -> str:
     """
     Generate a comprehensive summary of notes in a notebook.
@@ -28,27 +28,27 @@ async def summarize_notes(
     - "Create a study summary"
     
     Args:
-        notebook_id: Target notebook to summarize
-        user_id: User identifier (injected by agent)
-        topic: Optional specific topic to focus on
+        topic: Specific topic to focus on or "all notes" for everything
+        notebook_id: Target notebook to summarize (optional, auto-injected)
+        user_id: User identifier (optional, auto-injected)
     
     Returns:
         Structured summary with key topics and concepts
     """
     try:
-        # Get retriever for this notebook
-        retriever = get_retriever(
-            user_id=user_id,
-            notebook_id=notebook_id,
-            k=20  # Get more docs for comprehensive summary
-        )
-        
-        # Retrieve documents
         query = topic if topic else "main topics and key concepts"
-        docs = retriever.get_relevant_documents(query)
-        
+
+        # First: scoped to the notebook (preferred)
+        retriever = get_retriever(user_id=user_id, notebook_id=notebook_id, k=20)
+        docs = retriever.invoke(query)
+
+        # Fallback: user-wide (handles notebook/session id mismatches)
         if not docs:
-            return "No documents found in this notebook. Please upload some study materials first."
+            retriever = get_retriever(user_id=user_id, notebook_id=None, k=20)
+            docs = retriever.invoke(query)
+
+        if not docs:
+            return "No documents found. Please upload some study materials first."
         
         # Combine document content
         combined_text = "\n\n".join([doc.page_content for doc in docs])

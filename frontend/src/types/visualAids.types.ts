@@ -280,12 +280,13 @@ export interface GenerateFlashcardsResponse {
 
 export interface GenerateMindMapRequest {
   topic: string;
+  text?: string;
   depth?: number;
   maxNodes?: number;
-  includeExamples?: boolean;
-  saveToLibrary?: boolean;
+  save?: boolean;
+  subjectId?: string;
+  useRag?: boolean;
   title?: string;
-  subject?: string;
 }
 
 export interface GenerateMindMapResponse {

@@ -490,13 +490,46 @@ export default function StudyNotebookPage() {
             let appended = eventData;
             try {
               const maybeJson = JSON.parse(eventData);
-              if (maybeJson && typeof maybeJson.chunk === 'string') appended = maybeJson.chunk;
+
+              // Backward compatible: older server streamed `{ chunk: "..." }`
+              if (maybeJson && typeof maybeJson.chunk === 'string') {
+                appended = maybeJson.chunk;
+              }
+
+              // Current server streams typed payloads
+              if (maybeJson && typeof maybeJson.type === 'string') {
+                if (maybeJson.type === 'token' && typeof maybeJson.content === 'string') {
+                  appended = maybeJson.content;
+                } else if (maybeJson.type === 'tool_start') {
+                  console.log('🔧 [LLM tool_start]', {
+                    tool: maybeJson.tool,
+                    inputs: maybeJson.inputs,
+                  });
+                  appended = '';
+                } else if (maybeJson.type === 'tool_end') {
+                  console.log('✅ [LLM tool_end]', {
+                    tool: maybeJson.tool,
+                    output_preview: maybeJson.output,
+                    output_truncated: maybeJson.output_truncated,
+                    output_len: maybeJson.output_len,
+                  });
+                  appended = '';
+                } else if (maybeJson.type === 'error') {
+                  console.error('❌ [LLM error]', maybeJson);
+                  appended = typeof maybeJson.message === 'string' ? maybeJson.message : '❌ An error occurred.';
+                } else {
+                  // Unknown typed event: don't append into chat
+                  appended = '';
+                }
+              }
             } catch {
               // ignore
             }
 
-            fullResponse += appended;
-            scheduleRender();
+            if (appended) {
+              fullResponse += appended;
+              scheduleRender();
+            }
           }
 
           if (sawDoneEvent) break;
@@ -576,31 +609,20 @@ export default function StudyNotebookPage() {
         const lines: string[] = [];
         lines.push('[COURSE_FINDER_REQUEST]');
         lines.push('');
-        lines.push(`Find the best online courses about "${topics}" from the internet.`);
+        lines.push(`Topic: ${topics}`);
         lines.push('');
-        lines.push('**CRITICAL: YOU MUST USE WEB_SEARCH TOOL**');
-        lines.push(`1. Call the web_search tool with queries such as: "best courses ${topics}", "${topics} online course", or "${topics} tutorial course"`);
-        lines.push('2. Do NOT answer from model memory — web_search must be used first.');
+        lines.push('You MUST call the tool `search_web` before answering. Do not use memory.');
         lines.push('');
-        lines.push('**EXTRACTION REQUIREMENTS:**');
-        lines.push('From the web_search tool results, extract for EACH course (where available):');
-        lines.push('- Course title (exact name from the course page)');
-        lines.push('- Course URL (direct course page URL)');
-        lines.push('- Platform name (Coursera, Udemy, edX, Codecademy, etc.)');
-        lines.push('- Rating (format as X.X/5 if available)');
-        lines.push('- Price (format as $XX or "Free" if available)');
+        lines.push('Return ONLY valid JSON (no markdown, no code fences):');
+        lines.push('{"tool": null, "answer": "<COURSE_LIST>"}');
         lines.push('');
-        lines.push('**OUTPUT FORMAT - MANDATORY:**');
-        lines.push('Return a JSON object exactly like: {"tool": null, "answer": "<COURSE_LIST>"}');
-        lines.push('Where <COURSE_LIST> is the courses each on its own line, formatted as:');
-        lines.push('[Course Title](https://course.url) - Platform: X | Rating: X.X/5 | Price: $X');
+        lines.push('Where <COURSE_LIST> is 5-8 lines. EACH line MUST be exactly:');
+        lines.push('- [Course Title](https://direct.course.url) - Platform: X | Rating: X.X/5 | Price: $X');
         lines.push('');
-        lines.push('Requirements:');
-        lines.push('- Provide 5-8 courses when possible');
-        lines.push('- Use real course URLs (not search result pages)');
-        lines.push('- One course per line, no extra commentary');
-        lines.push('');
-        lines.push('Now call web_search tool and format the results exactly as specified.');
+        lines.push('Rules:');
+        lines.push('- Use direct course pages (not search result pages)');
+        lines.push('- If rating/price missing, write "Not provided"');
+        lines.push('- No extra commentary; JSON only');
 
         const message = lines.join('\n');
 
@@ -610,31 +632,23 @@ export default function StudyNotebookPage() {
       }
 
       if (type === 'flashcards') {
-        const message = `Create flashcards for studying: ${topics}
+        const message = `Create flashcards for: ${topics}
 
-Use the content from the selected sources to create study flashcards.
-
-Output ONLY a JSON object with this exact structure (no markdown, no code blocks):
+Return ONLY valid JSON (no markdown, no code fences):
 {
   "title": "Flashcards: ${topics}",
   "cards": [
-    {
-      "id": "card-1",
-      "front": "What is...",
-      "back": "The answer is...",
-      "category": "Basics"
-    }
+    {"id":"card-1","front":"...","back":"...","category":"Basics"}
   ]
 }
 
-Requirements:
-- Generate 15-20 flashcards based on source content
-- Front: Clear question or concept to test
-- Back: Concise answer or explanation (2-3 sentences max)
-- Category: Group related cards (Basics, Definitions, Applications, etc.)
-- Cover key concepts, definitions, processes, and applications
-- Make questions specific and answers clear
-Output ONLY the JSON object, nothing else.`;
+Rules:
+- Exactly 15 cards
+- front: short question/term (<= 120 chars)
+- back: 1-3 concise sentences
+- category: one of Basics, Definitions, Processes, Applications, Pitfalls
+- Use only info implied by the selected sources
+- JSON only (no extra text)`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -653,33 +667,27 @@ Output ONLY the JSON object, nothing else.`;
           ? actionEdits.prompt
           : DEFAULT_QUIZ_PROMPT;
 
-        const message = `###QUIZ_GENERATOR###
+        const message = `###QUIZ_GENERATION_REQUEST###
 
 ${original} ${topics}
 
-Settings:
-- Number of questions: ${numQuestions}
-- Difficulty: ${difficulty}
-
-Format each question exactly like this:
-
-Question 1: [question text]?
-A) [option]
-B) [option]
-C) [option]
-D) [option]
-Answer: A
-Explanation: [why A is correct]
+Return ONLY valid JSON (no markdown, no code fences):
+[
+  {
+    "question": "...",
+    "options": ["A...", "B...", "C...", "D..."],
+    "correctAnswer": 0,
+    "explanation": "..."
+  }
+]
 
 Rules:
-- Strictly follow the format above
-- Questions must be relevant to the source material
-- Options should be plausible to ensure challenge
-- Generate exactly ${numQuestions} questions
-- Answer must be single letter (A, B, C, or D)
-- Base questions on the selected source material
-Output ONLY the questions, no extra text
-###END_INSTRUCTION###`;
+- Exactly ${numQuestions} questions
+- Exactly 4 options per question
+- correctAnswer is an integer 0-3 (index into options)
+- difficulty: ${difficulty} (use it to tune question depth)
+- Explanations must be 1-2 sentences
+- JSON only`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -687,25 +695,25 @@ Output ONLY the questions, no extra text
       }
 
       if (type === 'mindmap') {
-        const message = `Create a mind map about: ${topics}
+        const message = `Create a mind map for: ${topics}
 
-Use the content from the selected sources to build the mind map structure.
-
-Output ONLY a JSON object with this exact structure (no markdown, no code blocks, no extra text):
+Return ONLY valid JSON (no markdown, no code fences):
 {
   "nodes": [
-    {"id": "root", "label": "${topics}", "level": 0}
+    {"id":"root","label":"${topics}","level":0},
+    {"id":"node-1","label":"...","level":1}
   ],
-  "edges": []
+  "edges": [
+    {"from":"root","to":"node-1"}
+  ]
 }
 
-Requirements:
-- 10-20 nodes total based on the source content
-- 2-3 levels deep showing concept hierarchy
-- Labels should be 2-5 words extracted from source material
-- Connect related concepts with edges (parent-child relationships)
-- Each node id must be unique (use "node-" prefix with numbers)
-Output ONLY the JSON object, nothing else.`;
+Rules:
+- 12-20 nodes
+- 2-3 levels deep
+- Every edge must reference existing node ids
+- Short labels (2-6 words)
+- JSON only`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -726,10 +734,9 @@ Analyze the selected source materials and create a structured report with the fo
 7. Assessment Criteria (What to focus on for testing)
 8. Additional Resources (Recommended readings/videos)
 
-Format the report in clear markdown with headers, bullet points, and emphasis.
-Base all content on the actual source material provided.
-Make it comprehensive but readable (aim for 800-1200 words).
-Output ONLY the markdown report, nothing else.`;
+Format in clear markdown with headers and bullet points.
+Do not include JSON.
+No preamble; output the report only.`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -737,24 +744,29 @@ Output ONLY the markdown report, nothing else.`;
       }
 
       if (type === 'infographic') {
-        const message = `Create an infographic data structure for: ${topics}
+        const message = `Create an infographic JSON for: ${topics}
 
-Analyze the selected sources and extract key visual elements.
-
-Output ONLY a JSON object with this structure (no markdown, no code blocks):
+Return ONLY valid JSON (no markdown, no code fences):
 {
-  "title": "Main topic title",
-  "subtitle": "Brief description",
-  "sections": []
+  "title": "${topics}",
+  "subtitle": "...",
+  "sections": [
+    {
+      "id": "section-1",
+      "title": "...",
+      "icon": "📌",
+      "keyPoints": ["...", "..."],
+      "stats": [{"label": "...", "value": "..."}]
+    }
+  ],
+  "conclusion": "..."
 }
 
-Requirements:
-- Extract 3-5 sections from source content
-- Include real data/statistics when available
-- Use relevant emojis for icons
-- Timeline events should be chronological if source has historical context
-- Comparisons should highlight key differences
-Output ONLY the JSON object.`;
+Rules:
+- 3-5 sections
+- keyPoints: 3-5 bullets per section
+- stats: 0-3 items per section (only if supported by sources)
+- JSON only`;
 
         handleSendMessage(message);
         setIsGenerating(false);
@@ -819,6 +831,7 @@ Output ONLY the JSON object.`;
         title: `Practice Quiz - ${displayCount} Questions`,
         description: quizPrompt || 'Generated from study session',
         sourceType: 'ai',
+        subject: '', // Optional subject - can be set later
         questions: questions.map((q, index) => {
           const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
 
@@ -918,7 +931,7 @@ Output ONLY the JSON object.`;
         useRag: false,
         save: true,
         subjectId: '',
-      } as any);
+      });
 
       const savedId = (result && (result.savedMapId || (result as any)._id || (result as any).data?._id)) || null;
 

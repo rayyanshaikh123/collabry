@@ -43,7 +43,7 @@ const createGeoShape = (overrides: Partial<TemplateShape> & { props: any }): Tem
     content: [
       {
         type: 'paragraph',
-        content: [{ type: 'text', text: '' }]
+        content: []
       }
     ]
   };
@@ -97,7 +97,7 @@ const createTextShape = (overrides: Partial<TemplateShape> & { props: any }): Te
     content: [
       {
         type: 'paragraph',
-        content: [{ type: 'text', text: '' }]
+        content: []
       }
     ]
   };
@@ -166,7 +166,7 @@ export const boardTemplates: BoardTemplate[] = [
       }),
       createGeoShape({
         x: 400, y: 230, index: 'a4',
-        props: { geo: 'rectangle', w: 250, h: 400, color: 'light-yellow', fill: 'semi' },
+        props: { geo: 'rectangle', w: 250, h: 400, color: 'yellow', fill: 'semi' },
       }),
       createGeoShape({
         x: 700, y: 150, index: 'a5',
@@ -228,7 +228,7 @@ export const boardTemplates: BoardTemplate[] = [
       }),
       createGeoShape({
         x: 100, y: 500, index: 'a4',
-        props: { geo: 'rectangle', w: 350, h: 250, color: 'light-yellow', fill: 'semi', text: '❓ Questions', size: 'l', font: 'sans' },
+        props: { geo: 'rectangle', w: 350, h: 250, color: 'yellow', fill: 'semi', text: '❓ Questions', size: 'l', font: 'sans' },
       }),
       createGeoShape({
         x: 500, y: 500, index: 'a5',

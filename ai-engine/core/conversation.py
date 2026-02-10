@@ -38,8 +38,19 @@ class ConversationManager:
             mongodb_uri: MongoDB connection URI (defaults to env MONGODB_URI)
             db_name: Database name (defaults to env MONGODB_DB or 'study_assistant')
         """
-        self.uri = mongodb_uri or os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-        self.db_name = db_name or os.getenv("MONGODB_DB", "study_assistant")
+        # Accept common env var aliases used across deployments.
+        env_uri = (
+            (os.getenv("MONGODB_URI") or "").strip()
+            or (os.getenv("MONGO_URI") or "").strip()
+            or (os.getenv("MONGO_URL") or "").strip()
+            or (os.getenv("MONGODB_URL") or "").strip()
+            or (os.getenv("DATABASE_URL") or "").strip()
+        )
+        if env_uri and not env_uri.lower().startswith("mongodb"):
+            env_uri = ""
+
+        self.uri = mongodb_uri or env_uri or "mongodb://localhost:27017"
+        self.db_name = db_name or (os.getenv("MONGODB_DB") or os.getenv("MONGO_DB") or "study_assistant")
         
         self.client: Optional[MongoClient] = None
         self.db: Optional[Database] = None

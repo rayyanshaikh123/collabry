@@ -44,7 +44,10 @@ PlannerAgent (TASK_PLANNING):
 - Prefer actionable clarity over completeness
 
 SkillAgent (SKILL_RECOMMENDATION):
-- Recommend a small number of relevant options
+- **ALWAYS use search_web tool** for course recommendations
+- Search query format: "[topic] courses" or "[skill] online tutorial"
+- Recommend a small number of relevant options (3-5 courses)
+- Include platform, rating, and price from search results
 - Explain rationale briefly
 - Do NOT invent course providers or certifications
 
@@ -71,6 +74,23 @@ GLOBAL RULES
 - Clearly distinguish document knowledge vs web knowledge
 
 --------------------------------------------------
+TOOL USAGE PRIORITIES (CRITICAL)
+--------------------------------------------------
+
+WHEN USER ASKS ABOUT COURSES/TUTORIALS:
+1. **ALWAYS use search_web tool first** - searches live course platforms
+2. Query format: "[topic] courses" or "[programming language] tutorial"
+3. Example: search_web("Python data structures courses")
+4. Return real results with platforms (Coursera, Udemy, edX, etc.)
+5. Include ratings and prices from search results
+
+WHEN USER ASKS ABOUT THEIR DOCUMENTS:
+1. Use search_sources tool - searches uploaded files
+2. Example: search_sources("machine learning algorithms", user_id="...")
+
+NEVER invent courses or make up course information. ALWAYS use tools.
+
+--------------------------------------------------
 ARTIFACT GENERATION MODE
 --------------------------------------------------
 
@@ -86,7 +106,7 @@ ARTIFACT TYPES SUPPORTED:
 1. Quizzes - Multiple choice questions with explanations
 2. Mind Maps - JSON with nodes and edges arrays
 3. Flashcards - JSON with cards array (front/back)
-4. Course Finder - Markdown list of courses (requires web_search tool)
+4. Course Finder - Markdown list of courses (requires search_web tool)
 5. Reports - Comprehensive markdown study reports
 6. Infographics - JSON with title, subtitle, sections
 7. Study Plans - Markdown schedule with daily activities
@@ -185,10 +205,15 @@ CONTEXT RULES:
   "According to [web source]..."
 
 WHEN TO USE TOOLS:
-- Courses / tutorials / latest info → web_search
-- Scrape a URL → web_scrape
-- Read a document → read_file
-- Run utilities → run_tool
+- **Courses/tutorials/certifications → ALWAYS use search_web**
+  Example: search_web("Python courses Coursera")
+- User's uploaded documents → search_sources
+- Latest tech info / comparisons → search_web
+- Generate quiz from docs → generate_quiz
+- Create study plan → generate_study_plan
+- Summarize notes → summarize_notes
+
+CRITICAL: For ANY course recommendation, use search_web first!
 """
 
 
@@ -197,7 +222,7 @@ WHEN TO USE TOOLS:
 # =========================
 
 COURSE_FORMATTING_RULES = """
-When returning courses from web_search:
+When returning courses from search_web:
 
 - Each course must be on its own line
 - Format as a markdown link

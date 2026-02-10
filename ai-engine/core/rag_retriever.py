@@ -18,7 +18,6 @@ import logging
 from typing import List, Optional
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
 from core.embeddings import EmbeddingModel
 from langchain_core.embeddings import Embeddings
 
@@ -33,12 +32,11 @@ class HuggingFaceCloudEmbeddings(Embeddings):
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed documents."""
-        return self._model.embed(texts)
+        return self._model.embed_documents(texts)
 
     def embed_query(self, text: str) -> List[float]:
         """Embed a single query."""
-        result = self._model.embed([text])
-        return result[0] if result else []
+        return self._model.embed_query(text)
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
         """Async embed documents."""

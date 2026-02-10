@@ -14,10 +14,10 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def generate_flashcards(
-    notebook_id: str,
-    user_id: str,
-    num_cards: int = 15,
-    topic: Optional[str] = None
+    topic: str,
+    num_cards: int = 10,
+    notebook_id: Optional[str] = None,
+    user_id: str = "default"
 ) -> str:
     """
     Generate flashcards from study materials.
@@ -30,10 +30,10 @@ async def generate_flashcards(
     - "Generate 20 flashcards on vocabulary"
     
     Args:
-        notebook_id: Target notebook
-        user_id: User identifier (injected by agent)
-        num_cards: Number of flashcards (default 15)
-        topic: Optional specific topic filter
+        topic: The topic for flashcards (REQUIRED)
+        num_cards: Number of flashcards (default 10)
+        notebook_id: Target notebook (optional, auto-injected)
+        user_id: User identifier (optional, auto-injected)
     
     Returns:
         JSON array of flashcards with front/back content
@@ -51,7 +51,7 @@ async def generate_flashcards(
         
         # Retrieve relevant documents
         query = topic if topic else "key terms concepts and definitions"
-        docs = retriever.get_relevant_documents(query)
+        docs = retriever.invoke(query)
         
         if not docs:
             return "No documents found. Please upload study materials first."

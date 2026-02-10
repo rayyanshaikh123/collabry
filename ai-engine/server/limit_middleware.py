@@ -30,7 +30,6 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         "/ai/chat",
         "/ai/summarize",
         "/ai/qa",
-        "/ai/mindmap",
         "/ai/sessions"
     ]
 

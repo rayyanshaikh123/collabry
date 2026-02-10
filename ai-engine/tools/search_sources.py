@@ -5,7 +5,7 @@ This tool searches the user's uploaded documents and notes
 for relevant information to answer their questions.
 """
 
-from typing import Optional
+from typing import Optional, List
 from langchain_core.tools import tool
 from rag.retriever import get_retriever
 from langchain_core.documents import Document
@@ -29,7 +29,12 @@ def format_sources(docs: list[Document]) -> str:
 
 
 @tool
-def search_sources(query: str, user_id: str, notebook_id: Optional[str] = None) -> str:
+def search_sources(
+    query: str,
+    user_id: str = "default",
+    notebook_id: Optional[str] = None,
+    source_ids: Optional[List[str]] = None,
+) -> str:
     """
     Search user's uploaded documents and notes for relevant information.
     
@@ -43,22 +48,26 @@ def search_sources(query: str, user_id: str, notebook_id: Optional[str] = None) 
     
     Args:
         query: The search query
-        user_id: User identifier (injected by agent)
-        notebook_id: Optional notebook to search within
+        user_id: User identifier (optional, auto-injected)
+        notebook_id: Optional notebook to search within (optional, auto-injected)
     
     Returns:
         Relevant text excerpts with source citations
+    
+    Example:
+        search_sources(query="What is photosynthesis?")
     """
     try:
         # Get retriever with user and notebook filtering
         retriever = get_retriever(
             user_id=user_id,
             notebook_id=notebook_id,
+            source_ids=source_ids,
             k=4
         )
         
         # Retrieve relevant documents
-        docs = retriever.get_relevant_documents(query)
+        docs = retriever.invoke(query)
         
         # Format and return
         return format_sources(docs)

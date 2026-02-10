@@ -14,6 +14,7 @@ import InviteMemberModal from '../components/InviteMemberModal';
 import BoardSettingsModal from '../components/BoardSettingsModal';
 import { studyBoardService } from '../src/services/studyBoard.service';
 import { BoardParticipant } from '../src/types/studyBoard.types';
+import { googleDriveService } from '../src/lib/googleDrive';
 
 // Type definitions
 interface TLEditor {
@@ -167,6 +168,35 @@ const CollaborativeBoard: React.FC = () => {
     return `asset:${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   };
 
+  // Sanitize shape colors to ensure they are valid tldraw colors
+  const sanitizeColor = (color: string): string => {
+    const validColors = [
+      'black', 'grey', 'light-violet', 'violet', 'blue', 'light-blue', 
+      'yellow', 'orange', 'green', 'light-green', 'light-red', 'red', 'white'
+    ];
+    
+    // Map invalid colors to valid ones
+    const colorMap: Record<string, string> = {
+      'light-yellow': 'yellow',
+    };
+    
+    const mappedColor = colorMap[color] || color;
+    return validColors.includes(mappedColor) ? mappedColor : 'black';
+  };
+
+  const sanitizeShape = (shape: any): any => {
+    if (shape.type === 'geo' && shape.props?.color) {
+      return {
+        ...shape,
+        props: {
+          ...shape.props,
+          color: sanitizeColor(shape.props.color),
+        },
+      };
+    }
+    return shape;
+  };
+
   const buildInfographicShapes = (infographic: any) => {
     if (!infographic) return [];
     const title = String(infographic.title || 'Infographic');
@@ -262,13 +292,50 @@ const CollaborativeBoard: React.FC = () => {
     return shapes;
   };
 
-  const buildMindmapShapes = (payload: any) => {
+  const buildMindmapShapes = async (payload: any) => {
+    console.log('=== buildMindmapShapes DEBUG ===');
+    console.log('Payload:', payload);
+    console.log('Has payload.svgBase64:', !!payload?.svgBase64);
+    console.log('Has payload.data:', !!payload?.data);
+    console.log('Has payload.data.svgBase64:', !!payload?.data?.svgBase64);
+    console.log('Has payload.data.mermaidCode:', !!payload?.data?.mermaidCode);
+    
     if (!payload) return { shapes: [], assets: [] };
     
     const title = payload.title || 'Mind Map';
     const data = payload.data || payload;
     const nodeCount = data?.nodes?.length || 0;
-    const svgBase64 = payload.svgBase64 || data?.svgBase64;
+    let svgBase64 = payload.svgBase64 || data?.svgBase64;
+    
+    console.log('Initial svgBase64 check:', !!svgBase64);
+    console.log('MermaidCode available:', !!data?.mermaidCode);
+    
+    // If no SVG but we have mermaid code, render it to SVG
+    if (!svgBase64 && data?.mermaidCode) {
+      console.log('No SVG found, rendering mermaid code to SVG for study board...');
+      console.log('Mermaid code length:', data.mermaidCode.length);
+      console.log('Mermaid code preview:', data.mermaidCode.substring(0, 100));
+      try {
+        const mermaidModule = await import('mermaid');
+        const mermaid = (mermaidModule as any).default || mermaidModule;
+        if (mermaid) {
+          mermaid.initialize({ startOnLoad: false, theme: 'default' });
+          const id = 'board_' + Math.random().toString(36).slice(2, 9);
+          console.log('Calling mermaid.render with id:', id);
+          const { svg } = await mermaid.render(id, data.mermaidCode);
+          console.log('Mermaid render returned, svg length:', svg?.length);
+          
+          // Convert SVG string to base64
+          svgBase64 = btoa(svg);
+          console.log('Successfully rendered mermaid to SVG, base64 length:', svgBase64?.length);
+        }
+      } catch (error) {
+        console.error('Failed to render mermaid for study board:', error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
+      }
+    }
+    
+    console.log('Final svgBase64 available:', !!svgBase64);
     
     const originX = 120;
     const originY = 160;
@@ -288,15 +355,15 @@ const CollaborativeBoard: React.FC = () => {
         props: {
           name: `${title}.svg`,
           src: svgDataUri,
-          w: 800,
-          h: 600,
+          w: 1600,
+          h: 1200,
           mimeType: 'image/svg+xml',
           isAnimated: false,
         },
         meta: {},
       });
 
-      // Create image shape
+      // Create image shape with SVG data stored in meta for persistence
       shapes.push({
         id: generateShapeId('shape'),
         typeName: 'shape',
@@ -308,10 +375,14 @@ const CollaborativeBoard: React.FC = () => {
         rotation: 0,
         isLocked: false,
         opacity: 1,
-        meta: {},
+        meta: {
+          svgDataUri: svgDataUri, // Store SVG data for reconstruction on reload
+          assetType: 'mindmap-svg',
+          title: title,
+        },
         props: {
-          w: 800,
-          h: 600,
+          w: 1600,
+          h: 1200,
           assetId: assetId,
           playing: true,
           url: '',
@@ -366,12 +437,30 @@ const CollaborativeBoard: React.FC = () => {
     return { shapes, assets };
   };
 
-  const buildShapesFromImport = (payload: any) => {
-    if (!payload || typeof payload !== 'object') return { shapes: [], assets: [] };
-    if (payload.kind === 'mindmap') return buildMindmapShapes(payload);
+  const buildShapesFromImport = async (payload: any) => {
+    console.log('=== buildShapesFromImport ===');
+    console.log('Payload:', payload);
+    console.log('Payload type:', typeof payload);
+    console.log('Payload.kind:', payload?.kind);
+    
+    if (!payload || typeof payload !== 'object') {
+      console.log('Invalid payload, returning empty');
+      return { shapes: [], assets: [] };
+    }
+    
+    if (payload.kind === 'mindmap') {
+      console.log('Building mindmap shapes...');
+      const result = await buildMindmapShapes(payload);
+      console.log('Mindmap shapes result:', result);
+      return result;
+    }
+    
     if (payload.kind === 'infographic') {
+      console.log('Building infographic shapes...');
       return { shapes: buildInfographicShapes(payload.data), assets: [] };
     }
+    
+    console.log('Unknown payload kind, returning empty');
     return { shapes: [], assets: [] };
   };
 
@@ -427,6 +516,68 @@ const CollaborativeBoard: React.FC = () => {
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            let meta = record.meta || {};
+            
+            // For image shapes, upload to Google Drive and store file ID
+            if (record.type === 'image' && record.props?.assetId && !meta.driveFileId && !meta.imageData) {
+              const asset = editor?.store.get(record.props.assetId) as any;
+              if (asset?.props?.src) {
+                console.log('Uploading image to Google Drive...');
+                
+                // Upload async without blocking the store change
+                (async () => {
+                  try {
+                    // Try Google Drive upload first
+                    const isAuth = googleDriveService.isAuthenticated();
+                    if (!isAuth) {
+                      const granted = await googleDriveService.requestAccess();
+                      if (!granted) {
+                        console.warn('Google Drive access denied, storing locally');
+                        throw new Error('Drive access denied');
+                      }
+                    }
+                    
+                    const filename = asset.props.name || `image-${Date.now()}.png`;
+                    const driveFile = await googleDriveService.uploadImage(
+                      asset.props.src,
+                      filename,
+                      asset.props.mimeType || 'image/png'
+                    );
+                    
+                    console.log('Image uploaded to Drive:', driveFile.id);
+                    
+                    // Update the shape with Drive file ID after upload completes
+                    const updatedMeta = {
+                      ...record.meta,
+                      driveFileId: driveFile.id,
+                      driveMimeType: asset.props.mimeType,
+                      driveName: filename,
+                      w: asset.props.w,
+                      h: asset.props.h,
+                    };
+                    
+                    editor?.store.put([{ ...record, meta: updatedMeta }]);
+                  } catch (driveError) {
+                    console.error('Drive upload failed, falling back to local storage:', driveError);
+                    
+                    // Fallback: store image data locally
+                    const fallbackMeta = {
+                      ...record.meta,
+                      imageData: {
+                        src: asset.props.src,
+                        w: asset.props.w,
+                        h: asset.props.h,
+                        mimeType: asset.props.mimeType,
+                        name: asset.props.name,
+                      }
+                    };
+                    
+                    editor?.store.put([{ ...record, meta: fallbackMeta }]);
+                  }
+                })();
+              }
+            }
+            
             // Track if this is a draw/freehand shape being created
             if (record.type === 'draw') {
               isDrawingRef.current = true;
@@ -444,7 +595,7 @@ const CollaborativeBoard: React.FC = () => {
                 rotation: record.rotation || 0,
                 isLocked: record.isLocked || false,
                 opacity: record.opacity || 1,
-                meta: record.meta || {},
+                meta: meta,
               });
               return;
             }
@@ -461,7 +612,7 @@ const CollaborativeBoard: React.FC = () => {
               rotation: record.rotation || 0,
               isLocked: record.isLocked || false,
               opacity: record.opacity || 1,
-              meta: record.meta || {},
+              meta: meta,
             });
           }
         });
@@ -560,7 +711,7 @@ const CollaborativeBoard: React.FC = () => {
     isApplyingRemoteChange.current = true;
     
     try {
-      const shapeRecord: any = {
+      const shapeRecord: any = sanitizeShape({
         id: data.element.id,
         typeName: data.element.typeName || 'shape',
         type: data.element.type,
@@ -573,7 +724,67 @@ const CollaborativeBoard: React.FC = () => {
         isLocked: data.element.isLocked || false,
         opacity: data.element.opacity || 1,
         meta: data.element.meta || {},
-      };
+      });
+      
+      // If this is an image shape with image data in meta or Drive, recreate the asset
+      if (shapeRecord.type === 'image' && shapeRecord.props?.assetId) {
+        let asset = null;
+        let assetSrc = null;
+        
+        // Check for Drive file ID
+        if (shapeRecord.meta?.driveFileId) {
+          console.log('Recreating asset from Google Drive for remote shape:', shapeRecord.id);
+          assetSrc = googleDriveService.getPublicUrl(shapeRecord.meta.driveFileId);
+        }
+        
+        // Check for SVG data (mindmaps) if no Drive file
+        if (!assetSrc && shapeRecord.meta?.svgDataUri) {
+          console.log('Recreating SVG asset for remote image shape:', shapeRecord.id);
+          assetSrc = shapeRecord.meta.svgDataUri;
+          asset = {
+            id: shapeRecord.props.assetId,
+            type: 'image',
+            typeName: 'asset',
+            props: {
+              name: `${shapeRecord.meta.title || 'mindmap'}.svg`,
+              src: assetSrc,
+              w: shapeRecord.props.w || 800,
+              h: shapeRecord.props.h || 600,
+              mimeType: 'image/svg+xml',
+              isAnimated: false,
+            },
+            meta: {},
+          };
+        }
+        // Check for general image data fallback
+        else if (!assetSrc && shapeRecord.meta?.imageData?.src) {
+          console.log('Recreating general image asset for remote shape:', shapeRecord.id);
+          assetSrc = shapeRecord.meta.imageData.src;
+        }
+        
+        // Create asset if we have a source
+        if (assetSrc && !asset) {
+          asset = {
+            id: shapeRecord.props.assetId,
+            type: 'image',
+            typeName: 'asset',
+            props: {
+              name: shapeRecord.meta?.driveName || shapeRecord.meta?.imageData?.name || 'image.png',
+              src: assetSrc,
+              w: shapeRecord.meta?.w || shapeRecord.meta?.imageData?.w || shapeRecord.props.w || 800,
+              h: shapeRecord.meta?.h || shapeRecord.meta?.imageData?.h || shapeRecord.props.h || 600,
+              mimeType: shapeRecord.meta?.driveMimeType || shapeRecord.meta?.imageData?.mimeType || 'image/png',
+              isAnimated: false,
+            },
+            meta: {},
+          };
+        }
+        
+        // Add asset first, then shape
+        if (asset) {
+          editor.store.put([asset]);
+        }
+      }
       
       editor.store.put([shapeRecord]);
     } catch (error) {
@@ -678,6 +889,15 @@ const CollaborativeBoard: React.FC = () => {
           return;
         }
 
+        // Initialize Google Drive for image storage
+        try {
+          await googleDriveService.initialize();
+          console.log('[Board] Google Drive initialized');
+        } catch (error) {
+          console.warn('[Board] Google Drive initialization failed:', error);
+          // Continue without Drive - fallback to base64 storage
+        }
+
         // Set a timeout for joinBoard callback
         joinTimeoutId = setTimeout(() => {
           if (!isMounted) return;
@@ -720,7 +940,13 @@ const CollaborativeBoard: React.FC = () => {
           const importPayload = sessionStorage.getItem(`board-${boardId}-import`);
           if (importPayload) {
             try {
+              console.log('=== Loading import payload from sessionStorage ===');
+              console.log('Raw payload:', importPayload);
               importPayloadRef.current = JSON.parse(importPayload);
+              console.log('Parsed payload:', importPayloadRef.current);
+              console.log('Payload kind:', importPayloadRef.current?.kind);
+              console.log('Has data:', !!importPayloadRef.current?.data);
+              console.log('Has mermaidCode:', !!importPayloadRef.current?.data?.mermaidCode);
               importAppliedRef.current = false;
               sessionStorage.removeItem(`board-${boardId}-import`);
             } catch (error) {
@@ -788,7 +1014,7 @@ const CollaborativeBoard: React.FC = () => {
 
     let cancelled = false;
 
-    const tryApply = () => {
+    const tryApply = async () => {
       if (cancelled) return;
       if (!editor || !isConnected) return;
 
@@ -798,14 +1024,26 @@ const CollaborativeBoard: React.FC = () => {
         return;
       }
 
+      console.log('=== tryApply: Applying imported shapes ===');
+      console.log('Import payload:', importPayloadRef.current);
+
       try {
-        const { shapes, assets } = buildShapesFromImport(importPayloadRef.current);
+        const { shapes, assets } = await buildShapesFromImport(importPayloadRef.current);
+        console.log('Built shapes:', shapes.length, 'assets:', assets.length);
+        console.log('Shapes:', shapes);
+        console.log('Assets:', assets);
+        
         const records = [...assets, ...shapes];
         if (records.length > 0) {
+          console.log('Putting', records.length, 'records into editor store');
           editor.store.put(records);
+          console.log('Successfully added shapes to board');
+        } else {
+          console.warn('No records to add to board');
         }
       } catch (e) {
         console.error('Failed to apply imported shapes:', e);
+        console.error('Error details:', e instanceof Error ? e.stack : String(e));
       } finally {
         importAppliedRef.current = true;
         importPayloadRef.current = null;
@@ -830,7 +1068,7 @@ const CollaborativeBoard: React.FC = () => {
       try {
         const validElements = pendingElements.filter((el: any) => el && el.id && el.type);
 
-        const shapes = validElements.map((el: any) => ({
+        const shapes = validElements.map((el: any) => sanitizeShape({
           id: el.id,
           typeName: el.typeName || 'shape',
           type: el.type,
@@ -844,6 +1082,77 @@ const CollaborativeBoard: React.FC = () => {
           opacity: el.opacity || 1,
           meta: el.meta || {},
         }));
+        
+        // Reconstruct assets for image shapes that have image data in meta or Drive
+        const assets: any[] = [];
+        for (const shape of shapes) {
+          if (shape.type === 'image' && shape.props?.assetId) {
+            let assetSrc = null;
+            
+            // Check for Drive file ID
+            if (shape.meta?.driveFileId) {
+              console.log('Loading image from Google Drive:', shape.meta.driveFileId);
+              try {
+                // Use public URL for Drive files
+                assetSrc = googleDriveService.getPublicUrl(shape.meta.driveFileId);
+                console.log('Using Drive public URL');
+              } catch (error) {
+                console.error('Failed to get Drive image, trying fallback:', error);
+              }
+            }
+            
+            // Check for SVG data (mindmaps) if no Drive file
+            if (!assetSrc && shape.meta?.svgDataUri) {
+              console.log('Reconstructing SVG asset for image shape:', shape.id);
+              assetSrc = shape.meta.svgDataUri;
+              assets.push({
+                id: shape.props.assetId,
+                type: 'image',
+                typeName: 'asset',
+                props: {
+                  name: `${shape.meta.title || 'mindmap'}.svg`,
+                  src: assetSrc,
+                  w: shape.props.w || 800,
+                  h: shape.props.h || 600,
+                  mimeType: 'image/svg+xml',
+                  isAnimated: false,
+                },
+                meta: {},
+              });
+              continue;
+            }
+            
+            // Check for local image data fallback
+            if (!assetSrc && shape.meta?.imageData?.src) {
+              console.log('Reconstructing general image asset from local storage:', shape.id);
+              assetSrc = shape.meta.imageData.src;
+            }
+            
+            // Create asset if we have a source
+            if (assetSrc) {
+              assets.push({
+                id: shape.props.assetId,
+                type: 'image',
+                typeName: 'asset',
+                props: {
+                  name: shape.meta?.driveName || shape.meta?.imageData?.name || 'image.png',
+                  src: assetSrc,
+                  w: shape.meta?.w || shape.meta?.imageData?.w || shape.props.w || 800,
+                  h: shape.meta?.h || shape.meta?.imageData?.h || shape.props.h || 600,
+                  mimeType: shape.meta?.driveMimeType || shape.meta?.imageData?.mimeType || 'image/png',
+                  isAnimated: false,
+                },
+                meta: {},
+              });
+            }
+          }
+        }
+        
+        // Add assets first, then shapes
+        if (assets.length > 0) {
+          console.log('Recreating', assets.length, 'assets for image shapes');
+          editor.store.put(assets);
+        }
         
         if (shapes.length > 0) {
           editor.store.put(shapes);

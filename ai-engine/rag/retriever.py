@@ -4,7 +4,7 @@ RAG Retriever - LangChain retriever with metadata filtering.
 Creates retrievers filtered by user_id and notebook_id for secure multi-tenant RAG.
 """
 
-from typing import Optional
+from typing import Optional, List
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.documents import Document
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
@@ -16,6 +16,7 @@ class FilteredRetriever(BaseRetriever):
     
     user_id: str
     notebook_id: Optional[str] = None
+    source_ids: Optional[List[str]] = None
     k: int = 4
     
     def _get_relevant_documents(
@@ -29,6 +30,7 @@ class FilteredRetriever(BaseRetriever):
             query=query,
             user_id=self.user_id,
             notebook_id=self.notebook_id,
+            source_ids=self.source_ids,
             k=self.k
         )
 
@@ -36,6 +38,7 @@ class FilteredRetriever(BaseRetriever):
 def get_retriever(
     user_id: str,
     notebook_id: Optional[str] = None,
+    source_ids: Optional[List[str]] = None,
     k: int = 4
 ) -> BaseRetriever:
     """
@@ -56,6 +59,7 @@ def get_retriever(
     return FilteredRetriever(
         user_id=user_id,
         notebook_id=notebook_id,
+        source_ids=source_ids,
         k=k
     )
 

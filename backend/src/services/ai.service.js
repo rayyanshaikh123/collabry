@@ -297,12 +297,26 @@ class AIService {
       
       // Call AI engine to generate mindmap structure
       console.log('Calling AI engine /ai/mindmap with topic:', mapTopic);
+      
+      // Calculate depth: ensure it's between 1-4 (AI engine validation requirement)
+      let depth = 3; // Default
+      if (options.maxNodes) {
+        depth = Math.max(1, Math.min(Math.ceil(options.maxNodes / 5), 4));
+      }
+      
+      console.log('Mind map generation params:', {
+        topic: mapTopic,
+        use_documents: options.useRag || false,
+        depth: depth,
+        maxNodes: options.maxNodes
+      });
+      
       const response = await this.client.post(
         '/ai/mindmap',
         {
           topic: mapTopic,
           use_documents: options.useRag || false,
-          depth: options.maxNodes ? Math.min(options.maxNodes / 5, 4) : 3
+          depth: depth
         },
         {
           headers: {

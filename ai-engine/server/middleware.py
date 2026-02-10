@@ -31,7 +31,6 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         "/ai/qa/stream": "qa_stream",
         "/ai/qa/file": "qa_file",
         "/ai/qa/file/stream": "qa_file_stream",
-        "/ai/mindmap": "mindmap",
         "/ai/upload": "upload"
     }
     

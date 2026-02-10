@@ -37,6 +37,12 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
   const handleSelectBoard = (boardId: string) => {
     if (!canAddToBoard) return;
     try {
+      console.log('=== handleSelectBoard DEBUG ===');
+      console.log('Artifact type:', artifact.type);
+      console.log('Artifact.data:', artifact.data);
+      console.log('Has artifact.data.svgBase64:', !!artifact.data?.svgBase64);
+      console.log('Has artifact.data.mermaidCode:', !!artifact.data?.mermaidCode);
+      
       const payload =
         artifact.type === 'mindmap'
           ? { 
@@ -47,7 +53,9 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             }
           : { kind: 'infographic' as const, data: artifact.data, title: artifact.title };
 
+      console.log('Payload being stored:', payload);
       sessionStorage.setItem(`board-${boardId}-import`, JSON.stringify(payload));
+      console.log('Payload stored in sessionStorage with key:', `board-${boardId}-import`);
     } catch (e) {
       console.error('Failed to store board import payload:', e);
     }

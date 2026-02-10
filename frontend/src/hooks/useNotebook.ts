@@ -237,7 +237,11 @@ export const useLinkArtifact = (notebookId: string) => {
         if (alreadyThere) return nb;
         return { ...nb, artifacts: [...existing, added] };
       });
-    }
+    },
+    onSettled: () => {
+      // Ensure we converge with backend to pick up the linked artifact
+      queryClient.invalidateQueries({ queryKey: ['notebooks', notebookId] });
+    },
   });
 };
 
@@ -250,6 +254,10 @@ export const useUnlinkArtifact = (notebookId: string) => {
         ...nb,
         artifacts: (nb.artifacts ?? []).filter((a) => a._id !== artifactId)
       }));
-    }
+    },
+    onSettled: () => {
+      // Ensure we converge with backend after unlinking
+      queryClient.invalidateQueries({ queryKey: ['notebooks', notebookId] });
+    },
   });
 };

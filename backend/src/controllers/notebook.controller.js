@@ -226,6 +226,10 @@ async function ingestSourceToRAG(notebook, source, authToken) {
         );
         status = statusResponse.data.status;
         console.log(`  Polling (${attempts}s): ${status}`);
+
+        if (status === 'failed' && statusResponse.data && statusResponse.data.error) {
+          console.error(`  ❌ Ingestion error: ${statusResponse.data.error}`);
+        }
         
         // If task is unknown (server restarted), assume it completed
         if (status === 'unknown') {

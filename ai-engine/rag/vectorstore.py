@@ -234,6 +234,7 @@ def similarity_search(
     query: str,
     user_id: str,
     notebook_id: Optional[str] = None,
+    source_ids: Optional[List[str]] = None,
     k: int = 4
 ) -> List[Document]:
     """
@@ -260,25 +261,30 @@ def similarity_search(
     config = VectorStoreConfig()
     
     if config.provider == "faiss":
-        # FAISS: search more results and filter in memory
-        results = vectorstore.similarity_search(query, k=k * 5)
+        # FAISS: search more results and filter in memory.
+        # When filtering by source_ids, over-retrieve more to avoid missing matches.
+        search_k = k * (50 if source_ids else 5)
+        results = vectorstore.similarity_search(query, k=search_k)
         
         # Post-filter by metadata
         filtered = [
             doc for doc in results
             if doc.metadata.get("user_id") == user_id
             and (not notebook_id or doc.metadata.get("notebook_id") == notebook_id)
+            and (not source_ids or doc.metadata.get("source_id") in source_ids)
         ]
         
         return filtered[:k]
     
     else:
-        # Other stores support native filtering
-        return vectorstore.similarity_search(
-            query,
-            k=k,
-            filter=filter_dict
-        )
+        # Other stores support native filtering for simple equality constraints.
+        # Many providers don't support "$in" on metadata filters, so we post-filter source_ids.
+        search_k = k * 25 if source_ids else k
+        results = vectorstore.similarity_search(query, k=search_k, filter=filter_dict)
+        if not source_ids:
+            return results[:k]
+        filtered = [doc for doc in results if doc.metadata.get("source_id") in source_ids]
+        return filtered[:k]
 
 
 def reset_vectorstore():

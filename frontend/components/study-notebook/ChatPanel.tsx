@@ -192,28 +192,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRegenerateResponse}
-                disabled={isLoading}
-                className="flex items-center gap-1"
-              >
-                <ICONS.refresh className="w-4 h-4" />
-                <span className="text-xs font-bold">Regenerate</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClearChat}
-                disabled={isLoading}
-                className="flex items-center gap-1"
-              >
-                <ICONS.trash className="w-4 h-4" />
-                <span className="text-xs font-bold">Clear</span>
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClearChat}
+              disabled={isLoading}
+              className="flex items-center gap-1"
+            >
+              <ICONS.trash className="w-4 h-4" />
+              <span className="text-xs font-bold">Clear</span>
+            </Button>
           )}
         </div>
       </div>
@@ -446,20 +434,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         let mindmap = null;
                         let cleanMarkdown = markdownAfterQuiz;
                         
-                        // Only parse if we have structure AND it was explicitly requested
-                        if (hasMindmapStructure && isExplicitMindmapRequest) {
+                        // Parse mindmap when it was explicitly requested.
+                        // This supports both JSON responses and plain hierarchical outlines.
+                        if (isExplicitMindmapRequest) {
                           const result = extractMindMapFromMarkdown(contentToParse);
                           mindmap = result.mindmap;
                           cleanMarkdown = result.cleanMarkdown;
-                          
+
                           // Debug logging
                           if (mindmap) {
                             console.log('✅ Mindmap parsed successfully:', {
                               nodeCount: mindmap.nodes?.length || 0,
-                              edgeCount: mindmap.edges?.length || 0
+                              edgeCount: mindmap.edges?.length || 0,
+                              hadStructureHint: hasMindmapStructure
                             });
-                          } else {
-                            console.log('⚠️ Mindmap JSON detected but parsing failed or rejected');
+                          } else if (hasMindmapStructure) {
+                            console.log('⚠️ Mindmap structure detected but parsing failed or rejected');
                           }
                         }
 

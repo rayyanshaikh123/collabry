@@ -55,8 +55,10 @@ def ingest_document_background(
                 "started_at": datetime.utcnow()
             }
         
-        # Create RAG retriever for user
-        rag = RAGRetriever(CONFIG, user_id=user_id)
+        # Ingest into the same vector store that tools query (rag/vectorstore).
+        # This avoids writing into a separate FAISS singleton that tools don't see.
+        from rag.vectorstore import add_documents
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
         
         # Create document with metadata
         doc = Document(
@@ -68,9 +70,29 @@ def ingest_document_background(
                 **metadata
             }
         )
-        
-        # Add document to user's RAG index (includes chunking & embedding)
-        rag.add_user_documents([doc], user_id=user_id, save_index=True)
+
+        # IMPORTANT: The /ai/sessions/{session_id}/chat/stream endpoint currently
+        # passes notebook_id=session_id into the agent. To keep ingestion and
+        # retrieval consistent, prefer session_id as the notebook_id key used
+        # in the vectorstore metadata.
+        notebook_id = (metadata or {}).get("session_id") or (metadata or {}).get("notebook_id") or "default"
+
+        # Chunk before writing, so retrieval works well and chunk metadata is preserved.
+        chunk_size = int(CONFIG.get("chunk_size", 1000))
+        chunk_overlap = int(CONFIG.get("chunk_overlap", 200))
+        splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        chunks = splitter.split_documents([doc])
+
+        # Record processed chunk count for status visibility
+        if task_id in ingestion_tasks:
+            ingestion_tasks[task_id]["chunks_processed"] = len(chunks)
+
+        # Ensure metadata is present on every chunk (splitter should preserve it).
+        for c in chunks:
+            c.metadata.setdefault("user_id", user_id)
+            c.metadata.setdefault("notebook_id", notebook_id)
+
+        add_documents(documents=chunks, user_id=user_id, notebook_id=str(notebook_id))
         
         # Update task status
         ingestion_tasks[task_id]["status"] = "completed"
@@ -225,6 +247,7 @@ async def get_upload_status(
         "filename": task.get("filename"),
         "started_at": task.get("started_at"),
         "completed_at": task.get("completed_at"),
+        "chunks_processed": task.get("chunks_processed"),
         "error": task.get("error")
     }
 
