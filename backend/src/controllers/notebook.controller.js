@@ -528,6 +528,19 @@ exports.addSource = asyncHandler(async (req, res) => {
   notebook.sources.push(source);
   await notebook.save();
 
+  // Track storage usage
+  const sourceSize = source.size || 0;
+  if (sourceSize > 0) {
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(req.user._id, { $inc: { storageUsed: sourceSize } });
+  }
+
+  // Track file upload
+  if (type === 'pdf' || type === 'document') {
+    const { trackFileUpload } = require('../middleware/usageEnforcement');
+    await trackFileUpload(req.user._id);
+  }
+
   // Return the newly added source
   const addedSource = notebook.sources[notebook.sources.length - 1];
 
@@ -622,6 +635,13 @@ exports.removeSource = asyncHandler(async (req, res) => {
     } catch (error) {
       console.error('Failed to delete source from FAISS:', error.message);
     }
+  }
+
+  // Reclaim storage
+  const sourceSize = source.size || 0;
+  if (sourceSize > 0) {
+    const User = require('../models/User');
+    await User.findByIdAndUpdate(req.user._id, { $inc: { storageUsed: -sourceSize } });
   }
 
   source.deleteOne();

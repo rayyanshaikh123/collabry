@@ -6,7 +6,7 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const { protect } = require('../middlewares/auth.middleware');
-const { checkAIUsageLimit, trackAIUsage } = require('../middleware/usageEnforcement');
+const { checkAIUsageLimit, trackAIUsage, checkFileUploadLimit, checkStorageLimit } = require('../middleware/usageEnforcement');
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
@@ -226,7 +226,7 @@ router.post('/summarize/stream', protect, checkAIUsageLimit, createTrackedProxyH
 router.post('/qa', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
 router.post('/qa/stream', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
 router.post('/mindmap', protect, checkAIUsageLimit, createTrackedProxyHandler('other'));
-router.post('/upload', protect, proxyToAI);
+router.post('/upload', protect, checkFileUploadLimit, checkStorageLimit, proxyToAI);
 router.post('/generate-study-plan', protect, checkAIUsageLimit, createTrackedProxyHandler('study-copilot'));
 
 module.exports = router;

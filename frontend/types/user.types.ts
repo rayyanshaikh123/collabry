@@ -19,8 +19,8 @@ export interface User {
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
+  refreshToken?: string; // Now httpOnly cookie — not returned in JSON body
+  expiresIn?: number;
 }
 
 export interface LoginCredentials {
@@ -38,4 +38,16 @@ export interface RegisterData {
 export interface AuthResponse {
   user: User;
   tokens: AuthTokens;
+}
+
+export interface RegisterResponse {
+  message: string;
+}
+
+export interface Session {
+  id: string;
+  userAgent: string;
+  ipAddress: string;
+  createdAt: string;
+  expiresAt: string;
 }

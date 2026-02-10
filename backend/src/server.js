@@ -4,6 +4,7 @@ const connectDB = require('./config/db');
 const config = require('./config/env');
 const { initializeSocket } = require('./socket');
 const { startNotificationScheduler, stopNotificationScheduler } = require('./services/notificationScheduler');
+const { startSubscriptionExpiryJob, stopSubscriptionExpiryJob } = require('./jobs/subscriptionExpiry');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -24,6 +25,9 @@ initializeSocket(server);
 // Start notification scheduler
 startNotificationScheduler();
 
+// Start subscription expiry cron job
+startSubscriptionExpiryJob();
+
 // Start server
 server.listen(config.port, () => {
   console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
@@ -34,6 +38,7 @@ process.on('unhandledRejection', (err) => {
   console.error('UNHANDLED REJECTION! 💥 Shutting down...');
   console.error(err.name, err.message);
   stopNotificationScheduler();
+  stopSubscriptionExpiryJob();
   server.close(() => {
     process.exit(1);
   });
@@ -43,6 +48,7 @@ process.on('unhandledRejection', (err) => {
 process.on('SIGTERM', () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
   stopNotificationScheduler();
+  stopSubscriptionExpiryJob();
   server.close(() => {
     console.log('💥 Process terminated!');
   });

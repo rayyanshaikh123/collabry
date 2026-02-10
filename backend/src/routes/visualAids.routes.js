@@ -17,6 +17,7 @@ const subjectController = require('../controllers/subject.controller');
 // Import middleware
 const { protect } = require('../middlewares/auth.middleware');
 const { validateFlashcardSet, validateFlashcard, validateMindMap, validateQuiz } = require('../middlewares/validation.middleware');
+const { checkAIUsageLimit, checkFileUploadLimit } = require('../middleware/usageEnforcement');
 
 // ============================================================================
 // MIND MAPS ROUTES
@@ -63,8 +64,8 @@ router.get('/quizzes/:id/statistics', protect, quizController.getStatistics);
 // AI GENERATION ROUTES
 // ============================================================================
 
-router.post('/generate/quiz', protect, upload.single('file'), generateController.generateQuiz);
-router.post('/generate/mindmap', protect, generateController.generateMindMap);
+router.post('/generate/quiz', protect, checkAIUsageLimit, upload.single('file'), generateController.generateQuiz);
+router.post('/generate/mindmap', protect, checkAIUsageLimit, generateController.generateMindMap);
 
 // ============================================================================
 // VISUAL ENCYCLOPEDIA (FUTURE PLACEHOLDER)

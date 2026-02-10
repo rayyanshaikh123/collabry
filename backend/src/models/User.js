@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: [true, 'Password is required'],
-      minlength: [6, 'Password must be at least 6 characters'],
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false, // Don't return password by default
     },
     role: {
@@ -41,6 +41,10 @@ const userSchema = new mongoose.Schema(
       enum: ['free', 'basic', 'pro', 'enterprise'],
       default: 'free',
     },
+    storageUsed: {
+      type: Number,
+      default: 0, // in bytes
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -50,6 +54,33 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
     resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+    // Timestamp of last password change (used to invalidate tokens issued before)
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
+    // Account lockout after failed login attempts
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
+    },
+    // Email verification
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationToken: {
+      type: String,
+      default: null,
+    },
+    emailVerificationExpires: {
       type: Date,
       default: null,
     },
@@ -151,7 +182,7 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash password before saving
+// Hash password before saving & track passwordChangedAt
 userSchema.pre('save', async function () {
   // Only hash if password is modified
   if (!this.isModified('password')) {
@@ -160,6 +191,11 @@ userSchema.pre('save', async function () {
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+
+  // Track when the password was changed (skip on brand-new documents)
+  if (!this.isNew) {
+    this.passwordChangedAt = new Date();
+  }
 });
 
 // Method to compare password
@@ -169,6 +205,65 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   } catch (error) {
     throw new Error('Password comparison failed');
   }
+};
+
+/**
+ * Check if the password was changed after a JWT was issued.
+ * @param {Number} jwtIssuedAt - The `iat` claim (epoch seconds)
+ * @returns {Boolean} true = password was changed AFTER the token was issued
+ */
+userSchema.methods.changedPasswordAfter = function (jwtIssuedAt) {
+  if (this.passwordChangedAt) {
+    const changedTimestamp = Math.floor(this.passwordChangedAt.getTime() / 1000);
+    return jwtIssuedAt < changedTimestamp;
+  }
+  return false;
+};
+
+/**
+ * Account lockout constants
+ */
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCK_TIME_MS = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Check if the account is currently locked.
+ * Virtual property — not stored, derived from lockUntil.
+ */
+userSchema.virtual('isLocked').get(function () {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+});
+
+/**
+ * Increment failed login attempts. Lock account if threshold exceeded.
+ */
+userSchema.methods.incLoginAttempts = async function () {
+  // If a previous lock has expired, reset
+  if (this.lockUntil && this.lockUntil < Date.now()) {
+    return this.updateOne({
+      $set: { loginAttempts: 1 },
+      $unset: { lockUntil: 1 },
+    });
+  }
+
+  const updates = { $inc: { loginAttempts: 1 } };
+
+  // Lock the account if we've reached max attempts
+  if (this.loginAttempts + 1 >= MAX_LOGIN_ATTEMPTS) {
+    updates.$set = { lockUntil: new Date(Date.now() + LOCK_TIME_MS) };
+  }
+
+  return this.updateOne(updates);
+};
+
+/**
+ * Reset login attempts on successful login.
+ */
+userSchema.methods.resetLoginAttempts = async function () {
+  return this.updateOne({
+    $set: { loginAttempts: 0 },
+    $unset: { lockUntil: 1 },
+  });
 };
 
 // Method to return user object without sensitive data
@@ -182,6 +277,12 @@ userSchema.methods.toJSON = function () {
   // Don't delete _id - keep it for socket authentication
   delete userObject.password;
   delete userObject.__v;
+  delete userObject.emailVerificationToken;
+  delete userObject.emailVerificationExpires;
+  delete userObject.resetPasswordToken;
+  delete userObject.resetPasswordExpires;
+  delete userObject.loginAttempts;
+  delete userObject.lockUntil;
   
   return userObject;
 };

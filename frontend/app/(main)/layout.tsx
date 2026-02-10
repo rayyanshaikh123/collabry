@@ -6,7 +6,7 @@
  * Used for: dashboard, study-board, planner, focus, profile, study-buddy, visual-aids
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
 import { ICONS } from '../../constants';
@@ -16,7 +16,6 @@ import { useSocket } from '@/hooks/useCollaboration';
 import { AppRoute } from '../../types';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
-import FocusWidget from '../../components/FocusWidget';
 
 const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
 
@@ -52,24 +51,79 @@ export default function MainLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout, isAuthenticated, isLoading } = useAuthStore();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const { isMobileSidebarOpen, toggleMobileSidebar, theme, setTheme } = useUIStore();
+
+  // Client-side mount detection (avoids SSR mismatch).
+  const [mounted, setMounted] = useState(false);
+  // True once Zustand persist has hydrated AND any needed token refresh has resolved.
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Initialize socket connection
   useSocket();
 
-  // Check authentication state and redirect if not authenticated
+  // ── Auth resolution: hydration → token refresh → authReady ──────────────
+  // After Zustand persist reads localStorage we know whether the user was
+  // previously authenticated.  If so, the in-memory accessToken is gone
+  // (it's never persisted) so we must refresh it via the httpOnly cookie
+  // before any "redirect-to-login" decision is made.
   useEffect(() => {
-    // Allow pricing page to be accessible without authentication
+    let cancelled = false;
+    let unsubHydration: (() => void) | undefined;
+    let safetyTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const resolveAuth = async () => {
+      if (cancelled) return;
+      const state = useAuthStore.getState();
+      if (state.isAuthenticated && !state.accessToken) {
+        // Persisted auth but no in-memory token → refresh from httpOnly cookie
+        try {
+          await state.checkAuth();
+        } catch {
+          // checkAuth already sets isAuthenticated=false on failure
+        }
+      }
+      if (!cancelled) setAuthReady(true);
+    };
+
+    // Use Zustand persist's public API to wait for hydration
+    if ((useAuthStore as any).persist?.hasHydrated?.()) {
+      resolveAuth();
+    } else if ((useAuthStore as any).persist?.onFinishHydration) {
+      unsubHydration = (useAuthStore as any).persist.onFinishHydration(() => {
+        if (!cancelled) resolveAuth();
+      });
+      // Safety: if hydration callback never fires, proceed after 3 s
+      safetyTimer = setTimeout(() => {
+        if (!cancelled) resolveAuth();
+      }, 3000);
+    } else {
+      // Fallback: persist API unavailable — resolve after a short wait
+      safetyTimer = setTimeout(() => {
+        if (!cancelled) resolveAuth();
+      }, 150);
+    }
+
+    return () => {
+      cancelled = true;
+      unsubHydration?.();
+      if (safetyTimer) clearTimeout(safetyTimer);
+    };
+  }, []);
+
+  // ── Redirect to login ONLY after auth is definitively resolved ──────────
+  // No arbitrary timers — we wait for checkAuth() to finish/fail first.
+  useEffect(() => {
+    if (!mounted || !authReady) return;
+
     const publicPaths = ['/pricing', '/subscription'];
     const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
-    
-    if (!isAuthenticated && !isLoading && !isPublicPath) {
-      // Save current path for redirect after login
-      const currentPath = pathname;
-      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+
+    if (!isAuthenticated && !isPublicPath) {
+      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
-  }, [isAuthenticated, isLoading, router, pathname]);
+  }, [mounted, authReady, isAuthenticated, router, pathname]);
 
   const cycleTheme = () => {
     const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;
@@ -110,16 +164,10 @@ export default function MainLayout({
 
   const currentRoute = getAppRouteFromPath(pathname);
 
-  // Show loading state during logout
-  if (!isAuthenticated && isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 dark:border-indigo-500 mx-auto"></div>
-          <p className="mt-4 text-slate-600 dark:text-slate-400 font-semibold">Logging out...</p>
-        </div>
-      </div>
-    );
+  // During SSR / before client mount, render nothing to avoid flash.
+  // This is a single-frame delay (~16ms), NOT dependent on any async operation.
+  if (!mounted) {
+    return null;
   }
 
   return (
@@ -180,9 +228,6 @@ export default function MainLayout({
           {children}
         </main>
       </div>
-
-      {/* Focus Widget - only shown on protected pages when logged in */}
-      <FocusWidget />
     </div>
   );
 }

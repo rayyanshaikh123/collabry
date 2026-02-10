@@ -102,7 +102,7 @@ const config = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-csrf-token'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -110,7 +110,7 @@ const config = {
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h',
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   email: {

@@ -388,6 +388,12 @@ class AIService {
         mermaidCode: renderData.mermaid,
         svgBase64: renderData.svg_base64
       };
+
+      if (result.root) {
+        flattenNode(result.root);
+      }
+
+      return { nodes, edges };
     } catch (error) {
       console.error('AI generateMindMap error:', error.response?.data || error.message);
       throw new Error(error.response?.data?.detail || 'Failed to generate mind map from AI engine');

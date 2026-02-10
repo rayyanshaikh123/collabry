@@ -270,6 +270,97 @@ class EmailService {
   }
 
   /**
+   * Send email verification link
+   * @param {string} email - User email
+   * @param {string} name - User name
+   * @param {string} verificationToken - Raw verification token
+   */
+  async sendEmailVerification(email, name, verificationToken) {
+    const verifyUrl = `${config.frontendUrl}/verify-email?token=${verificationToken}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+          }
+          .container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+          }
+          .content {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-top: 20px;
+          }
+          h1 {
+            color: white;
+            margin: 0;
+            font-size: 28px;
+          }
+          .button {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+          }
+          .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Welcome to Collabry!</h1>
+          <div class="content">
+            <h2>Verify Your Email</h2>
+            <p>Hi ${name},</p>
+            <p>Thanks for signing up! Please verify your email address to activate your account.</p>
+            
+            <a href="${verifyUrl}" class="button">Verify Email</a>
+            
+            <p style="margin-top: 20px; font-size: 14px; color: #666;">
+              This link will expire in <strong>24 hours</strong>.
+            </p>
+            <p style="font-size: 14px; color: #666;">
+              Or copy and paste this URL into your browser:<br/>
+              <a href="${verifyUrl}" style="color: #667eea; word-break: break-all;">${verifyUrl}</a>
+            </p>
+          </div>
+          
+          <div class="footer">
+            <p>&copy; 2026 Collabry - AI Collaborative Study Platform</p>
+            <p>If you didn't create an account, please ignore this email.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return await this.sendEmail({
+      to: email,
+      subject: 'Verify Your Email - Collabry',
+      html,
+    });
+  }
+
+  /**
    * Verify email configuration
    */
   async verifyConnection() {

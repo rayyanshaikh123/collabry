@@ -14,10 +14,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import GroupChat from './GroupChat';
+import { useAuthStore } from '@/src/stores/auth.store';
 
 export default function GroupsTab() {
-  const [currentUser, setCurrentUser] = useState<{ _id?: string; id?: string; name: string; email: string } | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const { user: authUser, accessToken } = useAuthStore();
+  const currentUser = authUser ? { _id: (authUser as any)._id || (authUser as any).id, id: (authUser as any)._id || (authUser as any).id, name: authUser.name, email: authUser.email } : null;
+  const token = accessToken;
   const [isLoading, setIsLoading] = useState(true);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
@@ -31,36 +33,6 @@ export default function GroupsTab() {
   });
   const { toast } = useToast();
 
-  const loadCurrentUser = () => {
-    try {
-      const userStr = localStorage.getItem('user');
-      const authToken = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' instead of 'token'
-      console.log('🔍 [GroupsTab] Loading user from localStorage:', { userStr, hasToken: !!authToken });
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        console.log('✅ [GroupsTab] User loaded:', user);
-        console.log('🔍 [GroupsTab] User._id:', user._id);
-        console.log('🔍 [GroupsTab] User.id:', user.id);
-        // Backend returns _id (MongoDB ObjectId), frontend expects id
-        // Make sure both exist for compatibility
-        if (user._id && !user.id) {
-          user.id = user._id;
-          console.log('✅ [GroupsTab] Set user.id = user._id:', user.id);
-        }
-        setCurrentUser(user);
-      }
-      if (authToken) {
-        console.log('✅ [GroupsTab] Token loaded');
-        setToken(authToken);
-      }
-    } catch (error) {
-      console.error('❌ [GroupsTab] Error loading user:', error);
-    } finally {
-      setIsLoading(false);
-      console.log('✅ [GroupsTab] Loading complete');
-    }
-  };
-
   const loadGroups = async () => {
     try {
       const data = await groupService.getUserGroups();
@@ -73,7 +45,7 @@ export default function GroupsTab() {
 
   useEffect(() => {
     loadGroups();
-    loadCurrentUser();
+    setIsLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

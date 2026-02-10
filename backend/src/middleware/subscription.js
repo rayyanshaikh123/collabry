@@ -1,52 +1,6 @@
 const Subscription = require('../models/Subscription');
 const AppError = require('../utils/AppError');
-
-/**
- * Feature limits by subscription tier
- */
-const FEATURE_LIMITS = {
-  free: {
-    aiQuestionsPerDay: 10,
-    boards: 1,
-    groupMembers: 5,
-    storageGB: 0.1,
-    documentsPerUpload: 1,
-    maxDocumentSize: 5, // MB
-    aiModels: ['basic'],
-  },
-  basic: {
-    aiQuestionsPerDay: 100,
-    boards: 5,
-    groupMembers: 20,
-    storageGB: 5,
-    documentsPerUpload: 5,
-    maxDocumentSize: 20, // MB
-    aiModels: ['basic', 'advanced'],
-  },
-  pro: {
-    aiQuestionsPerDay: -1, // unlimited
-    boards: -1, // unlimited
-    groupMembers: 50,
-    storageGB: 50,
-    documentsPerUpload: 20,
-    maxDocumentSize: 100, // MB
-    aiModels: ['basic', 'advanced', 'premium'],
-    prioritySupport: true,
-  },
-  enterprise: {
-    aiQuestionsPerDay: -1,
-    boards: -1,
-    groupMembers: -1,
-    storageGB: 500,
-    documentsPerUpload: -1,
-    maxDocumentSize: 500, // MB
-    aiModels: ['basic', 'advanced', 'premium', 'custom'],
-    prioritySupport: true,
-    customIntegrations: true,
-    dedicatedSupport: true,
-    whiteLabel: true,
-  },
-};
+const { PLAN_LIMITS, getLimitsForTier, isTierAtLeast, TIER_ORDER } = require('../config/plans');
 
 /**
  * Check if user's subscription allows access to a feature
@@ -80,15 +34,11 @@ const checkFeatureAccess = (feature, minTier = null) => {
       }
 
       const userTier = subscription.plan;
-      const limits = FEATURE_LIMITS[userTier];
+      const limits = getLimitsForTier(userTier);
 
       // Check minimum tier requirement
       if (minTier) {
-        const tierOrder = ['free', 'basic', 'pro', 'enterprise'];
-        const userTierIndex = tierOrder.indexOf(userTier);
-        const minTierIndex = tierOrder.indexOf(minTier);
-        
-        if (userTierIndex < minTierIndex) {
+        if (!isTierAtLeast(userTier, minTier)) {
           return res.status(403).json({
             success: false,
             error: `This feature requires ${minTier} plan or higher`,
@@ -151,10 +101,8 @@ const requireTier = (minTier) => {
  * @returns {string}
  */
 function getMinimumTierForFeature(feature) {
-  const tiers = ['free', 'basic', 'pro', 'enterprise'];
-  
-  for (const tier of tiers) {
-    const limits = FEATURE_LIMITS[tier];
+  for (const tier of TIER_ORDER) {
+    const limits = PLAN_LIMITS[tier];
     if (limits[feature] && limits[feature] !== 0 && limits[feature] !== false) {
       return tier;
     }
@@ -180,7 +128,7 @@ const attachSubscription = async (req, res, next) => {
       }
       
       req.subscription = subscription;
-      req.subscriptionLimits = FEATURE_LIMITS[subscription.plan];
+      req.subscriptionLimits = getLimitsForTier(subscription.plan);
     }
   } catch (error) {
     console.error('Error attaching subscription:', error);
@@ -194,5 +142,4 @@ module.exports = {
   requireFeature,
   requireTier,
   attachSubscription,
-  FEATURE_LIMITS,
 };

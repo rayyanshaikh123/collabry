@@ -8,86 +8,42 @@ import type {
   LoginCredentials,
   RegisterData,
   AuthResponse,
+  RegisterResponse,
+  Session,
   User,
-  ApiResponse,
-} from '../types';
+  
+} from '@/types/user.types';
+
 
 export const authService = {
   /**
    * Login with email and password
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post<{ user: User; accessToken: string; refreshToken: string }>('/auth/login', credentials);
+    const response = await apiClient.post<{ user: User; accessToken: string }>('/auth/login', credentials);
     
     if (response.success && response.data) {
-      // Backend returns { user, accessToken, refreshToken }
-      // Transform to match AuthResponse type
-      const authResponse: AuthResponse = {
+      // Backend sends accessToken in JSON body, refreshToken via httpOnly cookie
+      return {
         user: response.data.user,
         tokens: {
           accessToken: response.data.accessToken,
-          refreshToken: response.data.refreshToken,
-          expiresIn: 900 // 15 minutes in seconds
-        }
+          // refreshToken is now an httpOnly cookie — not in JSON
+        },
       };
-      
-      // Persist into Zustand `auth-storage` so the app's auth store is the single source of truth.
-      try {
-        const raw = localStorage.getItem('auth-storage');
-        const parsed = raw ? JSON.parse(raw) : { state: {} };
-        if (!parsed.state) parsed.state = {};
-        parsed.state.user = authResponse.user;
-        parsed.state.accessToken = authResponse.tokens.accessToken;
-        parsed.state.refreshToken = authResponse.tokens.refreshToken;
-        parsed.state.isAuthenticated = true;
-        localStorage.setItem('auth-storage', JSON.stringify(parsed));
-      } catch (e) {
-        console.error('[authService] Failed to persist to auth-storage, falling back to flat keys', e);
-        localStorage.setItem('accessToken', authResponse.tokens.accessToken);
-        localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
-        localStorage.setItem('user', JSON.stringify(authResponse.user));
-      }
-      return authResponse;
     }
     
     throw new Error(response.error?.message || 'Login failed');
   },
 
   /**
-   * Register new user
+   * Register new user — returns message (email verification required)
    */
-  async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await apiClient.post<{ user: User; accessToken: string; refreshToken: string }>('/auth/register', data);
+  async register(data: RegisterData): Promise<RegisterResponse> {
+    const response = await apiClient.post<{ message: string }>('/auth/register', data);
     
-    if (response.success && response.data) {
-      // Backend returns { user, accessToken, refreshToken }
-      // Transform to match AuthResponse type
-      const authResponse: AuthResponse = {
-        user: response.data.user,
-        tokens: {
-          accessToken: response.data.accessToken,
-          refreshToken: response.data.refreshToken,
-          expiresIn: 900 // 15 minutes in seconds
-        }
-      };
-      
-      // Persist into Zustand `auth-storage` so the app's auth store is the single source of truth.
-      try {
-        const raw = localStorage.getItem('auth-storage');
-        const parsed = raw ? JSON.parse(raw) : { state: {} };
-        if (!parsed.state) parsed.state = {};
-        parsed.state.user = authResponse.user;
-        parsed.state.accessToken = authResponse.tokens.accessToken;
-        parsed.state.refreshToken = authResponse.tokens.refreshToken;
-        parsed.state.isAuthenticated = true;
-        localStorage.setItem('auth-storage', JSON.stringify(parsed));
-      } catch (e) {
-        console.error('[authService] Failed to persist to auth-storage, falling back to flat keys', e);
-        localStorage.setItem('accessToken', authResponse.tokens.accessToken);
-        localStorage.setItem('refreshToken', authResponse.tokens.refreshToken);
-        localStorage.setItem('user', JSON.stringify(authResponse.user));
-      }
-      return authResponse;
+    if (response.success) {
+      return { message: response.message || 'Registration successful. Please check your email to verify your account.' };
     }
     
     throw new Error(response.error?.message || 'Registration failed');
@@ -98,55 +54,25 @@ export const authService = {
    */
   async logout(): Promise<void> {
     try {
-      // Try to call backend logout endpoint
+      // Backend revokes refresh token and clears httpOnly cookie
       await apiClient.post('/auth/logout');
     } catch (error) {
-      // Silently handle logout errors - still clear local storage
-      console.log('Backend logout skipped (not connected)');
-    } finally {
-      // Clear persisted auth storage and flat keys regardless of backend response
-      try {
-        localStorage.removeItem('auth-storage');
-      } catch (e) {
-        console.error('[authService] Failed to remove auth-storage:', e);
-      }
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
+      // Logout errors are non-critical — state will be cleared regardless
+      console.warn('Backend logout request failed:', error);
     }
   },
 
   /**
    * Refresh access token
    */
-  async refreshToken(refreshToken: string): Promise<string> {
-    const response = await apiClient.post<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
-      refreshToken,
+  async refreshToken(): Promise<string> {
+    // Refresh token is sent automatically via httpOnly cookie (withCredentials: true)
+    // Use a short timeout — if the backend is down we shouldn't block the UI for minutes
+    const response = await apiClient.post<{ accessToken: string }>('/auth/refresh', undefined, {
+      timeout: 10000, // 10 seconds
     });
     
     if (response.success && response.data) {
-      // Update persisted zustand storage (`auth-storage`) if present so the rest of
-      // the app reads the rotated tokens from the same source as the auth store.
-      try {
-        const raw = localStorage.getItem('auth-storage');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (!parsed.state) parsed.state = {};
-          parsed.state.accessToken = response.data.accessToken;
-          if (response.data.refreshToken) parsed.state.refreshToken = response.data.refreshToken;
-          localStorage.setItem('auth-storage', JSON.stringify(parsed));
-        } else {
-          // Fallback to flat keys for backwards compatibility
-          localStorage.setItem('accessToken', response.data.accessToken);
-          if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
-        }
-      } catch (e) {
-        console.error('[authService] Failed to persist refreshed tokens to auth-storage:', e);
-        // still write flat keys as fallback
-        localStorage.setItem('accessToken', response.data.accessToken);
-        if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
-      }
-
       return response.data.accessToken;
     }
     
@@ -242,6 +168,43 @@ export const authService = {
     
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to delete account');
+    }
+  },
+
+  /**
+   * Resend email verification
+   */
+  async resendVerification(email: string): Promise<string> {
+    const response = await apiClient.post<{ message: string }>('/auth/resend-verification', { email });
+
+    if (response.success) {
+      return response.message || 'Verification email sent. Please check your inbox.';
+    }
+
+    throw new Error(response.error?.message || 'Failed to resend verification email');
+  },
+
+  /**
+   * Get active sessions for current user
+   */
+  async getActiveSessions(): Promise<Session[]> {
+    const response = await apiClient.get<{ sessions: Session[] }>('/auth/sessions');
+
+    if (response.success && response.data) {
+      return response.data.sessions;
+    }
+
+    throw new Error(response.error?.message || 'Failed to fetch sessions');
+  },
+
+  /**
+   * Revoke a specific session
+   */
+  async revokeSession(sessionId: string): Promise<void> {
+    const response = await apiClient.delete(`/auth/sessions/${sessionId}`);
+
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to revoke session');
     }
   },
 };

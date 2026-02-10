@@ -23,26 +23,14 @@ class AIEngineService {
   }
 
   private setupInterceptors() {
-    // Request interceptor - attach JWT token
+    // Request interceptor - attach JWT token from Zustand in-memory state
     this.client.interceptors.request.use(
       (config) => {
-        // Get token from Zustand persist storage
-        const authStorage = localStorage.getItem('auth-storage');
-        console.log('🔍 Auth storage:', authStorage ? 'Found' : 'Not found');
-        
-        if (authStorage) {
-          try {
-            const { state } = JSON.parse(authStorage);
-            const token = state?.accessToken;
-            console.log('🔑 Token extracted:', token ? `${token.substring(0, 20)}...` : 'None');
-            
-            if (token && config.headers) {
-              config.headers.Authorization = `Bearer ${token}`;
-              console.log('✅ Authorization header set');
-            }
-          } catch (e) {
-            console.error('❌ Failed to parse auth storage:', e);
-          }
+        // Lazy import to avoid circular dependency
+        const { useAuthStore } = require('../stores/auth.store');
+        const token = useAuthStore.getState().accessToken;
+        if (token && config.headers) {
+          config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
       },

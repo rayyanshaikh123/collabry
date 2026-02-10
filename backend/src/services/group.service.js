@@ -1,6 +1,8 @@
 const Group = require('../models/Group');
 const User = require('../models/User');
 const crypto = require('crypto');
+const { getLimitsForTier, isUnlimited } = require('../config/plans');
+const { getUserPlan } = require('../middleware/usageEnforcement');
 
 class GroupService {
   // Create group
@@ -142,6 +144,13 @@ class GroupService {
       throw new Error('User not found');
     }
 
+    // Enforce group member limit based on group creator's plan
+    const creatorPlan = await getUserPlan(group.creator);
+    const limits = getLimitsForTier(creatorPlan);
+    if (!isUnlimited(limits.groupMembers) && group.members.length >= limits.groupMembers) {
+      throw new Error(`Group member limit reached (${limits.groupMembers} for ${creatorPlan} plan). The group owner needs to upgrade.`);
+    }
+
     group.members.push({
       user: memberId,
       role: 'member',
@@ -274,6 +283,13 @@ class GroupService {
 
     if (alreadyMember) {
       throw new Error('Already a member of this group');
+    }
+
+    // Enforce group member limit based on group creator's plan
+    const creatorPlan = await getUserPlan(group.creator);
+    const limits = getLimitsForTier(creatorPlan);
+    if (!isUnlimited(limits.groupMembers) && group.members.length >= limits.groupMembers) {
+      throw new Error(`Group member limit reached (${limits.groupMembers} for ${creatorPlan} plan). The group owner needs to upgrade.`);
     }
 
     group.members.push({

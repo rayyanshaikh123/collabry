@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Check, Sparkles, Zap, Crown, Star } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Card } from '../components/UIElements';
+
 import { useAuthStore } from '@/lib/stores/auth.store';
+import { useUIStore } from '@/lib/stores/ui.store';
 import { useRouter } from 'next/navigation';
+import { apiClient } from '../src/lib/api';
+import AlertModal from '../components/AlertModal';
 
 // Type definitions
 interface BasePlan {
@@ -60,14 +63,14 @@ const PLANS: Record<PlanKey, Plan> = {
     features: [
       '10 AI questions per day',
       '1 collaborative board',
+      '3 study notebooks',
       '5 group members per board',
-      'Basic AI model access',
-      'Community features',
-      '100MB storage',
+      '5 file uploads per day',
+      '100 MB storage',
     ],
     limitations: [
-      'Limited AI models',
-      'Basic features only',
+      'Limited daily AI usage',
+      'Single board only',
     ],
     color: 'from-slate-500 to-slate-700',
     buttonText: 'Current Plan',
@@ -83,12 +86,11 @@ const PLANS: Record<PlanKey, Plan> = {
     features: [
       '100 AI questions per day',
       '5 collaborative boards',
+      '20 study notebooks',
       '20 group members per board',
-      'Advanced AI model access',
-      'All collaboration features',
-      'Study planner & analytics',
-      '5GB storage',
-      'Email support',
+      '50 file uploads per day',
+      '5 GB storage',
+      'Real-time collaboration',
     ],
     popular: true,
     color: 'from-indigo-500 to-purple-600',
@@ -107,13 +109,11 @@ const PLANS: Record<PlanKey, Plan> = {
     features: [
       'Unlimited AI questions',
       'Unlimited boards',
+      'Unlimited notebooks',
       '50 group members per board',
-      'All AI models (premium)',
-      'Advanced study analytics',
-      'Groups & communities',
-      '50GB storage',
+      'Unlimited file uploads',
+      '50 GB storage',
       'Real-time collaboration',
-      'Priority email support',
     ],
     color: 'from-amber-500 to-orange-600',
     buttonText: 'Upgrade to Pro',
@@ -124,18 +124,13 @@ const PLANS: Record<PlanKey, Plan> = {
     icon: Star,
     price: 99999,
     currency: '₹',
-    period: 'custom',
+    period: 'one-time',
     description: 'For organizations',
     features: [
       'Everything in Pro',
       'Unlimited group members',
-      'Custom AI model access',
-      'Dedicated account manager',
-      '500GB storage',
-      'Advanced analytics & reporting',
-      'Custom onboarding',
-      'Phone & email support',
-      'Flexible billing',
+      '500 GB storage',
+      'Lifetime access',
     ],
     color: 'from-rose-500 to-pink-600',
     buttonText: 'Contact Sales',
@@ -146,8 +141,33 @@ const PLANS: Record<PlanKey, Plan> = {
 const PricingView: React.FC = () => {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponStatus, setCouponStatus] = useState<{ valid: boolean; message: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
+  const { showAlert } = useUIStore();
   const router = useRouter();
+
+  const handleValidateCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setValidatingCoupon(true);
+    setCouponStatus(null);
+    try {
+      const data = await apiClient.post('/coupons/validate', {
+        code: couponCode.trim(),
+        planTier: 'basic', // Validates generically
+      });
+      if (data.success && data.data?.valid) {
+        setCouponStatus({ valid: true, message: `Coupon applied! ${data.data.discount ? `${data.data.discountType === 'percentage' ? data.data.discountValue + '%' : '₹' + (data.data.discountValue / 100)} off` : 'Discount will be applied at checkout.'}` });
+      } else {
+        setCouponStatus({ valid: false, message: data.data?.reason || data.error || 'Invalid coupon' });
+      }
+    } catch (error: any) {
+      setCouponStatus({ valid: false, message: error.message || 'Failed to validate coupon' });
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
 
   const handleSubscribe = async (planKey: string) => {
     if (!isAuthenticated) {
@@ -178,27 +198,15 @@ const PricingView: React.FC = () => {
       const interval = billingCycle === 'yearly' ? 'yearly' : 'monthly';
       const planId = `${planKey}_${interval}`;
 
-      // Create order
-      const orderResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/create-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: JSON.stringify({ planId }),
-      });
-
-      if (!orderResponse.ok) {
-        const errorText = await orderResponse.text();
-        console.error('Order creation failed:', orderResponse.status, errorText);
-        throw new Error(`Server returned ${orderResponse.status}: ${errorText}`);
+      // Create order (include coupon if validated)
+      const orderPayload: any = { planId };
+      if (couponCode.trim() && couponStatus?.valid) {
+        orderPayload.couponCode = couponCode.trim();
       }
-
-      const orderData = await orderResponse.json();
-      console.log('Order response:', orderData);
+      const orderData = await apiClient.post('/subscriptions/create-order', orderPayload);
 
       if (!orderData.success) {
-        throw new Error(orderData.error || 'Failed to create order');
+        throw new Error(String(orderData.error || 'Failed to create order'));
       }
 
       const { orderId, amount, currency } = orderData.data;
@@ -221,40 +229,36 @@ const PricingView: React.FC = () => {
         handler: async (response: any) => {
           // Verify payment
           try {
-            const verifyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/subscriptions/verify-payment`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                planId,
-              }),
+            const verifyData = await apiClient.post('/subscriptions/verify-payment', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              planId,
             });
-
-            const verifyData = await verifyResponse.json();
 
             if (verifyData.success) {
               // Update user in auth store with new subscription tier
               if (verifyData.data?.user) {
                 const { setUser } = useAuthStore.getState();
                 setUser(verifyData.data.user);
-                
-                // Also update localStorage
-                localStorage.setItem('user', JSON.stringify(verifyData.data.user));
               }
               
-              alert('🎉 Subscription activated successfully!');
+              showAlert({
+                type: 'success',
+                title: 'Subscription Activated!',
+                message: '🎉 Your subscription has been activated successfully!',
+              });
               router.push('/dashboard');
             } else {
-              throw new Error(verifyData.error || 'Payment verification failed');
+              throw new Error(String(verifyData.error || 'Payment verification failed'));
             }
           } catch (error: any) {
             console.error('Payment verification error:', error);
-            alert('Payment verification failed. Please contact support.');
+            showAlert({
+              type: 'error',
+              title: 'Verification Failed',
+              message: 'Payment verification failed. Please contact support.',
+            });
           }
         },
         modal: {
@@ -282,14 +286,22 @@ const PricingView: React.FC = () => {
       
       razorpay.on('payment.failed', function (response: any) {
         console.error('Razorpay payment failed:', response);
-        alert(`Payment failed: ${response.error.description || 'Unknown error'}`);
+        showAlert({
+          type: 'error',
+          title: 'Payment Failed',
+          message: response.error.description || 'Unknown error',
+        });
         setLoading(false);
       });
       
       razorpay.open();
     } catch (error: any) {
       console.error('Subscription error:', error);
-      alert(error.message || 'Failed to process subscription');
+      showAlert({
+        type: 'error',
+        title: 'Subscription Error',
+        message: error.message || 'Failed to process subscription',
+      });
     } finally {
       setLoading(false);
     }
@@ -299,6 +311,7 @@ const PricingView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 py-20 px-6-m-4 md:-m-8 text-slate-800 dark:text-slate-100">
+      <AlertModal />
       <div className="max-w-7xl mx-auto">
         {/* Current Plan Badge */}
         {currentTier !== 'free' && (
@@ -346,6 +359,33 @@ const PricingView: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Coupon code input */}
+        {isAuthenticated && (
+          <div className="max-w-md mx-auto mb-12">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponStatus(null); }}
+                placeholder="Have a coupon code?"
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400"
+              />
+              <button
+                onClick={handleValidateCoupon}
+                disabled={!couponCode.trim() || validatingCoupon}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {validatingCoupon ? '...' : 'Apply'}
+              </button>
+            </div>
+            {couponStatus && (
+              <p className={`mt-2 text-sm font-bold ${couponStatus.valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {couponStatus.message}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Pricing cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">

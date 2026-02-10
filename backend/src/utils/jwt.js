@@ -1,5 +1,22 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const config = require('../config/env');
+
+/**
+ * Generate a unique JWT ID (jti) for token identification
+ * @returns {String} - Unique token ID
+ */
+const generateJti = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Generate a token family ID (shared across a login session's token chain)
+ * @returns {String} - Unique family ID
+ */
+const generateTokenFamily = () => {
+  return crypto.randomBytes(16).toString('hex');
+};
 
 /**
  * Sign access token
@@ -9,18 +26,54 @@ const config = require('../config/env');
 const signAccessToken = (payload) => {
   return jwt.sign(payload, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpiresIn,
+    jwtid: generateJti(),
   });
 };
 
 /**
- * Sign refresh token
+ * Sign refresh token with a specific jti (for server-side tracking)
  * @param {Object} payload - Token payload (user data)
+ * @param {String} jti - Unique token ID for server-side storage
  * @returns {String} - Signed JWT refresh token
  */
-const signRefreshToken = (payload) => {
+const signRefreshToken = (payload, jti) => {
+  if (!jti) {
+    jti = generateJti();
+  }
   return jwt.sign(payload, config.jwt.refreshSecret, {
     expiresIn: config.jwt.refreshExpiresIn,
+    jwtid: jti,
   });
+};
+
+/**
+ * Decode a refresh token WITHOUT verifying (to extract jti for revocation even if expired)
+ * @param {String} token - JWT refresh token
+ * @returns {Object|null} - Decoded payload or null
+ */
+const decodeRefreshToken = (token) => {
+  try {
+    return jwt.decode(token);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Calculate refresh token expiry as a Date object (for DB storage)
+ * @returns {Date} - Expiry date
+ */
+const getRefreshTokenExpiry = () => {
+  const expiresIn = config.jwt.refreshExpiresIn || '7d';
+  const match = expiresIn.match(/^(\d+)(s|m|h|d)$/);
+  if (!match) {
+    // Default to 7 days
+    return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  }
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return new Date(Date.now() + value * multipliers[unit]);
 };
 
 /**
@@ -64,8 +117,12 @@ const verifyRefreshToken = (token) => {
 };
 
 module.exports = {
+  generateJti,
+  generateTokenFamily,
   signAccessToken,
   signRefreshToken,
+  decodeRefreshToken,
+  getRefreshTokenExpiry,
   verifyAccessToken,
   verifyRefreshToken,
 };

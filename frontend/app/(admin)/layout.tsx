@@ -32,9 +32,16 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) { 
   const router = useRouter();
-  const { user, logout, isAuthenticated, isLoading } = useAuthStore();
+  const { user, logout, isAuthenticated, isLoading, accessToken, checkAuth } = useAuthStore();
   const { isMobileSidebarOpen, toggleMobileSidebar, theme, setTheme } = useUIStore();
   const [currentSubRoute, setCurrentSubRoute] = useState<AppRoute>(AppRoute.ADMIN);
+
+  // On mount: if persisted auth but no in-memory token, refresh the access token
+  useEffect(() => {
+    if (isAuthenticated && !accessToken) {
+      checkAuth();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check authentication state and redirect if not authenticated
   useEffect(() => {

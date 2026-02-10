@@ -44,6 +44,22 @@ const errorHandler = (err, req, res, next) => {
     error.statusCode = 400;
   }
 
+  // JWT errors — return 401 with clear messages
+  if (err.name === 'TokenExpiredError') {
+    error.message = 'Token has expired. Please login again.';
+    error.statusCode = 401;
+  }
+
+  if (err.name === 'JsonWebTokenError') {
+    error.message = 'Invalid token. Please login again.';
+    error.statusCode = 401;
+  }
+
+  if (err.name === 'NotBeforeError') {
+    error.message = 'Token is not yet active.';
+    error.statusCode = 401;
+  }
+
   res.status(error.statusCode).json({
     success: false,
     error: error.message || 'Server Error',

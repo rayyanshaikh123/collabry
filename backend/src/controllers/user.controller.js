@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+const RefreshToken = require('../models/RefreshToken');
+const { logAuthEvent } = require('../utils/auditLogger');
 
 /**
  * @desc    Get current user profile
@@ -56,10 +57,29 @@ const changePassword = asyncHandler(async (req, res) => {
     });
   }
 
-  if (newPassword.length < 6) {
+  // Enforce same strength rules as registration
+  if (newPassword.length < 8) {
     return res.status(400).json({
       success: false,
-      message: 'New password must be at least 6 characters',
+      message: 'New password must be at least 8 characters',
+    });
+  }
+  if (!/[A-Z]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: 'New password must contain at least one uppercase letter',
+    });
+  }
+  if (!/[a-z]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: 'New password must contain at least one lowercase letter',
+    });
+  }
+  if (!/[0-9]/.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: 'New password must contain at least one number',
     });
   }
 
@@ -75,13 +95,22 @@ const changePassword = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update password
+  // Update password (pre-save hook sets passwordChangedAt)
   user.password = newPassword;
   await user.save();
 
+  // Revoke ALL refresh tokens — force re-login on every device
+  await RefreshToken.revokeAllForUser(req.user._id, 'password_change');
+
+  logAuthEvent('password_change', {
+    userId: req.user._id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+  });
+
   res.status(200).json({
     success: true,
-    message: 'Password changed successfully',
+    message: 'Password changed successfully. Please login again on all devices.',
   });
 });
 

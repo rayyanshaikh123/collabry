@@ -1,345 +1,618 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Badge, ProgressBar } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts';
 import { usageService, type UsageStats } from '@/lib/services/usage.service';
 import { useAuthStore } from '@/lib/stores/auth.store';
+import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 
-const SUBSCRIPTION_TIERS = {
-  free: {
-    name: 'Free',
-    limit: 10000, // 10K tokens/day
-    price: '₹0/month',
-    features: ['10K tokens/day', 'Basic AI features', 'Community support', 'Resets every 24 hours']
-  },
-  basic: {
-    name: 'Basic',
-    limit: 100000, // 100K tokens/day (updated from 50K)
-    price: '₹9/month',
-    features: ['100K tokens/day', 'All AI features', 'Priority support', 'Export data']
-  },
-  pro: {
-    name: 'Pro',
-    limit: 1000000, // 1M tokens/day (updated from 200K)
-    price: '₹29/month',
-    features: ['Unlimited tokens', 'Advanced AI models', '24/7 support', 'Custom integrations']
-  },
-  enterprise: {
-    name: 'Enterprise',
-    limit: 10000000, // 10M tokens/day
-    price: '₹99,999 lifetime',
-    features: ['Everything in Pro', 'Dedicated AI instance', 'SLA guarantee', 'Custom training']
-  }
+/* ────────────────────────────────────────── */
+/*  Types for /api/usage/summary response     */
+/* ────────────────────────────────────────── */
+interface LimitEntry {
+  used: number;
+  limit: number; // -1 = unlimited
+  remaining: number | 'unlimited';
+}
+interface StorageEntry {
+  used: string;
+  usedBytes: number;
+  limit: string;
+  limitBytes: number;
+  percentUsed: number;
+}
+interface UsageSummary {
+  plan: string;
+  today: {
+    aiQuestions: LimitEntry;
+    fileUploads: LimitEntry;
+  };
+  totals: {
+    boards: LimitEntry;
+    notebooks: LimitEntry;
+    storage: StorageEntry;
+  };
+  monthly: {
+    totalQuestions: number;
+    totalTokens: number;
+    totalFileUploads: number;
+    avgDailyQuestions: number;
+  } | null;
+  limits: Record<string, number>;
+  resetTime: string;
+}
+
+interface HistoryRecord {
+  date: string;
+  aiQuestions: number;
+  aiTokensUsed: number;
+  fileUploads: number;
+}
+
+/* ────────────────────────────────────────── */
+/*  Constants                                 */
+/* ────────────────────────────────────────── */
+const PLAN_BADGES: Record<string, { label: string; color: 'indigo' | 'emerald' | 'amber' | 'rose' }> = {
+  free: { label: 'Free', color: 'indigo' },
+  basic: { label: 'Basic', color: 'emerald' },
+  pro: { label: 'Pro', color: 'amber' },
+  enterprise: { label: 'Enterprise', color: 'rose' },
 };
 
-const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+/* ────────────────────────────────────────── */
+/*  Helper: human-readable "remaining" label  */
+/* ────────────────────────────────────────── */
+function limitLabel(limit: number): string {
+  if (limit === -1) return 'Unlimited';
+  return limit.toLocaleString();
+}
+function remainingLabel(r: number | 'unlimited'): string {
+  if (r === 'unlimited') return '∞';
+  return r.toLocaleString();
+}
+function pct(used: number, limit: number): number {
+  if (limit === -1) return 0;
+  if (limit === 0) return 100;
+  return Math.min(100, Math.round((used / limit) * 100));
+}
+function pctColor(p: number): 'emerald' | 'amber' | 'rose' {
+  if (p < 50) return 'emerald';
+  if (p < 80) return 'amber';
+  return 'rose';
+}
 
+/* ────────────────────────────────────────── */
+/*  Component                                 */
+/* ────────────────────────────────────────── */
 const UsageView: React.FC = () => {
-  const { user } = useAuthStore();
+  const { user } = useAuthStore(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const router = useRouter();
-  const [usage, setUsage] = useState<UsageStats | null>(null);
+
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<7 | 30 | 90>(7);
+  const [error, setError] = useState<string | null>(null);
+  const [historyDays, setHistoryDays] = useState<7 | 30 | 90>(30);
+  const [countdown, setCountdown] = useState('');
 
-  useEffect(() => {
-    loadUsage();
-  }, [selectedPeriod]);
-
-  const loadUsage = async () => {
+  /* ── Fetch data ── */
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await usageService.getMyUsage(selectedPeriod);
-      setUsage(data);
-    } catch (error: any) {
-      console.error('Failed to load usage:', error);
+      setError(null);
+
+      const [summaryRes, historyRes] = await Promise.all([
+        apiClient.get('/usage/summary').catch(() => null),
+        apiClient.get(`/usage/history?days=${historyDays}`).catch(() => null),
+      ]);
+
+      if (summaryRes?.data) setSummary(summaryRes.data);
+      if (historyRes?.data?.history) setHistory(historyRes.data.history);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to load usage data';
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [historyDays]);
 
-  // Get user's subscription tier (default to free)
-  const subscriptionTier = (user?.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS) || 'free';
-  const tierInfo = SUBSCRIPTION_TIERS[subscriptionTier];
-  const usagePercentage = usage ? (usage.total_tokens / tierInfo.limit) * 100 : 0;
-  const remainingTokens = usage ? Math.max(0, tierInfo.limit - usage.total_tokens) : tierInfo.limit;
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Prepare chart data
-  const dailyData = usage?.daily_usage 
-    ? Object.entries(usage.daily_usage).map(([date, data]) => ({
-        name: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        tokens: data.tokens,
-        operations: data.operations
-      })).slice(-14) // Last 14 days
-    : [];
-
-  const operationsData = usage?.operations_by_type
-    ? Object.entries(usage.operations_by_type).map(([name, value]) => ({
-        name: formatOperationName(name),
-        value
-      }))
-    : [];
-
-  function formatOperationName(opType: string): string {
-    const names: Record<string, string> = {
-      chat: 'Chat',
-      chat_stream: 'Chat',
-      session_chat: 'Chat',
-      summarize: 'Summarize',
-      summarize_stream: 'Summarize',
-      qa: 'Q&A',
-      qa_stream: 'Q&A',
-      qa_file: 'Q&A (File)',
-      qa_file_stream: 'Q&A (File)',
-      mindmap: 'Mind Map',
-      upload: 'Upload',
+  /* ── Countdown timer to daily reset ── */
+  useEffect(() => {
+    if (!summary?.resetTime) return;
+    const tick = () => {
+      const now = Date.now();
+      const reset = new Date(summary.resetTime).getTime();
+      const diff = Math.max(0, reset - now);
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1_000);
+      setCountdown(`${h}h ${m}m ${s}s`);
     };
-    return names[opType] || opType;
-  }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [summary?.resetTime]);
 
-  const getUsageColor = () => {
-    if (usagePercentage < 50) return 'emerald';
-    if (usagePercentage < 80) return 'amber';
-    return 'rose';
-  };
+  /* ── Chart data ── */
+  const chartData = history
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((r) => ({
+      name: new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      questions: r.aiQuestions,
+      tokens: r.aiTokensUsed,
+      uploads: r.fileUploads,
+    }));
 
+  const planBadge = PLAN_BADGES[summary?.plan || 'free'] ?? PLAN_BADGES.free;
+
+  /* ── Derived percentages ── */
+  const aiPct = summary ? pct(summary.today.aiQuestions.used, summary.today.aiQuestions.limit) : 0;
+  const uploadPct = summary ? pct(summary.today.fileUploads.used, summary.today.fileUploads.limit) : 0;
+  const boardPct = summary ? pct(summary.totals.boards.used, summary.totals.boards.limit) : 0;
+  const nbPct = summary ? pct(summary.totals.notebooks.used, summary.totals.notebooks.limit) : 0;
+  const storagePct = summary?.totals.storage.percentUsed ?? 0;
+
+  /* ──────────────────────── Render ──────────────────────── */
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans">
-      <div className="max-w-7xl mx-auto p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-black text-slate-800 dark:text-slate-200 mb-2">AI Usage</h1>
-          <p className="text-slate-500 dark:text-slate-400">Monitor your AI token consumption and activity</p>
+      <div className="max-w-7xl mx-auto p-4 sm:p-8">
+        {/* ── Header ── */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-slate-200 mb-1">
+              Usage &amp; Limits
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
+              Track your resource consumption and plan limits
+            </p>
+          </div>
+          <button
+            onClick={loadData}
+            className="self-start sm:self-auto flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+          >
+            <ICONS.Clock className="w-4 h-4" />
+            Refresh
+          </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="text-slate-400 dark:text-slate-500">Loading usage data...</div>
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin" />
+              <p className="text-sm text-slate-400 dark:text-slate-500 font-bold">Loading usage data…</p>
+            </div>
           </div>
+        ) : error || !summary ? (
+          <Card className="text-center py-16">
+            <ICONS.Sparkles className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-2">
+              {error || 'Unable to load usage data'}
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              Make sure the backend is running and try again.
+            </p>
+            <button
+              onClick={loadData}
+              className="px-6 py-2 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors"
+            >
+              Retry
+            </button>
+          </Card>
         ) : (
           <>
-            {/* Current Plan & Usage Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              <Card className="lg:col-span-2">
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-800 dark:text-slate-200 mb-1">Current Usage</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {selectedPeriod} day{selectedPeriod > 1 ? 's' : ''} period
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {[7, 30, 90].map((days) => (
-                      <button
-                        key={days}
-                        onClick={() => setSelectedPeriod(days as 7 | 30 | 90)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                          selectedPeriod === days
-                            ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                      >
-                        {days}d
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Token Usage */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Tokens Used</p>
-                        <p className="text-3xl font-black text-slate-800 dark:text-slate-200">
-                          {usage?.total_tokens.toLocaleString() || 0}
-                          <span className="text-lg text-slate-400 dark:text-slate-500 font-medium ml-2">
-                            / {tierInfo.limit.toLocaleString()}
-                          </span>
-                        </p>
-                      </div>
-                      <Badge variant={getUsageColor() as any}>
-                        {usagePercentage.toFixed(1)}%
-                      </Badge>
-                    </div>
-                    <ProgressBar 
-                      progress={Math.min(100, usagePercentage)} 
-                      color={getUsageColor() as any}
-                    />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                      {remainingTokens.toLocaleString()} tokens remaining
-                    </p>
-                  </div>
-
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl p-4">
-                      <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase mb-1">Operations</p>
-                      <p className="text-2xl font-black text-indigo-900 dark:text-indigo-300">
-                        {usage?.total_operations || 0}
-                      </p>
-                    </div>
-                    <div className="bg-emerald-50 dark:bg-emerald-900/30 rounded-2xl p-4">
-                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Success Rate</p>
-                      <p className="text-2xl font-black text-emerald-900 dark:text-emerald-300">
-                        {usage?.success_rate.toFixed(1) || 0}%
-                      </p>
-                    </div>
-                    <div className="bg-amber-50 dark:bg-amber-900/30 rounded-2xl p-4">
-                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Avg Response</p>
-                      <p className="text-2xl font-black text-amber-900 dark:text-amber-300">
-                        {usage?.avg_response_time_ms.toFixed(0) || 0}ms
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            {/* ═══════ Row 1: Plan + Reset + Quick Stats ═══════ */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* Plan */}
+              <Card className="flex flex-col items-start justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  Current Plan
+                </p>
+                <Badge variant={planBadge.color} className="text-sm px-4! py-1.5!">
+                  {planBadge.label}
+                </Badge>
+                {summary.plan === 'free' && (
+                  <button
+                    onClick={() => router.push('/pricing')}
+                    className="mt-3 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                  >
+                    Upgrade →
+                  </button>
+                )}
               </Card>
 
-              {/* Current Plan Card */}
-              <Card>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-black text-slate-800 dark:text-slate-200">Current Plan</h3>
-                  <Badge variant="indigo">{tierInfo.name}</Badge>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-3xl font-black text-slate-800 dark:text-slate-200 mb-1">{tierInfo.price}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">per month</p>
+              {/* Daily Reset */}
+              <Card className="flex flex-col items-start justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  Daily Reset In
+                </p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-200 tabular-nums">
+                  {countdown || '—'}
+                </p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Limits reset at midnight</p>
+              </Card>
+
+              {/* AI Questions Today */}
+              <Card className="flex flex-col justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  AI Questions Today
+                </p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-200">
+                  {summary.today.aiQuestions.used}
+                  <span className="text-base text-slate-400 dark:text-slate-500 font-medium ml-1">
+                    / {limitLabel(summary.today.aiQuestions.limit)}
+                  </span>
+                </p>
+                {summary.today.aiQuestions.limit !== -1 && (
+                  <div className="mt-2">
+                    <ProgressBar progress={aiPct} color={pctColor(aiPct)} />
                   </div>
-                  <div className="space-y-2">
-                    {tierInfo.features.map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                          <ICONS.Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                        </div>
-                        <span className="text-sm text-slate-600 dark:text-slate-400">{feature}</span>
-                      </div>
-                    ))}
+                )}
+              </Card>
+
+              {/* File Uploads Today */}
+              <Card className="flex flex-col justify-between">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  File Uploads Today
+                </p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-200">
+                  {summary.today.fileUploads.used}
+                  <span className="text-base text-slate-400 dark:text-slate-500 font-medium ml-1">
+                    / {limitLabel(summary.today.fileUploads.limit)}
+                  </span>
+                </p>
+                {summary.today.fileUploads.limit !== -1 && (
+                  <div className="mt-2">
+                    <ProgressBar progress={uploadPct} color={pctColor(uploadPct)} />
                   </div>
-                  {subscriptionTier === 'free' && (
-                    <button 
-                      onClick={() => router.push('/pricing')}
-                      className="w-full mt-4 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors"
-                    >
-                      Upgrade Plan
-                    </button>
-                  )}
-                </div>
+                )}
               </Card>
             </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Daily Usage Chart */}
+            {/* ═══════ Row 2: Resource Limits ═══════ */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {/* Boards */}
               <Card>
-                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Daily Token Usage</h3>
-                <div className="h-[300px]">
-                  {dailyData.length > 0 ? (
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                      <ICONS.StudyBoard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Study Boards</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Total created</p>
+                    </div>
+                  </div>
+                  <p className="text-xl font-black text-slate-800 dark:text-slate-200">
+                    {summary.totals.boards.used}
+                    <span className="text-sm text-slate-400 dark:text-slate-500 font-medium ml-1">
+                      / {limitLabel(summary.totals.boards.limit)}
+                    </span>
+                  </p>
+                </div>
+                {summary.totals.boards.limit !== -1 && (
+                  <ProgressBar progress={boardPct} color={pctColor(boardPct)} />
+                )}
+                {summary.totals.boards.limit !== -1 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                    {remainingLabel(summary.totals.boards.remaining)} remaining
+                  </p>
+                )}
+              </Card>
+
+              {/* Notebooks */}
+              <Card>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                      <ICONS.StickyNote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Notebooks</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Total created</p>
+                    </div>
+                  </div>
+                  <p className="text-xl font-black text-slate-800 dark:text-slate-200">
+                    {summary.totals.notebooks.used}
+                    <span className="text-sm text-slate-400 dark:text-slate-500 font-medium ml-1">
+                      / {limitLabel(summary.totals.notebooks.limit)}
+                    </span>
+                  </p>
+                </div>
+                {summary.totals.notebooks.limit !== -1 && (
+                  <ProgressBar progress={nbPct} color={pctColor(nbPct)} />
+                )}
+                {summary.totals.notebooks.limit !== -1 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                    {remainingLabel(summary.totals.notebooks.remaining)} remaining
+                  </p>
+                )}
+              </Card>
+
+              {/* Storage */}
+              <Card>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                      <ICONS.Upload className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Storage</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Files &amp; documents</p>
+                    </div>
+                  </div>
+                  <p className="text-xl font-black text-slate-800 dark:text-slate-200">
+                    {summary.totals.storage.used}
+                    <span className="text-sm text-slate-400 dark:text-slate-500 font-medium ml-1">
+                      / {summary.totals.storage.limit}
+                    </span>
+                  </p>
+                </div>
+                <ProgressBar progress={storagePct} color={pctColor(storagePct)} />
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
+                  {storagePct}% used
+                </p>
+              </Card>
+            </div>
+
+            {/* ═══════ Row 3: History Chart ═══════ */}
+            <Card className="mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200">Activity History</h3>
+                <div className="flex gap-2">
+                  {([7, 30, 90] as const).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setHistoryDays(d)}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                        historyDays === d
+                          ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {d}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-75">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} barCategoryGap="20%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 'bold' }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 'bold' }}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '16px',
+                          border: 'none',
+                          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
+                          backgroundColor: '#1e293b',
+                          color: '#f1f5f9',
+                        }}
+                      />
+                      <Bar dataKey="questions" name="AI Questions" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="uploads" name="File Uploads" fill="#10b981" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500">
+                    <ICONS.Sparkles className="w-10 h-10 mb-2 opacity-50" />
+                    <p className="text-sm font-bold">No activity in this period</p>
+                    <p className="text-xs">Start using AI features to see your history here.</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* ═══════ Row 4: Token Usage + Monthly Stats ═══════ */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Token Trend */}
+              <Card>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Token Consumption</h3>
+                <div className="h-62.5">
+                  {chartData.length > 0 && chartData.some((d) => d.tokens > 0) ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={dailyData}>
+                      <AreaChart data={chartData}>
                         <defs>
                           <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <XAxis 
-                          dataKey="name" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} 
+                        <XAxis
+                          dataKey="name"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }}
                         />
-                        <YAxis 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} 
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 'bold' }}
+                          tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v))}
                         />
-                        <Tooltip 
+                        <Tooltip
                           contentStyle={{
-                            borderRadius: '16px', 
-                            border: 'none', 
-                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+                            borderRadius: '16px',
+                            border: 'none',
+                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
                             backgroundColor: '#1e293b',
-                            color: '#f1f5f9'
-                          }} 
+                            color: '#f1f5f9',
+                          }}
+                          formatter={(v) => [Number(v ?? 0).toLocaleString(), 'Tokens'] as [string, string]}
                         />
-                        <Area 
-                          type="monotone" 
-                          dataKey="tokens" 
-                          stroke="#6366f1" 
+                        <Area
+                          type="monotone"
+                          dataKey="tokens"
+                          stroke="#8b5cf6"
                           strokeWidth={3}
-                          fill="url(#colorTokens)" 
+                          fill="url(#colorTokens)"
                         />
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500">
-                      No usage data available
+                      <p className="text-sm font-bold">No token data yet</p>
                     </div>
                   )}
                 </div>
               </Card>
 
-              {/* Operations Breakdown */}
+              {/* Monthly Summary */}
               <Card>
-                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">Operations Breakdown</h3>
-                <div className="h-[300px]">
-                  {operationsData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={operationsData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {operationsData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{
-                            borderRadius: '16px', 
-                            border: 'none', 
-                            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-                            backgroundColor: '#1e293b',
-                            color: '#f1f5f9'
-                          }} 
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500">
-                      No operations data available
-                    </div>
-                  )}
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-6">30-Day Summary</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-5">
+                    <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase mb-2">
+                      Total Questions
+                    </p>
+                    <p className="text-3xl font-black text-indigo-900 dark:text-indigo-300">
+                      {summary.monthly?.totalQuestions?.toLocaleString() || 0}
+                    </p>
+                  </div>
+                  <div className="bg-violet-50 dark:bg-violet-900/20 rounded-2xl p-5">
+                    <p className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase mb-2">
+                      Total Tokens
+                    </p>
+                    <p className="text-3xl font-black text-violet-900 dark:text-violet-300">
+                      {summary.monthly?.totalTokens
+                        ? summary.monthly.totalTokens >= 1000
+                          ? `${(summary.monthly.totalTokens / 1000).toFixed(1)}K`
+                          : summary.monthly.totalTokens
+                        : 0}
+                    </p>
+                  </div>
+                  <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-5">
+                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-2">
+                      File Uploads
+                    </p>
+                    <p className="text-3xl font-black text-emerald-900 dark:text-emerald-300">
+                      {summary.monthly?.totalFileUploads?.toLocaleString() || 0}
+                    </p>
+                  </div>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-5">
+                    <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase mb-2">
+                      Avg Daily Qs
+                    </p>
+                    <p className="text-3xl font-black text-amber-900 dark:text-amber-300">
+                      {summary.monthly?.avgDailyQuestions?.toFixed(1) || 0}
+                    </p>
+                  </div>
                 </div>
               </Card>
             </div>
 
-            {/* Usage Tips */}
-            {usagePercentage > 80 && (
-              <Card className="bg-gradient-to-r from-rose-50 dark:from-rose-900/30 to-orange-50 dark:to-orange-900/30 border-rose-200 dark:border-rose-800">
+            {/* ═══════ Row 5: Plan Limits Reference ═══════ */}
+            <Card className="mb-6">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-4">
+                Your Plan Limits
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-slate-100 dark:border-slate-800">
+                      <th className="text-left py-3 px-4 font-bold text-slate-500 dark:text-slate-400">Resource</th>
+                      <th className="text-right py-3 px-4 font-bold text-slate-500 dark:text-slate-400">Used</th>
+                      <th className="text-right py-3 px-4 font-bold text-slate-500 dark:text-slate-400">Limit</th>
+                      <th className="text-right py-3 px-4 font-bold text-slate-500 dark:text-slate-400">Remaining</th>
+                      <th className="text-right py-3 px-4 font-bold text-slate-500 dark:text-slate-400">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                    <LimitRow
+                      label="AI Questions / day"
+                      used={summary.today.aiQuestions.used}
+                      limit={summary.today.aiQuestions.limit}
+                      remaining={summary.today.aiQuestions.remaining}
+                    />
+                    <LimitRow
+                      label="File Uploads / day"
+                      used={summary.today.fileUploads.used}
+                      limit={summary.today.fileUploads.limit}
+                      remaining={summary.today.fileUploads.remaining}
+                    />
+                    <LimitRow
+                      label="Study Boards"
+                      used={summary.totals.boards.used}
+                      limit={summary.totals.boards.limit}
+                      remaining={summary.totals.boards.remaining}
+                    />
+                    <LimitRow
+                      label="Notebooks"
+                      used={summary.totals.notebooks.used}
+                      limit={summary.totals.notebooks.limit}
+                      remaining={summary.totals.notebooks.remaining}
+                    />
+                    <tr>
+                      <td className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">Storage</td>
+                      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">{summary.totals.storage.used}</td>
+                      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">{summary.totals.storage.limit}</td>
+                      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">—</td>
+                      <td className="py-3 px-4 text-right">
+                        <Badge variant={pctColor(storagePct)}>{storagePct}%</Badge>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {summary.plan === 'free' && (
+                <div className="mt-6 flex items-center gap-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4">
+                  <ICONS.Sparkles className="w-6 h-6 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <p className="text-sm text-slate-600 dark:text-slate-400 flex-1">
+                    Upgrade to <span className="font-bold text-indigo-600 dark:text-indigo-400">Basic</span> for
+                    100 AI questions/day, 5 boards, 20 notebooks, 5 GB storage and more.
+                  </p>
+                  <button
+                    onClick={() => router.push('/pricing')}
+                    className="px-5 py-2 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
+                  >
+                    View Plans
+                  </button>
+                </div>
+              )}
+            </Card>
+
+            {/* ═══════ High Usage Alert ═══════ */}
+            {aiPct >= 80 && summary.today.aiQuestions.limit !== -1 && (
+              <Card className="bg-linear-to-r from-rose-50 dark:from-rose-900/20 to-orange-50 dark:to-orange-900/20 border-rose-200 dark:border-rose-800">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shrink-0">
                     <ICONS.Sparkles className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-2">High Usage Alert</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                      You've used {usagePercentage.toFixed(1)}% of your daily token limit. 
-                      {usagePercentage >= 100 
-                        ? ' Your AI features will be limited until the next 24-hour reset or you upgrade your plan.'
-                        : ' Consider upgrading to avoid hitting your daily limit.'}
+                    <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-1">
+                      High Usage Alert
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                      You&apos;ve used {summary.today.aiQuestions.used} of {summary.today.aiQuestions.limit} daily AI
+                      questions ({aiPct}%).{' '}
+                      {aiPct >= 100
+                        ? 'Your AI features are limited until the next reset.'
+                        : 'Consider upgrading to avoid hitting your limit.'}
                     </p>
-                    {subscriptionTier === 'free' && (
-                      <button className="px-6 py-2 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors">
+                    {summary.plan === 'free' && (
+                      <button
+                        onClick={() => router.push('/pricing')}
+                        className="px-6 py-2 bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-xl transition-colors text-sm"
+                      >
                         Upgrade Now
                       </button>
                     )}
@@ -353,5 +626,35 @@ const UsageView: React.FC = () => {
     </div>
   );
 };
+
+/* ── Table row helper ── */
+function LimitRow({
+  label,
+  used,
+  limit,
+  remaining,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  remaining: number | 'unlimited';
+}) {
+  const p = pct(used, limit);
+  return (
+    <tr>
+      <td className="py-3 px-4 font-bold text-slate-700 dark:text-slate-300">{label}</td>
+      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">{used}</td>
+      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">{limitLabel(limit)}</td>
+      <td className="py-3 px-4 text-right text-slate-600 dark:text-slate-400">{remainingLabel(remaining)}</td>
+      <td className="py-3 px-4 text-right">
+        {limit === -1 ? (
+          <Badge variant="emerald">Unlimited</Badge>
+        ) : (
+          <Badge variant={pctColor(p)}>{p}%</Badge>
+        )}
+      </td>
+    </tr>
+  );
+}
 
 export default UsageView;
