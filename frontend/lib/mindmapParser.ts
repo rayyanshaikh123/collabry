@@ -236,63 +236,7 @@ export function parseMindMapFromText(text: string): MindMapStructure | null {
     }
   }
 
-  // Fallback: Try to parse hierarchical text format (like the AI engine does)
-  // This is a simplified version - the AI engine has a more robust parser
-  const lines = text.trim().split('\n');
-  const root: MindMapNode = {
-    id: 'root',
-    label: 'Root',
-    level: 0,
-    children: []
-  };
-
-  const stack: Array<{ level: number; node: MindMapNode }> = [{ level: 0, node: root }];
-  let nodeCounter = 1;
-
-  for (const line of lines) {
-    if (!line.trim() || line.trim().startsWith('#')) continue;
-
-    // Calculate indentation
-    const stripped = line.replace(/^[\s\-•*]+/, '');
-    const indent = line.length - stripped.length;
-    const level = Math.floor(indent / 2) + 1;
-
-    const label = stripped.trim();
-    if (!label) continue;
-
-    // Find parent
-    while (stack.length > 1 && stack[stack.length - 1].level >= level) {
-      stack.pop();
-    }
-
-    const parent = stack[stack.length - 1].node;
-    const newNode: MindMapNode = {
-      id: `node_${nodeCounter++}`,
-      label,
-      level,
-      children: []
-    };
-
-    if (!parent.children) {
-      parent.children = [];
-    }
-    parent.children.push(newNode);
-    stack.push({ level, node: newNode });
-  }
-
-  // Only return if we have more than just the root
-  if (root.children && root.children.length > 0) {
-    return treeToNodesEdges(root);
-  }
-
-  // If root has no children but has a label, return it as a single node structure
-  if (root.label && root.label !== 'Root') {
-    return {
-      nodes: [{ id: 'root', label: root.label, level: 0 }],
-      edges: []
-    };
-  }
-
+  // Do NOT fall back to hierarchical text parsing - that turns any bullet list into a "mindmap"
   return null;
 }
 
@@ -314,7 +258,18 @@ export function extractMindMapFromMarkdown(markdownText: string): {
   if (!mindmap || !mindmap.nodes || !Array.isArray(mindmap.nodes) || mindmap.nodes.length === 0) {
     return { cleanMarkdown: markdownText, mindmap: null };
   }
-  
+
+  // Reject if response looks like an error or generic apology (avoid rendering mindmap on failed/generic responses)
+  const errorIndicators = [
+    /^I('m| am) sorry/i, /^Sorry[,!]/i, /^Unfortunately/i, /^I (couldn't|cannot) /i,
+    /^(An? )?error (occurred|happened)/i, /^Something went wrong/i, /^Failed to /i,
+    /^(I )?don't have (access|information)/i, /^I ('m|am) unable to/i
+  ];
+  const textStart = markdownText.trim().substring(0, 150);
+  if (errorIndicators.some((pat) => pat.test(textStart))) {
+    return { cleanMarkdown: markdownText, mindmap: null };
+  }
+
   // CRITICAL: Reject mindmaps with placeholder text
   const placeholderPatterns = [
     /MainTopicName/i,

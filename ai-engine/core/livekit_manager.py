@@ -17,14 +17,21 @@ class LiveKitManager:
     """Manages LiveKit rooms and access tokens for voice tutor sessions"""
     
     def __init__(
-        self, 
-        api_key: Optional[str] = None, 
-        api_secret: Optional[str] = None, 
-        url: Optional[str] = None
+        self,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None,
+        url: Optional[str] = None,
     ):
         self.api_key = api_key or os.getenv("LIVEKIT_API_KEY")
         self.api_secret = api_secret or os.getenv("LIVEKIT_API_SECRET")
-        self.url = url or os.getenv("LIVEKIT_WS_URL", "ws://localhost:7880")
+        # Prefer explicit API/URL envs, fall back to websocket URL, then localhost.
+        self.url = (
+            url
+            or os.getenv("LIVEKIT_API_URL")
+            or os.getenv("LIVEKIT_URL")
+            or os.getenv("LIVEKIT_WS_URL")
+            or "https://localhost:7880"
+        )
         
         if not self.api_key or not self.api_secret:
             raise ValueError("LiveKit API credentials not configured")

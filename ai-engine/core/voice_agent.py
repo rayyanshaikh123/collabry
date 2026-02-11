@@ -117,7 +117,17 @@ class SileroVAD:
         # VADIterator expects a 1D float tensor-like array at 16kHz
         if audio_frame_f32.size == 0:
             return False
-        speech_event = self._iterator(audio_frame_f32)
+        try:
+            speech_event = self._iterator(audio_frame_f32)
+        except Exception as e:
+            # Silero can raise "Input audio chunk is too short" for very small frames.
+            # Treat that as "no speech" instead of crashing the stream.
+            msg = str(e)
+            if "Input audio chunk is too short" in msg:
+                logger.debug("Silero VAD: chunk too short, treating as silence")
+                return False
+            logger.warning(f"Silero VAD error, falling back to silence: {e}")
+            return False
         if isinstance(speech_event, dict):
             if "start" in speech_event:
                 self._in_speech = True
@@ -194,7 +204,8 @@ class VoiceTutorAgent:
         self.action_queue = asyncio.Queue()
         
         # Audio processors
-        self.vad_provider = os.getenv("VAD_PROVIDER", "silero").lower()
+        # Default to a simple energy-based VAD for robustness; Silero can be enabled via VAD_PROVIDER=silero.
+        self.vad_provider = os.getenv("VAD_PROVIDER", "simple").lower()
         if self.vad_provider == "silero" and SILERO_AVAILABLE:
             try:
                 self.vad = SileroVAD(
@@ -476,8 +487,20 @@ class VoiceTutorAgent:
         audio_stream = rtc.AudioStream(track)
         
         try:
-            async for frame in audio_stream:
+            async for event in audio_stream:
+                # Newer LiveKit SDK yields AudioFrameEvent objects with a .frame attribute.
+                # Older versions may yield AudioFrame directly.
+                if hasattr(event, "frame"):
+                    frame = event.frame
+                else:
+                    frame = event
+
+                if not hasattr(frame, "data"):
+                    logger.warning(f"Audio frame missing 'data' attribute (type={type(frame).__name__}); skipping")
+                    continue
+
                 audio_data = frame.data
+
                 frame_sr = getattr(frame, "sample_rate", 16000)
                 frame_ch = getattr(frame, "num_channels", 1)
                 samples_per_channel = getattr(frame, "samples_per_channel", 0)

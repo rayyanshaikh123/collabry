@@ -12,7 +12,9 @@ import { SessionStats as SessionStatsCard } from '@/components/voice-tutor/Sessi
 import { SessionStatus } from '@/components/voice-tutor/SessionStatus'
 import { AudioVisualizer } from '@/components/voice-tutor/AudioVisualizer'
 import { TranscriptPanel } from '@/components/voice-tutor/TranscriptPanel'
+import { AiClassroomRoom } from '@/components/voice-tutor/AiClassroomRoom'
 import { useVoiceSession } from '@/hooks/useVoiceSession'
+import { useScheduledClasses, ScheduledClass } from '@/hooks/useScheduledClasses'
 
 interface ConversationTurn {
   speaker: 'student' | 'tutor'
@@ -131,6 +133,31 @@ export default function VoiceTutorPage() {
 
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(20).fill(0))
 
+  const {
+    classes: scheduledClasses,
+    loading: loadingClasses,
+    error: classesError,
+    scheduling,
+    scheduleError,
+    scheduleClass,
+    joiningClassId,
+    startClass,
+  } = useScheduledClasses()
+
+  const [scheduleTitle, setScheduleTitle] = useState('')
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduleDuration, setScheduleDuration] = useState(60)
+
+  const [activeClassroom, setActiveClassroom] = useState<{
+    token: string
+    wsUrl: string
+    sessionId: string
+    title: string
+  } | null>(null)
+
+  const isClassroomConnected = connected || !!activeClassroom
+
   // Simulated audio visualizer effect
   useEffect(() => {
     if (!tutorSpeaking) {
@@ -196,6 +223,29 @@ export default function VoiceTutorPage() {
   const handleConnectionStatus = useCallback((newStatus: string) => {
     setStatus(newStatus)
   }, [])
+
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!scheduleTitle || !scheduleDate || !scheduleTime) {
+      return
+    }
+    try {
+      await scheduleClass({
+        title: scheduleTitle,
+        notebookId: 'general',
+        source: undefined,
+        date: scheduleDate,
+        time: scheduleTime,
+        durationMinutes: scheduleDuration,
+      })
+      setScheduleTitle('')
+      setScheduleDate('')
+      setScheduleTime('')
+      setScheduleDuration(60)
+    } catch {
+      // errors already handled in hook
+    }
+  }
 
   return (
     <div className="h-full flex flex-col relative bg-slate-50 dark:bg-slate-950 overflow-hidden -m-4 md:-m-8">
@@ -315,6 +365,153 @@ export default function VoiceTutorPage() {
           />
         )}
 
+        {/* Scheduled Classes Section */}
+        {!connected && (
+          <div className="max-w-7xl mx-auto mb-8 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            {/* Schedule form */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border-4 border-slate-100 dark:border-slate-800 shadow-sm">
+              <h2 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-3">
+                Schedule AI Classroom
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                Book a 1:1 virtual class with the voice tutor at a specific time.
+              </p>
+              <form className="space-y-3" onSubmit={handleScheduleSubmit}>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={scheduleTitle}
+                    onChange={(e) => setScheduleTitle(e.target.value)}
+                    placeholder="e.g. Calculus revision session"
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min={15}
+                    max={240}
+                    step={15}
+                    value={scheduleDuration}
+                    onChange={(e) => setScheduleDuration(Number(e.target.value) || 60)}
+                    className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                {scheduleError && (
+                  <p className="text-xs text-rose-500 dark:text-rose-400">{scheduleError}</p>
+                )}
+                <Button
+                  type="submit"
+                  disabled={scheduling || !scheduleTitle || !scheduleDate || !scheduleTime}
+                  className="mt-1 w-full gap-2 bg-indigo-500 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ICONS.Planner className="w-4 h-4" />
+                  {scheduling ? 'Scheduling...' : 'Schedule Class'}
+                </Button>
+              </form>
+            </div>
+
+            {/* Upcoming classes */}
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl p-6 border-4 border-slate-100 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between mb  -3">
+                <h2 className="text-xl font-black text-slate-800 dark:text-slate-200">
+                  Upcoming Classes
+                </h2>
+                {loadingClasses && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Loading...</span>
+                )}
+              </div>
+              {classesError && (
+                <p className="text-xs text-rose-500 dark:text-rose-400 mb-2">{classesError}</p>
+              )}
+              {scheduledClasses.length === 0 ? (
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                  No classes scheduled yet. Create one on the left to get started.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {scheduledClasses.map((cls) => {
+                    const date = new Date(cls.scheduled_start)
+                    const isJoinable = cls.status === 'scheduled' || cls.status === 'started'
+                    return (
+                      <div
+                        key={cls.id}
+                        className="flex items-center justify-between rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 px-4 py-3"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">
+                              {cls.title}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                              {cls.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                            {date.toLocaleDateString()} • {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {cls.duration_minutes} min
+                          </p>
+                        </div>
+                        <Button
+                          disabled={!isJoinable || joiningClassId === cls.id}
+                          onClick={async () => {
+                            try {
+                              setStatus('Starting scheduled class...')
+                              const creds = await startClass(cls.id)
+                              setActiveClassroom({
+                                token: creds.token,
+                                wsUrl: creds.wsUrl,
+                                sessionId: creds.sessionId,
+                                title: cls.title,
+                              })
+                            } catch (err: any) {
+                              console.error('Failed to start class', err)
+                              setError(err?.message || 'Failed to start class')
+                            }
+                          }}
+                          className="gap-2 bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ICONS.Video className="w-4 h-4" />
+                          {joiningClassId === cls.id ? 'Joining...' : 'Join'}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Session Created - Waiting to Start */}
         {!connected && sessionCreated && (
           <div className="max-w-7xl mx-auto mb-6">
@@ -341,7 +538,7 @@ export default function VoiceTutorPage() {
           {/* Left Column - Session Stats */}
           <div className="lg:col-span-1 space-y-6">
             {/* Status Card */}
-            <SessionStatus connected={connected} status={status} />
+            <SessionStatus connected={isClassroomConnected} status={status} />
 
             {/* Session Stats */}
             {connected && (
@@ -424,6 +621,37 @@ export default function VoiceTutorPage() {
           </div>
         )}
       </div>
+      {/* Full-screen AI Classroom for scheduled classes */}
+      {activeClassroom && (
+        <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm flex flex-col items-center justify-center px-4">
+          <div className="w-full max-w-5xl mb-3 flex items-center justify-between px-6 py-3 bg-slate-950/90 border border-slate-800 rounded-2xl shadow-lg">
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                AI Classroom
+              </p>
+              <p className="text-sm font-bold text-slate-100">{activeClassroom.title}</p>
+            </div>
+            <Button
+              onClick={() => {
+                setActiveClassroom(null)
+              }}
+              className="gap-2 bg-rose-500 hover:bg-rose-600 text-white"
+            >
+              <ICONS.Phone className="w-4 h-4" />
+              Leave Class
+            </Button>
+          </div>
+          <div className="w-full max-w-5xl">
+            <AiClassroomRoom
+              token={activeClassroom.token}
+              serverUrl={activeClassroom.wsUrl}
+              onLeave={() => {
+                setActiveClassroom(null)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

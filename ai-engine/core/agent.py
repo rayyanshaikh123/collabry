@@ -268,6 +268,24 @@ def _extract_count(message: str, kind: str, default: int) -> int:
         except Exception:
             pass
 
+    # Quaternary: "increase to N", "make it N", "change to N", "N questions" (short follow-ups)
+    m4 = re.search(r"(?:to|it to|make it|change to|expand to)\s+(\d+)\b", message, re.IGNORECASE)
+    if m4:
+        try:
+            return int(m4.group(1))
+        except Exception:
+            pass
+
+    # Last: any standalone number in short follow-up messages
+    m5 = re.search(r"\b(\d+)\b", message)
+    if m5 and len(message.split()) <= 8:
+        try:
+            n = int(m5.group(1))
+            if 1 <= n <= 50:
+                return n
+        except Exception:
+            pass
+
     return default
 
 
@@ -450,11 +468,13 @@ def _route_tool(message: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         return "generate_quiz", {"topic": topic, "num_questions": num_questions, "difficulty": difficulty}
 
     # Follow-up quiz refinements (no explicit "quiz" keyword)
-    # Examples: "a more shorter one with like 5 questions", "make it 5 questions", "only 5 questions"
-    if (
+    # Examples: "make it 5 questions", "increase it to 10", "only 5 questions", "change to 10"
+    if re.search(r"\b\d+\b", m) and (
         "questions" in m
-        and any(k in m for k in ("short", "shorter", "only", "just", "make it", "another", "more"))
-        and re.search(r"\b\d+\b", m)
+        or any(k in m for k in (
+            "short", "shorter", "only", "just", "make it", "another", "more",
+            "increase", "change", "update", "expand", "double", "to"
+        ))
     ):
         num_questions = _extract_count(message, kind="questions", default=5)
         difficulty = _extract_difficulty(message, default="medium")
@@ -683,8 +703,13 @@ async def run_agent(
     if routed is None and effective_use_rag:
         routed = ("search_sources", {"query": message})
 
-    # For non-OpenAI providers (or OpenAI-compatible endpoints), native tool calling can be unreliable.
-    # Use a deterministic router + direct tool invocation instead.
+    # Load conversation history for context (needed for follow-ups like "increase it to 10")
+    conv_manager = get_conversation_manager()
+    history = conv_manager.get_history(user_id, session_id, limit=10)
+    langchain_history = _format_history_for_langchain(history)
+
+    # For non-OpenAI providers, native tool calling can be unreliable.
+    # Use heuristic router + tool invocation, but include history in a plain-chat fallback.
     if not supports_native_tool_calling:
         if routed is not None:
             tool_name, tool_inputs = routed
@@ -741,16 +766,18 @@ async def run_agent(
             yield {"type": "complete", "message": final_text}
             return
 
-        # No routed tool: do a plain chat completion WITHOUT tool calling.
-        # This avoids OpenAI-compatible providers (e.g., Groq) attempting native function calls.
+        # No routed tool: do a plain chat completion with conversation history.
+        # Include history so the LLM understands follow-ups (e.g. "increase it to 10").
+        msg_list = [{"role": "system", "content": "You are a study assistant. Answer clearly and concisely. If the user gives a short follow-up (e.g. 'increase it to 10', 'make it 5 questions'), interpret it in context of the previous messages."}]
+        for h in history:
+            if h.get("role") == "user":
+                msg_list.append({"role": "user", "content": h.get("content", "")})
+            elif h.get("role") == "assistant":
+                msg_list.append({"role": "assistant", "content": h.get("content", "")})
+        msg_list.append({"role": "user", "content": message})
+
         resp = await chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a study assistant. Answer clearly and concisely.",
-                },
-                {"role": "user", "content": message},
-            ],
+            messages=msg_list,
             stream=True,
         )
 
@@ -768,13 +795,7 @@ async def run_agent(
         except Exception:
             # If streaming fails for some provider, fall back to non-streaming.
             resp2 = await chat_completion(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a study assistant. Answer clearly and concisely.",
-                    },
-                    {"role": "user", "content": message},
-                ],
+                messages=msg_list,
                 stream=False,
             )
             try:
@@ -821,12 +842,7 @@ async def run_agent(
             yield {"type": "complete", "message": final_text}
             return
 
-    # Load conversation history
-    conv_manager = get_conversation_manager()
-    history = conv_manager.get_history(user_id, session_id, limit=10)
-    langchain_history = _format_history_for_langchain(history)
-    
-    # Create agent
+    # Create agent (history already loaded above)
     agent = _create_agent(user_id, notebook_id)
     
     # Prepare configuration with user context for tool injection

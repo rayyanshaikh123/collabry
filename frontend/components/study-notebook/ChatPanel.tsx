@@ -377,38 +377,34 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           ? messages.slice(0, currentMessageIndex).filter((m) => m.role === 'user')
                           : [];
                         
-                        // Only parse mindmap if:
-                        // 1. The message contains mindmap JSON structure (nodes/edges)
-                        // 2. AND it was explicitly requested (contains mindmap generation marker or keywords)
+                        // Only parse mindmap if (same pattern as infographic/flashcards):
+                        // 1. The message contains explicit mindmap JSON structure (nodes/edges or label/children)
+                        // 2. AND the immediately preceding user message requested a mindmap
                         let hasMindmapJson = message.content.includes('"nodes"') && 
                                             message.content.includes('"edges"');
                         
-                        // Check if this is an explicit mindmap request
-                        // Look for the marker we add in the prompt, or check if previous user message was about mindmap
+                        // Only the immediate prior user message counts (same as other artifacts)
+                        const lastUserMessage = priorUserMessages.length > 0 ? priorUserMessages[priorUserMessages.length - 1] : null;
                         const isExplicitMindmapRequest = message.content.includes('[MINDMAP_GENERATION_REQUEST]') ||
-                                                        // Check if any previous user message in the conversation was about mindmap
-                                                        priorUserMessages.some((m) => 
-                                                          (m.content.toLowerCase().includes('mind map') || 
-                                                           m.content.toLowerCase().includes('mindmap') ||
-                                                           m.content.includes('[MINDMAP_GENERATION_REQUEST]'))
-                                                        );
+                          (!!lastUserMessage && (
+                            lastUserMessage.content.toLowerCase().includes('mind map') ||
+                            lastUserMessage.content.toLowerCase().includes('mindmap') ||
+                            lastUserMessage.content.toLowerCase().includes('concept map') ||
+                            lastUserMessage.content.includes('[MINDMAP_GENERATION_REQUEST]')
+                          ));
                         
                         // Also check if mindmap JSON might be wrapped in answer field of JSON response
                         let contentToParse = markdownAfterQuiz;
                         if (!hasMindmapJson && message.content.includes('"answer"') && message.content.includes('"nodes"')) {
-                          // Try to extract JSON from answer field - handle both escaped and unescaped JSON
                           try {
-                            // Pattern 1: {"tool": null, "answer": "{\"nodes\": ...}"}
                             const jsonMatch1 = message.content.match(/\{"tool":\s*null,\s*"answer":\s*"([^"]*(?:\\.[^"]*)*)"[^}]*\}/);
                             if (jsonMatch1) {
                               const answerContent = jsonMatch1[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
                               if (answerContent.includes('"nodes"') && answerContent.includes('"edges"')) {
                                 contentToParse = answerContent;
-                                hasMindmapJson = true; // Update flag
+                                hasMindmapJson = true;
                               }
                             }
-                            
-                            // Pattern 2: Try to find JSON object directly in answer field (unescaped)
                             if (!hasMindmapJson) {
                               const answerMatch = message.content.match(/"answer":\s*"(\{[^"]*"nodes"[^"]*\})"/);
                               if (answerMatch) {
@@ -420,37 +416,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                               }
                             }
                           } catch (e) {
-                            // Extraction failed, use original content
+                            // Extraction failed
                           }
                         }
-                        
-                        // Also check for hierarchical structure (children format)
-                        const hasMindmapStructure = hasMindmapJson || 
-                                                  (contentToParse.includes('"children"') && 
-                                                   contentToParse.includes('"label"')) ||
-                                                  (message.content.includes('"children"') && 
-                                                   message.content.includes('"label"'));
+                        // Recompute structure flag if we found mindmap in answer field
+                        const hasMindmapData = hasMindmapJson ||
+                          (message.content.includes('"children"') && message.content.includes('"label"'));
                         
                         let mindmap = null;
                         let cleanMarkdown = markdownAfterQuiz;
                         
-                        // Parse mindmap when it was explicitly requested.
-                        // This supports both JSON responses and plain hierarchical outlines.
-                        if (isExplicitMindmapRequest) {
+                        // Parse mindmap only when BOTH: explicit request AND response has mindmap JSON structure
+                        if (hasMindmapData && isExplicitMindmapRequest) {
                           const result = extractMindMapFromMarkdown(contentToParse);
                           mindmap = result.mindmap;
                           cleanMarkdown = result.cleanMarkdown;
 
-                          // Debug logging
-                          if (mindmap) {
-                            console.log('✅ Mindmap parsed successfully:', {
-                              nodeCount: mindmap.nodes?.length || 0,
-                              edgeCount: mindmap.edges?.length || 0,
-                              hadStructureHint: hasMindmapStructure
-                            });
-                          } else if (hasMindmapStructure) {
-                            console.log('⚠️ Mindmap structure detected but parsing failed or rejected');
-                          }
                         }
 
                         // Check for infographic JSON

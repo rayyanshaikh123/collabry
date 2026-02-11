@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan, voice_tutor
+from server.routes import chat, ingest, summarize, qa, sessions, usage, studyplan, voice_tutor
 from server.deps import get_current_user
 from server.middleware import UsageTrackingMiddleware
 from server.limit_middleware import UsageLimitMiddleware
@@ -199,7 +199,6 @@ app.include_router(sessions.router)
 app.include_router(ingest.router)
 app.include_router(summarize.router)
 app.include_router(qa.router)
-app.include_router(mindmap.router)
 app.include_router(usage.router)
 app.include_router(studyplan.router)
 app.include_router(voice_tutor.router)
@@ -231,7 +230,6 @@ async def root():
             "qa_stream": "POST /ai/qa/stream - Streaming QA (SSE)",
             "qa_file": "POST /ai/qa/file - QA with file upload (PDF/TXT/MD, max 10MB)",
             "qa_file_stream": "POST /ai/qa/file/stream - Streaming QA with file (SSE)",
-            "mindmap": "POST /ai/mindmap - Generate mind map",
             "sessions": "GET /ai/sessions - List user sessions",
             "create_session": "POST /ai/sessions - Create new session",
             "usage_stats": "GET /ai/usage/stats?days=7 - Public usage statistics (no auth)",

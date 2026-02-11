@@ -167,123 +167,16 @@ function buildTree(node: any, allNodes: any[], edges: any[]): any {
   return result;
 }
 
-// Helper to call the backend mindmap render endpoint
-export async function renderMindmap(mindmap: any, format: 'svg' | 'mermaid' | 'both' = 'both', baseUrl?: string) {
-  const host = baseUrl || (typeof window !== 'undefined' && (window as any).__AI_ENGINE_URL) || process?.env?.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000';
-
-  const url = `${host.replace(/\/$/, '')}/ai/mindmap/render?format=${encodeURIComponent(format)}`;
-
-  // Get auth token from localStorage
-  let token = '';
-  if (typeof window !== 'undefined') {
-    try {
-      const authStorage = localStorage.getItem('auth-storage');
-      if (authStorage) {
-        const { state } = JSON.parse(authStorage);
-        token = state?.accessToken || '';
-      }
-    } catch (e) {
-      console.warn('Failed to get auth token:', e);
-    }
+/**
+ * Render mindmap client-side only (no AI engine calls).
+ * Uses generateMermaidFromNodesEdges for mermaid code; SVG is rendered by MindMapViewer via mermaid library.
+ */
+export async function renderMindmap(mindmap: any, _format: 'svg' | 'mermaid' | 'both' = 'both') {
+  const localMermaid = generateMermaidFromNodesEdges(mindmap);
+  if (!localMermaid) {
+    throw new Error('Could not generate mindmap visualization from the provided data');
   }
-
-  // Convert to hierarchical format if needed
-  const hierarchicalMindmap = convertToHierarchicalTree(mindmap);
-  
-  console.log('renderMindmap: Sending to backend:', {
-    original: { hasNodes: !!mindmap.nodes, hasEdges: !!mindmap.edges, hasChildren: !!mindmap.children },
-    converted: { hasLabel: !!hierarchicalMindmap.label, hasChildren: !!hierarchicalMindmap.children },
-    format
-  });
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(hierarchicalMindmap),
-    });
-  } catch (e) {
-    // Network/CORS errors show up here as a TypeError in browsers
-    const message = e instanceof Error ? e.message : String(e);
-    throw new Error(`Mindmap render request failed: ${message}`);
-  }
-
-  if (!res.ok) {
-    const contentType = res.headers.get('content-type') || '';
-    let payload: any = null;
-    let text: string | null = null;
-
-    if (contentType.includes('application/json')) {
-      try {
-        payload = await res.json();
-      } catch {
-        // fall through
-      }
-    }
-    if (payload === null) {
-      try {
-        text = await res.text();
-      } catch {
-        // ignore
-      }
-    }
-
-    const detail = payload?.detail ?? payload?.message ?? payload?.error ?? text ?? '';
-    const detailString = typeof detail === 'string' ? detail : JSON.stringify(detail);
-
-    console.error('renderMindmap: Backend error:', { status: res.status, detail: payload ?? text });
-
-    if (res.status === 429) {
-      // Friendly rate-limit message for UI
-      const msg =
-        (payload && typeof payload?.message === 'string' && payload.message) ||
-        (payload && typeof payload?.detail?.message === 'string' && payload.detail.message) ||
-        'Daily limit exceeded. Try again later.';
-      const suggestion =
-        (payload && typeof payload?.suggestion === 'string' && payload.suggestion) ||
-        (payload && typeof payload?.detail?.suggestion === 'string' && payload.detail.suggestion) ||
-        '';
-      throw new Error(`Rate limit exceeded (429): ${msg}${suggestion ? ` — ${suggestion}` : ''}`);
-    }
-
-    throw new Error(`Mindmap render failed (HTTP ${res.status}): ${detailString}`);
-  }
-
-  const data = await res.json();
-  console.log('renderMindmap: Backend response:', {
-    hasMermaid: !!data.mermaid,
-    hasSvg: !!data.svg_base64,
-    hasError: !!data.error,
-    mermaidPreview: data.mermaid?.substring(0, 100)
-  });
-  
-  if (data.error) {
-    console.error('renderMindmap: Backend returned error:', data.error);
-    // Try to generate mermaid locally as fallback
-    if (mindmap.nodes && mindmap.edges) {
-      console.log('renderMindmap: Attempting local mermaid generation as fallback');
-      const localMermaid = generateMermaidFromNodesEdges(mindmap);
-      if (localMermaid) {
-        return { mermaid: localMermaid, json: mindmap };
-      }
-    }
-    throw new Error(data.error);
-  }
-  
-  // If no mermaid but we have nodes/edges, try to generate locally
-  if (!data.mermaid && mindmap.nodes && mindmap.edges) {
-    console.log('renderMindmap: No mermaid from backend, generating locally');
-    const localMermaid = generateMermaidFromNodesEdges(mindmap);
-    if (localMermaid) {
-      return { ...data, mermaid: localMermaid };
-    }
-  }
-  
-  return data;
+  return { mermaid: localMermaid, json: mindmap };
 }
 
 export default renderMindmap;
