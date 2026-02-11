@@ -5,7 +5,6 @@ export enum AppRoute {
   STUDY_BOARD = 'study-board',
   STUDY_NOTEBOOK = 'study-notebook',
   PLANNER = 'planner',
-  VOICE_TUTOR = 'voice-tutor',
   FOCUS = 'focus',
   FLASHCARDS = 'flashcards',
   PROFILE = 'profile',
@@ -25,7 +24,8 @@ export enum AppRoute {
   LEARNING_JOURNAL = 'learning-journal',
   VISUAL_AIDS = 'visual-aids',
   STUDY_BUDDY = 'study-buddy',
-  SOCIAL = 'social'
+  SOCIAL = 'social',
+  RECYCLE_BIN = 'recycle-bin'
 }
 
 export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';

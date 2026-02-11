@@ -26,7 +26,7 @@ const protect = asyncHandler(async (req, res, next) => {
 
     // Find user by ID from token
     const user = await User.findById(decoded.id).select('-password');
-    
+
     if (!user) {
       throw new AppError('User not found', 404);
     }

@@ -25,7 +25,6 @@ const getAppRouteFromPath = (path: string): string => {
     '/dashboard': 'dashboard',
     '/study-board': 'study-board',
     '/study-notebook': 'study-notebook',
-    '/voice-tutor': 'voice-tutor',
     '/planner': 'planner',
     '/focus': 'focus',
     '/flashcards': 'flashcards',
@@ -36,11 +35,12 @@ const getAppRouteFromPath = (path: string): string => {
     '/study-buddy': 'study-buddy',
     '/visual-aids': 'visual-aids',
     '/social': 'social',
+    '/recycle-bin': 'recycle-bin',
   };
   // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
   if (path.startsWith('/study-board')) return 'study-board';
-  if (path.startsWith('/voice-tutor')) return 'voice-tutor';
+  if (path.startsWith('/study-board')) return 'study-board';
   return routeMap[path] || 'dashboard';
 };
 
@@ -147,7 +147,6 @@ export default function MainLayout({
       'dashboard': '/dashboard',
       'study-board': '/study-board',
       'study-notebook': '/study-notebook',
-      'voice-tutor': '/voice-tutor',
       'planner': '/planner',
       'focus': '/focus',
       'flashcards': '/flashcards',
@@ -158,23 +157,23 @@ export default function MainLayout({
       'study-buddy': '/study-buddy',
       'visual-aids': '/visual-aids',
       'social': '/social',
+      'recycle-bin': '/recycle-bin',
     };
     router.push(pathMap[routeStr] || '/dashboard');
   };
 
   const currentRoute = getAppRouteFromPath(pathname);
 
-  // During SSR / before client mount, render nothing to avoid flash.
-  // This is a single-frame delay (~16ms), NOT dependent on any async operation.
-  if (!mounted) {
+  // During SSR / before client mount or auth resolution, render nothing to avoid flash/race conditions.
+  if (!mounted || !authReady) {
     return null;
   }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      <Sidebar 
-        currentRoute={currentRoute as AppRoute} 
-        onNavigate={handleNavigate} 
+      <Sidebar
+        currentRoute={currentRoute as AppRoute}
+        onNavigate={handleNavigate}
         isMobileOpen={isMobileSidebarOpen}
         setMobileOpen={toggleMobileSidebar}
         onLogout={handleLogout}
@@ -186,7 +185,7 @@ export default function MainLayout({
         {/* Top Navbar */}
         <header className="h-16 bg-white dark:bg-slate-900 border-b-2 border-slate-100 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={toggleMobileSidebar}
               className="lg:hidden p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-all"
             >
@@ -196,9 +195,9 @@ export default function MainLayout({
             </button>
             <div className="hidden md:flex items-center bg-slate-50 dark:bg-slate-800 rounded-2xl px-4 py-2 w-72 border-2 border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-700 focus-within:bg-white dark:focus-within:bg-slate-700 transition-all shadow-inner">
               <span className="text-slate-300 dark:text-slate-500"><ICONS.Search size={18} strokeWidth={3} /></span>
-              <input 
-                type="text" 
-                placeholder="Search your knowledge..." 
+              <input
+                type="text"
+                placeholder="Search your knowledge..."
                 className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-500 font-bold"
               />
             </div>
@@ -208,7 +207,7 @@ export default function MainLayout({
             <DarkModeToggle />
             <NotificationDropdown />
             <div className="h-8 w-1 bg-slate-100 dark:bg-slate-700 mx-1 hidden md:block rounded-full"></div>
-            <div 
+            <div
               className="flex items-center gap-3 pl-1 md:pl-2 cursor-pointer group"
               onClick={() => router.push('/profile')}
             >

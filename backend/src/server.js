@@ -5,6 +5,7 @@ const config = require('./config/env');
 const { initializeSocket } = require('./socket');
 const { startNotificationScheduler, stopNotificationScheduler } = require('./services/notificationScheduler');
 const { startSubscriptionExpiryJob, stopSubscriptionExpiryJob } = require('./jobs/subscriptionExpiry');
+const { startRecycleBinCleanupJob, stopRecycleBinCleanupJob } = require('./jobs/recycleBinCleanup');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -28,6 +29,9 @@ startNotificationScheduler();
 // Start subscription expiry cron job
 startSubscriptionExpiryJob();
 
+// Start recycle bin cleanup cron job (30-day auto-purge)
+startRecycleBinCleanupJob();
+
 // Start server
 server.listen(config.port, () => {
   console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
@@ -39,6 +43,7 @@ process.on('unhandledRejection', (err) => {
   console.error(err.name, err.message);
   stopNotificationScheduler();
   stopSubscriptionExpiryJob();
+  stopRecycleBinCleanupJob();
   server.close(() => {
     process.exit(1);
   });
@@ -49,6 +54,7 @@ process.on('SIGTERM', () => {
   console.log('👋 SIGTERM received. Shutting down gracefully...');
   stopNotificationScheduler();
   stopSubscriptionExpiryJob();
+  stopRecycleBinCleanupJob();
   server.close(() => {
     console.log('💥 Process terminated!');
   });

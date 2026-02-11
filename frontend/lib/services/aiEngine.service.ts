@@ -277,27 +277,6 @@ class AIEngineService {
       };
     }
   }
-
-  /**
-   * Voice tutor - scheduled classes
-   */
-  async scheduleVoiceClass(payload: {
-    title: string;
-    notebook_id?: string;
-    source?: string;
-    scheduled_start: string;
-    duration_minutes: number;
-  }) {
-    return this.client.post('/voice/classes/schedule', payload);
-  }
-
-  async listVoiceClasses() {
-    return this.client.get('/voice/classes');
-  }
-
-  async startScheduledVoiceClass(classId: string) {
-    return this.client.post(`/voice/classes/${classId}/start`, {});
-  }
 }
 
 export const aiEngineService = new AIEngineService();

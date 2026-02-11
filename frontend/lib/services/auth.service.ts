@@ -11,7 +11,7 @@ import type {
   RegisterResponse,
   Session,
   User,
-  
+
 } from '@/types/user.types';
 
 
@@ -21,7 +21,7 @@ export const authService = {
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await apiClient.post<{ user: User; accessToken: string }>('/auth/login', credentials);
-    
+
     if (response.success && response.data) {
       // Backend sends accessToken in JSON body, refreshToken via httpOnly cookie
       return {
@@ -32,7 +32,7 @@ export const authService = {
         },
       };
     }
-    
+
     throw new Error(response.error?.message || 'Login failed');
   },
 
@@ -41,11 +41,11 @@ export const authService = {
    */
   async register(data: RegisterData): Promise<RegisterResponse> {
     const response = await apiClient.post<{ message: string }>('/auth/register', data);
-    
+
     if (response.success) {
       return { message: response.message || 'Registration successful. Please check your email to verify your account.' };
     }
-    
+
     throw new Error(response.error?.message || 'Registration failed');
   },
 
@@ -71,11 +71,11 @@ export const authService = {
     const response = await apiClient.post<{ accessToken: string }>('/auth/refresh', undefined, {
       timeout: 10000, // 10 seconds
     });
-    
+
     if (response.success && response.data) {
       return response.data.accessToken;
     }
-    
+
     throw new Error('Token refresh failed');
   },
 
@@ -84,12 +84,12 @@ export const authService = {
    * TODO: Connect to backend /api/auth/me
    */
   async getCurrentUser(): Promise<User> {
-    const response = await apiClient.get<User>('/auth/me');
-    
-    if (response.success && response.data) {
-      return response.data;
+    const response = await apiClient.get<{ user: User }>('/users/me');
+
+    if (response.success && response.data?.user) {
+      return response.data.user;
     }
-    
+
     throw new Error('Failed to fetch user profile');
   },
 
@@ -98,12 +98,12 @@ export const authService = {
    * TODO: Connect to backend /api/auth/profile
    */
   async updateProfile(data: Partial<User>): Promise<User> {
-    const response = await apiClient.patch<User>('/auth/profile', data);
-    
-    if (response.success && response.data) {
-      return response.data;
+    const response = await apiClient.patch<{ user: User }>('/users/me', data);
+
+    if (response.success && response.data?.user) {
+      return response.data.user;
     }
-    
+
     throw new Error('Failed to update profile');
   },
 
@@ -112,7 +112,7 @@ export const authService = {
    */
   async forgotPassword(email: string): Promise<void> {
     const response = await apiClient.post('/auth/forgot-password', { email });
-    
+
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to send reset email');
     }
@@ -126,7 +126,7 @@ export const authService = {
       token,
       newPassword,
     });
-    
+
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to reset password');
     }
@@ -138,7 +138,7 @@ export const authService = {
    */
   async verifyEmail(token: string): Promise<void> {
     const response = await apiClient.post('/auth/verify-email', { token });
-    
+
     if (!response.success) {
       throw new Error(response.error?.message || 'Email verification failed');
     }
@@ -152,7 +152,7 @@ export const authService = {
       currentPassword,
       newPassword,
     });
-    
+
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to change password');
     }
@@ -165,7 +165,7 @@ export const authService = {
     const response = await apiClient.delete('/users/me', {
       data: { password },
     });
-    
+
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to delete account');
     }
