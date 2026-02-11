@@ -6,7 +6,7 @@ based on the user's study materials.
 """
 
 import json
-from typing import Optional
+from typing import Optional, List
 from langchain_core.tools import tool
 from rag.retriever import get_retriever
 from core.llm import get_async_openai_client, get_llm_config
@@ -18,7 +18,8 @@ async def generate_quiz(
     num_questions: int = 10,
     difficulty: str = "medium",
     notebook_id: Optional[str] = None,
-    user_id: str = "default"
+    user_id: str = "default",
+    source_ids: Optional[List[str]] = None,
 ) -> str:
     """
     Generate a quiz based on study materials.
@@ -49,6 +50,7 @@ async def generate_quiz(
         retriever = get_retriever(
             user_id=user_id,
             notebook_id=notebook_id,
+            source_ids=source_ids,
             k=15
         )
         

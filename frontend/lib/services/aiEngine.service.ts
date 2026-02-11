@@ -42,11 +42,11 @@ class AIEngineService {
       (response) => response.data,
       (error) => {
         let errorMessage = 'AI request failed';
-        
+
         if (error.response) {
           // Server responded with error status
-          errorMessage = error.response.data?.detail 
-            || error.response.data?.message 
+          errorMessage = error.response.data?.detail
+            || error.response.data?.message
             || error.response.data?.error
             || `Server error: ${error.response.status}`;
         } else if (error.request) {
@@ -56,7 +56,7 @@ class AIEngineService {
           // Error in request setup
           errorMessage = error.message;
         }
-        
+
         return Promise.reject(new Error(errorMessage));
       }
     );
@@ -65,25 +65,27 @@ class AIEngineService {
   /**
    * Chat with AI
    */
-  async chat(message: string, userId: string, conversationId?: string) {
+  async chat(message: string, userId: string, conversationId?: string, notebookId?: string, sourceIds?: string[]) {
     const payload = {
       message,
       session_id: conversationId,
+      notebook_id: notebookId,
+      source_ids: sourceIds,
       stream: false
     };
     console.log('📤 Sending chat request:', payload);
-    console.log('🌐 Base URL:', this.client.defaults.baseURL);
-    console.log('🎯 Full URL:', `${this.client.defaults.baseURL}/ai/chat`);
-    return this.client.post('/ai/chat', payload);
+    return this.client.post(`/ai/sessions/${conversationId}/chat`, payload);
   }
 
   /**
    * Streaming chat with AI
    */
-  async chatStream(message: string, userId: string, conversationId?: string) {
-    return this.client.post('/ai/chat/stream', {
+  async chatStream(message: string, userId: string, conversationId: string, notebookId?: string, sourceIds?: string[]) {
+    return this.client.post(`/ai/sessions/${conversationId}/chat/stream`, {
       message,
       session_id: conversationId,
+      notebook_id: notebookId,
+      source_ids: sourceIds,
       stream: true
     });
   }

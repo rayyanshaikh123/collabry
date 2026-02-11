@@ -5,7 +5,7 @@ This tool creates structured summaries of study materials
 from a user's notebook.
 """
 
-from typing import Optional
+from typing import Optional, List
 from langchain_core.tools import tool
 from rag.retriever import get_retriever
 from core.llm import get_async_openai_client, get_llm_config
@@ -15,7 +15,8 @@ from core.llm import get_async_openai_client, get_llm_config
 async def summarize_notes(
     topic: str = "all notes",
     notebook_id: Optional[str] = None,
-    user_id: str = "default"
+    user_id: str = "default",
+    source_ids: Optional[List[str]] = None,
 ) -> str:
     """
     Generate a comprehensive summary of notes in a notebook.
@@ -31,6 +32,7 @@ async def summarize_notes(
         topic: Specific topic to focus on or "all notes" for everything
         notebook_id: Target notebook to summarize (optional, auto-injected)
         user_id: User identifier (optional, auto-injected)
+        source_ids: Optional list of source IDs to filter by (optional, auto-injected)
     
     Returns:
         Structured summary with key topics and concepts
@@ -39,11 +41,11 @@ async def summarize_notes(
         query = topic if topic else "main topics and key concepts"
 
         # First: scoped to the notebook (preferred)
-        retriever = get_retriever(user_id=user_id, notebook_id=notebook_id, k=20)
+        retriever = get_retriever(user_id=user_id, notebook_id=notebook_id, source_ids=source_ids, k=20)
         docs = retriever.invoke(query)
 
         # Fallback: user-wide (handles notebook/session id mismatches)
-        if not docs:
+        if not docs and not source_ids:
             retriever = get_retriever(user_id=user_id, notebook_id=None, k=20)
             docs = retriever.invoke(query)
 

@@ -9,13 +9,13 @@ This tool is essential for:
 """
 
 import os
-import requests
+import httpx
 from typing import Optional
 from langchain_core.tools import tool
 
 
 @tool
-def search_web(query: str, num_results: int = 5) -> str:
+async def search_web(query: str, num_results: int = 5) -> str:
     """
     Search the web for current information about courses, tutorials, or topics.
     
@@ -33,9 +33,9 @@ def search_web(query: str, num_results: int = 5) -> str:
         Formatted search results with titles, snippets, and links
     
     Examples:
-        >>> search_web("best Python courses on Coursera")
-        >>> search_web("JavaScript tutorial for beginners")
-        >>> search_web("machine learning certification programs")
+        >>> await search_web("best Python courses on Coursera")
+        >>> await search_web("JavaScript tutorial for beginners")
+        >>> await search_web("machine learning certification programs")
     """
     # Sanitize inputs
     query = " ".join((query or "").split()).strip()
@@ -55,7 +55,7 @@ def search_web(query: str, num_results: int = 5) -> str:
     serper_key = (os.getenv("SERPER_API_KEY") or "").strip()
     if serper_key:
         try:
-            return _search_with_serper(query, serper_key, num_results)
+            return await _search_with_serper(query, serper_key, num_results)
         except Exception as e:
             if debug:
                 print(f"Serper search failed: {e}, falling back...")
@@ -64,7 +64,7 @@ def search_web(query: str, num_results: int = 5) -> str:
     tavily_key = (os.getenv("TAVILY_API_KEY") or "").strip()
     if tavily_key:
         try:
-            return _search_with_tavily(query, tavily_key, num_results)
+            return await _search_with_tavily(query, tavily_key, num_results)
         except Exception as e:
             if debug:
                 print(f"Tavily search failed: {e}, falling back...")
@@ -73,7 +73,7 @@ def search_web(query: str, num_results: int = 5) -> str:
     return _no_api_fallback(query)
 
 
-def _search_with_serper(query: str, api_key: str, num_results: int) -> str:
+async def _search_with_serper(query: str, api_key: str, num_results: int) -> str:
     """Search using Serper API (Google Search)."""
     url = "https://google.serper.dev/search"
     
@@ -87,10 +87,10 @@ def _search_with_serper(query: str, api_key: str, num_results: int) -> str:
         "Content-Type": "application/json"
     }
     
-    response = requests.post(url, json=payload, headers=headers, timeout=10)
-    response.raise_for_status()
-    
-    data = response.json()
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
     
     # Format results
     results = []
@@ -109,7 +109,7 @@ def _search_with_serper(query: str, api_key: str, num_results: int) -> str:
     return "\n".join(results)
 
 
-def _search_with_tavily(query: str, api_key: str, num_results: int) -> str:
+async def _search_with_tavily(query: str, api_key: str, num_results: int) -> str:
     """Search using Tavily API."""
     url = "https://api.tavily.com/search"
     api_key = (api_key or "").strip()
@@ -124,10 +124,10 @@ def _search_with_tavily(query: str, api_key: str, num_results: int) -> str:
 
     headers = {"Content-Type": "application/json"}
 
-    response = requests.post(url, json=payload, headers=headers, timeout=10)
-    response.raise_for_status()
-    
-    data = response.json()
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
     
     # Format results
     results = []

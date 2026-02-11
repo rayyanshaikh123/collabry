@@ -10,6 +10,7 @@ interface UseNotebookChatProps {
   setIsStreaming: (value: boolean) => void;
   setIsChatLoading: (value: boolean) => void;
   clearSessionMessages: any; // React Query mutation
+  sourceIds?: string[];
 }
 
 export function useNotebookChat({
@@ -20,6 +21,7 @@ export function useNotebookChat({
   setIsStreaming,
   setIsChatLoading,
   clearSessionMessages,
+  sourceIds,
 }: UseNotebookChatProps) {
   const chatAbortRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -96,6 +98,8 @@ export function useNotebookChat({
           body: JSON.stringify({
             message: userText,
             session_id: sessionId,
+            notebook_id: notebookId,
+            source_ids: sourceIds,
             // Best-effort: enable retrieval when available; backend can ignore if unsupported.
             use_rag: true,
           }),
