@@ -6,7 +6,7 @@ const { protect } = require('../middlewares/auth.middleware');
 const { checkFileUploadLimit, checkStorageLimit, checkNotebookLimit } = require('../middleware/usageEnforcement');
 
 // Configure multer for file uploads
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
@@ -42,5 +42,24 @@ router.delete('/notebooks/:id/artifacts/:artifactId', protect, notebookControlle
 // ============================================================================
 
 router.get('/notebooks/:id/context', protect, notebookController.getNotebookContext);
+
+// ============================================================================
+// COLLABORATION
+// ============================================================================
+
+router.get('/notebooks/:id/collaborators', protect, notebookController.getCollaborators);
+router.post('/notebooks/:id/collaborators/invite', protect, notebookController.inviteCollaborator);
+router.delete('/notebooks/:id/collaborators/:userId', protect, notebookController.removeCollaborator);
+router.patch('/notebooks/:id/collaborators/:userId/role', protect, notebookController.updateCollaboratorRole);
+router.post('/notebooks/:id/share-link', protect, notebookController.generateShareLink);
+router.post('/notebooks/join/:shareCode', protect, notebookController.joinViaShareCode);
+
+// Invitation Management
+router.get('/invitations/pending', protect, notebookController.getPendingInvitations);
+router.post('/notebooks/:id/invitations/accept', protect, notebookController.acceptInvitation);
+router.post('/notebooks/:id/invitations/reject', protect, notebookController.rejectInvitation);
+
+// Friends Integration
+router.get('/notebooks/:id/friends', protect, notebookController.getFriendsToInvite);
 
 module.exports = router;

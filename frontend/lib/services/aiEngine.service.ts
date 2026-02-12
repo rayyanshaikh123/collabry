@@ -32,6 +32,12 @@ class AIEngineService {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+
+        // If data is FormData, remove Content-Type to let browser set it
+        if (config.data instanceof FormData) {
+          delete config.headers['Content-Type'];
+        }
+
         return config;
       },
       (error) => Promise.reject(error)
@@ -156,11 +162,7 @@ class AIEngineService {
     formData.append('file', file);
     formData.append('use_rag', String(use_rag));
 
-    return this.client.post('/ai/qa/file', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return this.client.post('/ai/qa/file', formData);
   }
 
   /**
@@ -199,11 +201,7 @@ class AIEngineService {
     formData.append('difficulty', options?.difficulty || 'medium');
     formData.append('include_options', String(options?.include_options || false));
 
-    return this.client.post('/ai/qa/generate/file', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return this.client.post('/ai/qa/generate/file', formData);
   }
 
   /**

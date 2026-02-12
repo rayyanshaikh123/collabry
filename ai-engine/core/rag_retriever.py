@@ -224,18 +224,19 @@ class RAGRetriever:
             )
         return None
 
-    def get_relevant_documents(self, query: str, user_id: Optional[str] = None, session_id: Optional[str] = None, source_ids: Optional[List[str]] = None) -> List[Document]:
+    def get_relevant_documents(self, query: str, user_id: Optional[str] = None, session_id: Optional[str] = None, source_ids: Optional[List[str]] = None, notebook_id: Optional[str] = None) -> List[Document]:
         """
-        Retrieve relevant documents for a query with user, session, and source filtering.
+        Retrieve relevant documents for a query with user, session, source, and notebook filtering.
         
         Args:
             query: Search query
             user_id: Override user_id for this query (defaults to instance user_id)
             session_id: Filter by session/notebook (optional, for better isolation)
             source_ids: Filter by specific source IDs (optional, for selected sources only)
+            notebook_id: Filter by notebook ID (optional, for collaborative notebooks)
             
         Returns:
-            List of documents filtered by user_id, session_id, and optionally source_ids
+            List of documents filtered by user_id, session_id, source_ids, and/or notebook_id
         """
         if not self.vector_store:
             return []
@@ -250,19 +251,19 @@ class RAGRetriever:
         total_docs = self.vector_store.index.ntotal if hasattr(self.vector_store, 'index') else "unknown"
         logger.info(f"🔍 FAISS index has {total_docs} total documents")
         
-        # When filtering by session/source, retrieve many more docs to ensure we find matches
-        # Otherwise similarity search might not include the filtered docs in top results
-        search_k = k * 50 if (session_id or source_ids) else k * 5
+        # When filtering by session/source/notebook, retrieve many more docs to ensure we find matches
+        search_k = k * 50 if (session_id or source_ids or notebook_id) else k * 5
         all_docs = self.vector_store.similarity_search(query, k=search_k)  # Over-retrieve for filtering
         
         logger.info(f"🔍 Similarity search returned {len(all_docs)} documents (search_k={search_k}) before filtering")
         
-        # Filter: user's docs + public docs, optionally by session and source
+        # Filter: user's docs + public docs, optionally by session, source, and notebook
         filtered_docs = []
         for i, doc in enumerate(all_docs):
             doc_user = doc.metadata.get("user_id", "public")
             doc_session = doc.metadata.get("session_id", None)
             doc_source = doc.metadata.get("source_id", None)
+            doc_notebook = doc.metadata.get("notebook_id", None)
             is_placeholder = doc.metadata.get("placeholder", False)
             
             # Skip placeholder documents
@@ -271,9 +272,23 @@ class RAGRetriever:
                 continue
             
             # Verbose logging for debugging
-            logger.info(f"  Doc {i+1}: user={doc_user}, session={doc_session}, source={doc_source}")
+            logger.info(f"  Doc {i+1}: user={doc_user}, session={doc_session}, source={doc_source}, notebook={doc_notebook}")
             
-            if filter_user_id is None:
+            # Notebook-scoped filtering: if notebook_id is specified, match by notebook
+            # This allows all collaborators' sources to be retrieved together
+            if notebook_id:
+                if doc_notebook != notebook_id:
+                    logger.info(f"    ❌ Skipping: notebook mismatch ({doc_notebook} != {notebook_id})")
+                    continue
+                
+                # If source_ids filtering is requested, apply it
+                if source_ids and doc_source not in source_ids:
+                    logger.info(f"    ❌ Skipping: source not in filter ({doc_source} not in {source_ids})")
+                    continue
+                
+                logger.info(f"    ✅ MATCHED (notebook-scoped)!")
+                filtered_docs.append(doc)
+            elif filter_user_id is None:
                 # No user context: only public docs
                 if doc_user == "public":
                     filtered_docs.append(doc)
@@ -298,7 +313,7 @@ class RAGRetriever:
             if len(filtered_docs) >= k:
                 break
         
-        logger.info(f"Retrieved {len(filtered_docs)} documents (user={filter_user_id}, session={session_id}, sources={source_ids})")
+        logger.info(f"Retrieved {len(filtered_docs)} documents (user={filter_user_id}, session={session_id}, sources={source_ids}, notebook={notebook_id})")
         return filtered_docs[:k]
     
     def add_user_documents(

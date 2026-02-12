@@ -24,25 +24,102 @@ mongo_client = MongoClient(CONFIG["mongo_uri"])
 db = mongo_client[CONFIG["mongo_db"]]
 sessions_collection = db["chat_sessions"]
 messages_collection = db["chat_messages"]
+notebooks_collection = db["notebooks"]
 
 # Create indexes
 sessions_collection.create_index([("user_id", 1), ("created_at", DESCENDING)])
+sessions_collection.create_index([("notebook_id", 1)])
 messages_collection.create_index([("session_id", 1), ("timestamp", 1)])
+
+
+def verify_session_access(session_id: str, user_id: str) -> dict:
+    """
+    Verify if a user has access to a session.
+    Access is granted if:
+    1. The user is the owner of the session.
+    2. The session is linked to a notebook where the user is a collaborator/owner.
+    """
+    try:
+        session_obj_id = ObjectId(session_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
+    session = sessions_collection.find_one({"_id": session_obj_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # 1. Direct ownership check
+    if session.get("user_id") == user_id:
+        return session
+
+    # 2. Collaborative notebook check
+    notebook_id = session.get("notebook_id")
+    
+    # 2a. Legacy recovery: If session has no notebook_id, search notebooks by aiSessionId
+    if not notebook_id:
+        logger.info(f"🔄 Recovering notebook_id for legacy session {session_id}")
+        notebook_doc = notebooks_collection.find_one({"aiSessionId": session_id})
+        if notebook_doc:
+            notebook_id = str(notebook_doc["_id"])
+            # Backfill for next time
+            sessions_collection.update_one(
+                {"_id": session_obj_id},
+                {"$set": {"notebook_id": notebook_id}}
+            )
+            logger.info(f"✅ Backfilled notebook_id {notebook_id} to session {session_id}")
+        else:
+            logger.warning(f"⚠️ No notebook found for legacy session {session_id}")
+
+    if notebook_id:
+        try:
+            # Backend stores IDs as ObjectIds
+            nb_obj_id = ObjectId(notebook_id)
+            user_obj_id = ObjectId(user_id)
+        except Exception:
+            # Fallback if IDs are not valid ObjectIds
+            nb_obj_id = notebook_id
+            user_obj_id = user_id
+
+        # Try both ObjectId and string matches for robustness
+        query = {
+            "_id": nb_obj_id,
+            "$or": [
+                {"userId": user_obj_id},
+                {"userId": str(user_obj_id)},
+                {
+                    "collaborators": {
+                        "$elemMatch": {
+                            "userId": {"$in": [user_obj_id, str(user_obj_id)]},
+                            "status": {"$in": ["accepted", None]}
+                        }
+                    }
+                }
+            ]
+        }
+        
+        notebook = notebooks_collection.find_one(query)
+        if notebook:
+            return session
+
+    raise HTTPException(status_code=403, detail="Access denied to this session")
 
 
 class Message(BaseModel):
     role: str  # 'user' | 'assistant' | 'system'
     content: str
     timestamp: str
+    user_id: Optional[str] = None
 
 
 class SessionCreate(BaseModel):
     title: str = Field(default="New Chat Session")
+    notebook_id: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
     id: str
     user_id: str
+    notebook_id: Optional[str] = None
     title: str
     last_message: str
     message_count: int
@@ -86,6 +163,7 @@ async def get_sessions(user_id: str = Depends(get_current_user)):
             sessions.append(SessionResponse(
                 id=str(session_doc["_id"]),
                 user_id=user_id,
+                notebook_id=session_doc.get("notebook_id"),
                 title=session_doc.get("title", "New Chat Session"),
                 last_message=session_doc.get("last_message", "Start chatting..."),
                 message_count=msg_count,
@@ -136,6 +214,7 @@ async def create_session(
         # Create new session
         new_session = {
             "user_id": user_id,
+            "notebook_id": session_data.notebook_id,
             "title": session_data.title,
             "last_message": "Start chatting...",
             "created_at": datetime.utcnow(),
@@ -150,6 +229,7 @@ async def create_session(
         return SessionResponse(
             id=session_id,
             user_id=user_id,
+            notebook_id=new_session["notebook_id"],
             title=new_session["title"],
             last_message=new_session["last_message"],
             message_count=0,
@@ -182,15 +262,8 @@ async def get_session_messages(
     Get all messages for a specific session.
     """
     try:
-        # Verify session belongs to user
-        try:
-            session_obj_id = ObjectId(session_id)
-        except:
-            raise HTTPException(status_code=404, detail="Invalid session ID")
-            
-        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        # Verify session access
+        session = verify_session_access(session_id, user_id)
         
         # Fetch messages
         messages_cursor = messages_collection.find(
@@ -202,7 +275,8 @@ async def get_session_messages(
             messages.append(Message(
                 role=msg_doc.get("role", msg_doc.get("sender", "assistant")),  # Support both old and new format
                 content=msg_doc.get("content", msg_doc.get("text", "")),
-                timestamp=msg_doc["timestamp"]
+                timestamp=msg_doc["timestamp"],
+                user_id=msg_doc.get("user_id")
             ))
         
         return messages
@@ -233,19 +307,14 @@ async def save_message(
     Save a message to a session.
     """
     try:
-        # Verify session belongs to user
-        try:
-            session_obj_id = ObjectId(session_id)
-        except:
-            raise HTTPException(status_code=404, detail="Invalid session ID")
-            
-        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        # Verify session access
+        session = verify_session_access(session_id, user_id)
+        session_obj_id = ObjectId(session_id)
         
         # Save message
         message_doc = {
             "session_id": session_id,
+            "user_id": user_id,
             "role": message.role,
             "content": message.content,
             "timestamp": message.timestamp,
@@ -291,13 +360,10 @@ async def delete_session(
     Delete a session and all its messages.
     """
     try:
-        # Verify session belongs to user
-        try:
-            session_obj_id = ObjectId(session_id)
-        except:
-            raise HTTPException(status_code=404, detail="Invalid session ID")
-            
-        result = sessions_collection.delete_one({"_id": session_obj_id, "user_id": user_id})
+        # Verify session access
+        session = verify_session_access(session_id, user_id)
+        session_obj_id = ObjectId(session_id)
+        result = sessions_collection.delete_one({"_id": session_obj_id})
         
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -333,15 +399,9 @@ async def clear_session_messages(
     Clear all messages in a session.
     """
     try:
-        # Verify session exists and belongs to user
-        try:
-            session_obj_id = ObjectId(session_id)
-        except:
-            raise HTTPException(status_code=404, detail="Invalid session ID")
-            
-        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        # Verify session access
+        session = verify_session_access(session_id, user_id)
+        session_obj_id = ObjectId(session_id)
         
         # Delete all messages in this session
         result = messages_collection.delete_many({"session_id": session_id})
@@ -415,17 +475,14 @@ async def session_chat_stream(
         StreamingResponse with Server-Sent Events
     """
     try:
-        # Verify session exists and belongs to user
-        try:
-            session_obj_id = ObjectId(session_id)
-        except:
-            raise HTTPException(status_code=404, detail="Invalid session ID")
-            
-        session = sessions_collection.find_one({"_id": session_obj_id, "user_id": user_id})
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
+        # Verify session access
+        session = verify_session_access(session_id, user_id)
+        session_obj_id = ObjectId(session_id)
         
-        logger.info(f"Streaming chat request for session={session_id}, user={user_id}")
+        # Get notebook context for agent
+        notebook_id = session.get("notebook_id")
+        
+        logger.info(f"Streaming chat request for session={session_id}, user={user_id}, notebook={notebook_id}")
         
         async def event_generator():
             """Generate SSE events that stream in real-time from agent."""
@@ -438,7 +495,7 @@ async def session_chat_stream(
                     user_id=user_id,
                     session_id=session_id,
                     message=request.message,
-                    notebook_id=session_id,  # Use session_id as notebook_id for now
+                    notebook_id=notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
                     stream=True
@@ -504,6 +561,7 @@ async def session_chat_stream(
                     # Save user message
                     user_msg = {
                         "session_id": session_id,
+                        "user_id": user_id,
                         "role": "user",
                         "content": request.message,
                         "timestamp": datetime.utcnow().isoformat(),

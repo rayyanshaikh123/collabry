@@ -34,7 +34,9 @@ async def run_agent(
     notebook_id: Optional[str] = None,
     use_rag: bool = False,
     source_ids: Optional[List[str]] = None,
-    stream: bool = True
+    stream: bool = True,
+    sender_name: Optional[str] = None,
+    is_collaborative: bool = False
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Main entry point using the simplified linear flow.
@@ -95,12 +97,14 @@ async def run_agent(
                     if token: yield {"type": "token", "content": token}
                 yield {"type": "complete", "message": content}
                 # Track turn in conversation history
-                conv_manager.save_turn(user_id, session_id, message, content, notebook_id)
+                conv_manager.save_turn(user_id, session_id, message, content, notebook_id,
+                                       sender_id=user_id, sender_name=sender_name)
             else:
                 msg = f"I've successfully performed '{tool_name}' for you."
                 yield {"type": "token", "content": msg}
                 yield {"type": "complete", "message": msg}
-                conv_manager.save_turn(user_id, session_id, message, msg, notebook_id)
+                conv_manager.save_turn(user_id, session_id, message, msg, notebook_id,
+                                       sender_id=user_id, sender_name=sender_name)
                 
         except Exception as e:
             print(f"❌ Execution error: {e}")
@@ -112,6 +116,11 @@ async def run_agent(
     messages = [
         {"role": "system", "content": "You are a helpful study assistant. Be supportive and keep answers clear."},
     ]
+    
+    # For collaborative sessions, include sender context
+    if is_collaborative and sender_name:
+        messages[0]["content"] += f"\n\nNote: This is a collaborative study session. The current speaker is '{sender_name}'."
+    
     for h in history:
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": message})
@@ -126,7 +135,8 @@ async def run_agent(
                 yield {"type": "token", "content": delta}
         
         yield {"type": "complete", "message": full_text}
-        conv_manager.save_turn(user_id, session_id, message, full_text, notebook_id)
+        conv_manager.save_turn(user_id, session_id, message, full_text, notebook_id,
+                               sender_id=user_id, sender_name=sender_name)
         
     except Exception as e:
         print(f"❌ Chat error: {e}")

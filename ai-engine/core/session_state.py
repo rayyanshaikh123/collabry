@@ -1,17 +1,27 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 
 class SessionTaskState:
     """Tracks the current task state for a user session to handle follow-up mutations."""
     
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, notebook_id: Optional[str] = None):
         self.session_id = session_id
+        self.notebook_id = notebook_id
+        self.active_users: Dict[str, datetime] = {}  # user_id -> last_active
         self.active_task: Optional[str] = None  # e.g., "quiz", "flashcards", "search", "web", "mindmap"
         self.last_tool: Optional[str] = None     # e.g., "generate_quiz", "search_web"
         self.task_params: Dict[str, Any] = {}    # Current parameters (topic, num, etc.)
         self.last_update: datetime = datetime.now()
         self.history: List[Dict[str, str]] = []  # Brief history for current task context
+    
+    def register_user(self, user_id: str):
+        """Track a user as active in this session."""
+        self.active_users[user_id] = datetime.now()
+    
+    def get_active_user_count(self) -> int:
+        """Return count of active users in this session."""
+        return len(self.active_users)
     
     def set_task(self, task: str, tool: str, params: Dict[str, Any]):
         """Set a new active task and reset parameters."""

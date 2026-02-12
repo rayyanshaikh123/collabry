@@ -25,6 +25,9 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   isLoading?: boolean;
+  senderId?: string;
+  senderName?: string;
+  senderAvatar?: string;
 }
 
 interface ChatPanelProps {
@@ -237,25 +240,47 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
               >
+                {/* Sender info (only for user messages in collaborative mode) */}
+                {message.role === 'user' && message.senderName && (
+                  <div className="flex items-center gap-2 mb-1.5 px-1">
+                    <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                      {message.senderName}
+                    </span>
+                    {message.senderAvatar ? (
+                      <div className="w-5 h-5 rounded-full ring-1 ring-slate-200 dark:ring-slate-700 p-0.5 bg-white dark:bg-slate-800">
+                        <img src={message.senderAvatar} alt={message.senderName} className="w-full h-full rounded-full object-cover" />
+                      </div>
+                    ) : (
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm ${(() => {
+                          const colors = ['bg-rose-500', 'bg-indigo-500', 'bg-amber-500', 'bg-emerald-500', 'bg-sky-500', 'bg-violet-500', 'bg-fuchsia-500', 'bg-orange-500'];
+                          return colors[message.senderId ? message.senderId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length : 0];
+                        })()
+                          }`}
+                      >
+                        {message.senderName.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div
-                  className={`max-w-[80%] ${
-                    message.role === 'user'
-                      ? 'bg-indigo-600 dark:bg-indigo-700 text-white rounded-2xl rounded-tr-sm'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-sm'
-                  } px-5 py-3 shadow-sm`}
+                  className={`max-w-[80%] ${message.role === 'user'
+                    ? 'bg-indigo-600 dark:bg-indigo-700 text-white rounded-2xl rounded-tr-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-sm'
+                    } px-5 py-3 shadow-sm`}
                 >
                   {/* Per-message tools (user prompts + assistant responses) */}
                   <div className={`flex items-center gap-1 mb-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(message.content)}
-                      className={`p-1 rounded-lg transition-colors ${
-                        message.role === 'user'
-                          ? 'hover:bg-white/15 text-white/90'
-                          : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
-                      }`}
+                      className={`p-1 rounded-lg transition-colors ${message.role === 'user'
+                        ? 'hover:bg-white/15 text-white/90'
+                        : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}
                       title="Copy"
                       aria-label="Copy"
                     >
@@ -327,7 +352,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     ) : (
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     )
-                    ) : (
+                  ) : (
                     <>
                       {(() => {
                         // If message content is a JSON payload with a mindmap, render the MindMapViewer
@@ -346,21 +371,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                         // Only parse courses if the message contains properly formatted course links
                         // OR contains plain text course format with Platform: ... | Rating: ... | Price: ...
-                        const hasFormattedCourseLinks = message.content.includes('[') && 
-                                                       message.content.includes('](') && 
-                                                       /\[.*\]\(https?:\/\/.*\)\s*-?\s*Platform:/i.test(message.content);
-                        
+                        const hasFormattedCourseLinks = message.content.includes('[') &&
+                          message.content.includes('](') &&
+                          /\[.*\]\(https?:\/\/.*\)\s*-?\s*Platform:/i.test(message.content);
+
                         const hasPlainTextCourses = /Platform:\s*[A-Za-z\s]+\s*\|\s*Rating:/i.test(message.content);
-                        
+
                         let courses: any[] = [];
                         let cleanMarkdownAfterCourses = message.content;
-                        
+
                         // Parse if we have either format
                         if (hasFormattedCourseLinks || hasPlainTextCourses) {
                           const result = extractCoursesFromMarkdown(message.content);
                           courses = result.courses;
                           cleanMarkdownAfterCourses = result.cleanMarkdown;
-                          
+
                           // Debug logging
                           if (courses.length > 0) {
                             console.log('✅ Courses parsed successfully:', {
@@ -368,7 +393,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             });
                           }
                         }
-                        
+
                         const { cleanMarkdown: markdownAfterQuiz, quiz } = extractQuizFromMarkdown(cleanMarkdownAfterCourses);
 
                         // Used by multiple artifact detectors to infer what the user asked for
@@ -376,13 +401,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         const priorUserMessages = currentMessageIndex > 0
                           ? messages.slice(0, currentMessageIndex).filter((m) => m.role === 'user')
                           : [];
-                        
+
                         // Only parse mindmap if (same pattern as infographic/flashcards):
                         // 1. The message contains explicit mindmap JSON structure (nodes/edges or label/children)
                         // 2. AND the immediately preceding user message requested a mindmap
-                        let hasMindmapJson = message.content.includes('"nodes"') && 
-                                            message.content.includes('"edges"');
-                        
+                        let hasMindmapJson = message.content.includes('"nodes"') &&
+                          message.content.includes('"edges"');
+
                         // Only the immediate prior user message counts (same as other artifacts)
                         const lastUserMessage = priorUserMessages.length > 0 ? priorUserMessages[priorUserMessages.length - 1] : null;
                         const isExplicitMindmapRequest = message.content.includes('[MINDMAP_GENERATION_REQUEST]') ||
@@ -392,7 +417,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             lastUserMessage.content.toLowerCase().includes('concept map') ||
                             lastUserMessage.content.includes('[MINDMAP_GENERATION_REQUEST]')
                           ));
-                        
+
                         // Also check if mindmap JSON might be wrapped in answer field of JSON response
                         let contentToParse = markdownAfterQuiz;
                         if (!hasMindmapJson && message.content.includes('"answer"') && message.content.includes('"nodes"')) {
@@ -422,10 +447,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         // Recompute structure flag if we found mindmap in answer field
                         const hasMindmapData = hasMindmapJson ||
                           (message.content.includes('"children"') && message.content.includes('"label"'));
-                        
+
                         let mindmap = null;
                         let cleanMarkdown = markdownAfterQuiz;
-                        
+
                         // Parse mindmap only when BOTH: explicit request AND response has mindmap JSON structure
                         if (hasMindmapData && isExplicitMindmapRequest) {
                           const result = extractMindMapFromMarkdown(contentToParse);
@@ -438,14 +463,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         const isExplicitInfographicRequest = message.content.includes('[INFOGRAPHIC_GENERATION_REQUEST]') ||
                           priorUserMessages.some((m) => m.content.toLowerCase().includes('infographic'));
                         const hasInfographicData = containsInfographicData(message.content);
-                        
+
                         let infographic = null;
                         if (hasInfographicData && isExplicitInfographicRequest) {
                           const result = extractInfographicFromMarkdown(message.content);
                           if (result.success && result.data) {
                             infographic = result.data;
                             console.log('✅ Infographic parsed successfully');
-                            
+
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/g, '').trim();
 
@@ -460,14 +485,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         const isExplicitFlashcardRequest = message.content.includes('[FLASHCARDS_GENERATION_REQUEST]') ||
                           priorUserMessages.some((m) => m.content.toLowerCase().includes('flashcard'));
                         const hasFlashcardData = containsFlashcardData(message.content);
-                        
+
                         let flashcardSet = null;
                         if (hasFlashcardData && isExplicitFlashcardRequest) {
                           const result = extractFlashcardsFromMarkdown(message.content);
                           if (result.success && result.data) {
                             flashcardSet = result.data;
                             console.log('✅ Flashcards parsed successfully:', flashcardSet.cards.length, 'cards');
-                            
+
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"cards"[\s\S]*"front"[\s\S]*\}/g, '').trim();
 
@@ -518,10 +543,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                   </div>
                                 </div>
                                 <div className="w-full overflow-auto min-h-[300px] max-h-[500px]">
-                                  <MindMapViewer 
-                                    mindmapJson={mindmap} 
-                                    format="both" 
-                                    className="w-full" 
+                                  <MindMapViewer
+                                    mindmapJson={mindmap}
+                                    format="both"
+                                    className="w-full"
                                   />
                                 </div>
                               </div>
@@ -530,24 +555,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             {/* Render markdown content */}
                             {cleanMarkdown && (
                               <div className="prose prose-sm max-w-none prose-slate dark:prose-invert prose-headings:font-black prose-headings:text-slate-800 dark:prose-headings:text-slate-200 prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-p:my-3 prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-strong:text-slate-800 dark:prose-strong:text-slate-200 prose-ul:my-3 prose-ol:my-3 prose-li:my-1">
-                                <ReactMarkdown 
+                                <ReactMarkdown
                                   remarkPlugins={[remarkGfm, remarkBreaks]}
                                   components={{
-                                    p: ({node, ...props}) => <p className="mb-3 last:mb-0" {...props} />,
-                                    h1: ({node, ...props}) => <h1 className="mt-4 mb-2 first:mt-0" {...props} />,
-                                    h2: ({node, ...props}) => <h2 className="mt-4 mb-2 first:mt-0" {...props} />,
-                                    h3: ({node, ...props}) => <h3 className="mt-3 mb-2 first:mt-0" {...props} />,
-                                    ul: ({node, ...props}) => <ul className="my-3 space-y-1" {...props} />,
-                                    ol: ({node, ...props}) => <ol className="my-3 space-y-1" {...props} />,
-                                    li: ({node, ...props}) => <li className="my-1" {...props} />,
-                                    blockquote: ({node, ...props}) => <blockquote className="my-3 border-l-4 border-indigo-400 pl-4 italic" {...props} />,
+                                    p: ({ node, ...props }) => <p className="mb-3 last:mb-0" {...props} />,
+                                    h1: ({ node, ...props }) => <h1 className="mt-4 mb-2 first:mt-0" {...props} />,
+                                    h2: ({ node, ...props }) => <h2 className="mt-4 mb-2 first:mt-0" {...props} />,
+                                    h3: ({ node, ...props }) => <h3 className="mt-3 mb-2 first:mt-0" {...props} />,
+                                    ul: ({ node, ...props }) => <ul className="my-3 space-y-1" {...props} />,
+                                    ol: ({ node, ...props }) => <ol className="my-3 space-y-1" {...props} />,
+                                    li: ({ node, ...props }) => <li className="my-1" {...props} />,
+                                    blockquote: ({ node, ...props }) => <blockquote className="my-3 border-l-4 border-indigo-400 pl-4 italic" {...props} />,
                                   }}
                                 >
                                   {cleanMarkdown}
                                 </ReactMarkdown>
                               </div>
                             )}
-                                                        {/* Render infographic */}
+                            {/* Render infographic */}
                             {infographic && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-cyan-50 dark:from-cyan-900/30 via-blue-50 dark:via-blue-900/30 to-indigo-50 dark:to-indigo-900/30 rounded-xl">
                                 <div className="flex items-center justify-between mb-4">
@@ -588,7 +613,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 />
                               </div>
                             )}
-                            
+
                             {/* Render flashcards */}
                             {flashcardSet && flashcardSet.cards && flashcardSet.cards.length > 0 && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-blue-50 dark:from-blue-900/30 via-indigo-50 dark:via-indigo-900/30 to-purple-50 dark:to-purple-900/30 rounded-xl">
@@ -618,7 +643,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                 </div>
                               </div>
                             )}
-                            
+
                             {/* Render quiz */}
                             {quiz && quiz.length > 0 && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
@@ -631,13 +656,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                     {quiz.length} {quiz.length === 1 ? 'Question' : 'Questions'}
                                   </span>
                                 </div>
-                                <QuizCard 
-                                  questions={quiz} 
+                                <QuizCard
+                                  questions={quiz}
                                   onSaveToStudio={onSaveQuizToStudio ? () => onSaveQuizToStudio(quiz) : undefined}
                                 />
                               </div>
                             )}
-                            
+
                             {/* Render course cards */}
                             {courses.length > 0 && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-r from-indigo-50 dark:from-indigo-900/30 via-purple-50 dark:via-purple-900/30 to-pink-50 dark:to-pink-900/30 rounded-xl">
@@ -652,7 +677,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                       {courses.length} {courses.length === 1 ? 'Course' : 'Courses'}
                                     </span>
                                   </div>
-                                  
+
                                   {/* Navigation buttons */}
                                   {courses.length > 1 && (
                                     <div className="flex items-center gap-2">
@@ -673,7 +698,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                     </div>
                                   )}
                                 </div>
-                                
+
                                 {/* Carousel container */}
                                 <div className="relative">
                                   <div
@@ -698,7 +723,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       })()}
                     </>
                   )}
-                  <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-indigo-200 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                  <div className={`text-[10px] font-bold mt-2 ${message.role === 'user' ? 'text-indigo-200 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'} flex items-center gap-1`}>
+                    <ICONS.Clock className="w-3 h-3 opacity-60" />
                     {new Date(message.timestamp).toLocaleTimeString('en-US', {
                       hour: '2-digit',
                       minute: '2-digit',

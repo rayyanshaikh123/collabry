@@ -42,6 +42,11 @@ const errorHandler = (err, req, res, next) => {
     const message = Object.values(err.errors).map((val) => val.message);
     error.message = message;
     error.statusCode = 400;
+
+    // Log validation specifics in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Validation Error Details:', err.errors);
+    }
   }
 
   // JWT errors — return 401 with clear messages

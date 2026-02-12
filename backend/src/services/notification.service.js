@@ -251,7 +251,7 @@ class NotificationService {
       userId,
       type: 'board_invitation',
       title: '📋 Board Invitation',
-      message: `${invitedBy.name} invited you to collaborate on "${board.title}"`,
+      message: `${invitedBy.name || 'Someone'} invited you to collaborate on "${board.title}"`,
       priority: 'high',
       relatedEntity: {
         entityType: 'Board',
@@ -259,6 +259,22 @@ class NotificationService {
       },
       actionUrl: `/study-board/${board._id || board.id}`,
       actionText: 'View Board',
+    });
+  }
+
+  async notifyNotebookInvite(userId, notebookTitle, senderName, notebookId) {
+    return this.createNotification({
+      userId,
+      type: 'notebook_invite',
+      title: '📚 Notebook Invitation',
+      message: `${senderName || 'Someone'} invited you to collaborate on the notebook "${notebookTitle}"`,
+      priority: 'high',
+      relatedEntity: {
+        entityType: 'Notebook',
+        entityId: notebookId,
+      },
+      actionUrl: `/study-notebook/${notebookId}`,
+      actionText: 'Join Notebook',
     });
   }
 

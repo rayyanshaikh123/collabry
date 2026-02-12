@@ -40,6 +40,7 @@ const initializeSocket = (httpServer) => {
 
   // Initialize notification namespace
   require('./notificationNamespace')(io);
+  require('./notebookCollabNamespace')(io);
 
   console.log('🔌 Socket.IO initialized');
   return io;

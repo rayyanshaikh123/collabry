@@ -7,6 +7,7 @@ import { useCreateNotebook } from '@/hooks/useNotebook';
 import { ICONS } from '../../constants';
 import { Button, Card, Input } from '../UIElements';
 import api from '@/lib/api';
+import notebookService from '@/lib/services/notebook.service';
 import { showError, showAlert } from '@/lib/alert';
 
 export default function CreateNotebookForm() {
@@ -47,9 +48,9 @@ export default function CreateNotebookForm() {
 
     try {
       // Create notebook
-      const response = await createNotebook.mutateAsync({ 
-        title: title.trim(), 
-        description: description.trim() 
+      const response = await createNotebook.mutateAsync({
+        title: title.trim(),
+        description: description.trim()
       });
 
       console.log('Create notebook response:', response);
@@ -74,9 +75,7 @@ export default function CreateNotebookForm() {
           formData.append('name', file.name);
 
           try {
-            await api.post(`/notebook/notebooks/${notebookId}/sources`, formData, {
-              headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            await notebookService.addSource(notebookId, formData);
           } catch (error) {
             console.error('Failed to upload source:', file.name, error);
           }
@@ -114,134 +113,134 @@ export default function CreateNotebookForm() {
 
           {/* Form */}
           <form onSubmit={handleSubmit}>
-          <Card className="space-y-6">
-            {/* Title Input */}
-            <div>
-              <label htmlFor="title" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
-                Notebook Title *
-              </label>
-              <Input
-                id="title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Computer Science 101"
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* Description Input */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
-                Description (Optional)
-              </label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of what you'll be studying..."
-                rows={3}
-                className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-900/50 focus:border-indigo-400 dark:focus:border-indigo-600 transition-all text-sm font-medium resize-none"
-                disabled={isSubmitting}
-              />
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <label htmlFor="sources" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
-                Add Sources (Optional)
-              </label>
-              <div className="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-2xl p-8 hover:border-indigo-400 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all">
-                <input
-                  id="sources"
-                  type="file"
-                  multiple
-                  accept=".pdf,.txt,.doc,.docx"
-                  onChange={handleFileChange}
-                  className="hidden"
+            <Card className="space-y-6">
+              {/* Title Input */}
+              <div>
+                <label htmlFor="title" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+                  Notebook Title *
+                </label>
+                <Input
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., Computer Science 101"
+                  required
                   disabled={isSubmitting}
                 />
-                <label
-                  htmlFor="sources"
-                  className="flex flex-col items-center cursor-pointer"
-                >
-                  <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-3">
-                    <ICONS.Upload className="w-8 h-8 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
-                  </div>
-                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Click to upload or drag and drop
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    PDF, TXT, DOC, DOCX (Max 50MB each)
-                  </span>
-                </label>
               </div>
 
-              {/* Selected Files */}
-              {files.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Selected Files:</p>
-                  <ul className="space-y-2">
-                    {files.map((file, index) => (
-                      <li key={index} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
-                            <ICONS.fileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-                          </div>
-                          <div>
-                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 block">{file.name}</span>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                              {(file.size / 1024 / 1024).toFixed(2)} MB
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setFiles(files.filter((_, i) => i !== index))}
-                          className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-all hover:scale-110"
-                          disabled={isSubmitting}
-                        >
-                          <ICONS.X className="w-4 h-4 text-rose-500 dark:text-rose-400" strokeWidth={2.5} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+              {/* Description Input */}
+              <div>
+                <label htmlFor="description" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+                  Description (Optional)
+                </label>
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Brief description of what you'll be studying..."
+                  rows={3}
+                  className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 dark:focus:ring-indigo-900/50 focus:border-indigo-400 dark:focus:border-indigo-600 transition-all text-sm font-medium resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            {/* Submit Button */}
-            <div className="flex gap-4 pt-4">
-              <Button
-                type="button"
-                onClick={() => router.push('/study-notebook')}
-                variant="secondary"
-                className="flex-1"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                className="flex-1 gap-2"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Creating...</span>
-                  </>
-                ) : (
-                  <>
-                    <ICONS.Plus className="w-5 h-5" />
-                    <span>Create Notebook</span>
-                  </>
+              {/* File Upload */}
+              <div>
+                <label htmlFor="sources" className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+                  Add Sources (Optional)
+                </label>
+                <div className="border-2 border-dashed border-indigo-200 dark:border-indigo-800 rounded-2xl p-8 hover:border-indigo-400 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-all">
+                  <input
+                    id="sources"
+                    type="file"
+                    multiple
+                    accept=".pdf,.txt,.doc,.docx"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    disabled={isSubmitting}
+                  />
+                  <label
+                    htmlFor="sources"
+                    className="flex flex-col items-center cursor-pointer"
+                  >
+                    <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-3">
+                      <ICONS.Upload className="w-8 h-8 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Click to upload or drag and drop
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      PDF, TXT, DOC, DOCX (Max 50MB each)
+                    </span>
+                  </label>
+                </div>
+
+                {/* Selected Files */}
+                {files.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Selected Files:</p>
+                    <ul className="space-y-2">
+                      {files.map((file, index) => (
+                        <li key={index} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-2xl border-2 border-slate-100 dark:border-slate-700">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center">
+                              <ICONS.fileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+                            </div>
+                            <div>
+                              <span className="text-sm font-bold text-slate-700 dark:text-slate-300 block">{file.name}</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setFiles(files.filter((_, i) => i !== index))}
+                            className="p-2 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-all hover:scale-110"
+                            disabled={isSubmitting}
+                          >
+                            <ICONS.X className="w-4 h-4 text-rose-500 dark:text-rose-400" strokeWidth={2.5} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-              </Button>
-            </div>
-          </Card>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex gap-4 pt-4">
+                <Button
+                  type="button"
+                  onClick={() => router.push('/study-notebook')}
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="flex-1 gap-2"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ICONS.Plus className="w-5 h-5" />
+                      <span>Create Notebook</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </Card>
 
             {/* Help Text */}
             <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400 font-medium pb-8">

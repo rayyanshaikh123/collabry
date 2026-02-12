@@ -25,7 +25,10 @@ import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '@/hooks/useV
 import { useNotebookChat } from '@/hooks/useNotebookChat';
 import { useArtifactGenerator } from '@/hooks/useArtifactGenerator';
 import { useStudioSave } from '@/hooks/useStudioSave';
+import { useNotebookCollab } from '@/hooks/useNotebookCollab';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import { showError, showSuccess, showWarning, showInfo, showConfirm } from '@/lib/alert';
+import NotebookInviteModal from '../../../../components/study-notebook/NotebookInviteModal';
 
 export default function StudyNotebookPage() {
   const params = useParams();
@@ -33,6 +36,8 @@ export default function StudyNotebookPage() {
   const notebookId = params.id as string;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const addSourceInFlightRef = useRef(false);
+  const { user } = useAuthStore();
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
 
   // Show create form for 'new' route
   if (notebookId === 'new') {
@@ -43,11 +48,11 @@ export default function StudyNotebookPage() {
   const createNotebook = useCreateNotebook();
 
   // Fetch notebook data
-  const { data: notebookData, isLoading: isLoadingNotebook } = useNotebook(
+  const { data: notebookData, isLoading: isLoadingNotebook, error: notebookError, refetch: refetchNotebook } = useNotebook(
     notebookId !== 'default' ? notebookId : undefined
   );
 
-  const notebook = (notebookData?.success ? notebookData.data : notebookData) as Notebook | undefined;
+  const notebook = (notebookData?.success ? notebookData.data : notebookData) as (Notebook & { collaborators?: any[] }) | undefined;
 
   // Mutations
   const addSource = useAddSource(notebookId);
@@ -88,15 +93,45 @@ export default function StudyNotebookPage() {
 
   useEffect(() => {
     if (sessionMessagesData && Array.isArray(sessionMessagesData)) {
-      const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => ({
-        id: msg._id || `msg-${Date.now()}-${Math.random()}`,
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp || msg.created_at || new Date().toISOString()
-      }));
+      const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => {
+        // Resolve sender attribution
+        let senderName = undefined;
+        let senderAvatar = undefined;
+
+        if (msg.role === 'user' && msg.user_id) {
+          // 1. Check if owner
+          const owner = notebook?.userId;
+          const ownerId = typeof owner === 'object' ? (owner as any)?._id : owner;
+
+          if (ownerId === msg.user_id) {
+            senderName = (owner as any)?.name || 'Owner';
+            senderAvatar = (owner as any)?.avatar;
+          } else {
+            // 2. Check collaborators
+            const collab = notebook?.collaborators?.find(c => {
+              const cid = typeof c.userId === 'object' ? c.userId?._id : c.userId;
+              return cid === msg.user_id;
+            });
+            if (collab && typeof collab.userId === 'object') {
+              senderName = collab.userId.name;
+              senderAvatar = collab.userId.avatar;
+            }
+          }
+        }
+
+        return {
+          id: msg._id || `msg-${Date.now()}-${Math.random()}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp || msg.created_at || new Date().toISOString(),
+          senderId: msg.user_id,
+          senderName,
+          senderAvatar
+        };
+      });
       setLocalMessages(formattedMessages);
     }
-  }, [sessionMessagesData]);
+  }, [sessionMessagesData, notebook]);
 
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
@@ -120,6 +155,44 @@ export default function StudyNotebookPage() {
   const [addWebsiteModalOpen, setAddWebsiteModalOpen] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState('');
 
+  // Collaboration Logic
+  const onMessageReceived = React.useCallback((message: ChatMessage) => {
+    // Avoid duplicates for messages we sent ourselves (already in localMessages)
+    setLocalMessages(prev => {
+      if (prev.some(m => m.id === message.id)) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
+  const onTokenReceived = React.useCallback((token: string, messageId: string) => {
+    setLocalMessages(prev => {
+      const idx = prev.findIndex(m => m.id === messageId);
+      if (idx === -1) {
+        return [...prev, { id: messageId, role: 'assistant', content: token, timestamp: new Date().toISOString() }];
+      }
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], content: updated[idx].content + token, isLoading: false };
+      return updated;
+    });
+  }, []);
+
+  const onSourceUpdate = React.useCallback(() => {
+    refetchNotebook();
+  }, [refetchNotebook]);
+
+  const {
+    participants,
+    broadcastSourceUpdate,
+    broadcastChatMessage,
+    broadcastAIToken,
+    broadcastAIComplete
+  } = useNotebookCollab({
+    notebookId,
+    onMessageReceived,
+    onTokenReceived,
+    onSourceUpdate
+  });
+
   // Custom logic hooks
   const {
     handleSendMessage,
@@ -136,6 +209,11 @@ export default function StudyNotebookPage() {
     setIsChatLoading,
     clearSessionMessages,
     sourceIds: selectedSourceIds,
+    senderName: user?.name,
+    isCollaborative: !!(notebook?.collaborators && notebook.collaborators.length > 0),
+    onToken: broadcastAIToken,
+    onComplete: broadcastAIComplete,
+    onMessageSent: broadcastChatMessage,
   });
 
   const { handleGenerateArtifact } = useArtifactGenerator({
@@ -172,7 +250,10 @@ export default function StudyNotebookPage() {
 
   // Handlers
   const handleToggleSource = async (sourceId: string) => {
-    try { await toggleSource.mutateAsync(sourceId); }
+    try {
+      await toggleSource.mutateAsync(sourceId);
+      broadcastSourceUpdate('toggled', { _id: sourceId });
+    }
     catch (e) { showError('Failed to toggle source'); }
   };
 
@@ -193,7 +274,8 @@ export default function StudyNotebookPage() {
             formData.append('file', file);
             formData.append('type', 'pdf');
             formData.append('name', file.name);
-            await addSource.mutateAsync(formData as any);
+            const res = await addSource.mutateAsync(formData as any);
+            broadcastSourceUpdate('added', res.data);
             showSuccess('PDF uploaded successfully');
           } catch (e) { showError('Failed to upload PDF'); }
           finally { addSourceInFlightRef.current = false; }
@@ -206,7 +288,8 @@ export default function StudyNotebookPage() {
   const handleSubmitText = async () => {
     if (!textContent.trim() || !textTitle.trim()) { showWarning('Please enter content and title'); return; }
     try {
-      await addSource.mutateAsync({ type: 'text', name: textTitle, content: textContent } as any);
+      const res = await addSource.mutateAsync({ type: 'text', name: textTitle, content: textContent } as any);
+      broadcastSourceUpdate('added', res.data);
       setAddTextModalOpen(false); setTextContent(''); setTextTitle('');
     } catch (e) { showError('Failed to add text source'); }
   };
@@ -214,7 +297,8 @@ export default function StudyNotebookPage() {
   const handleSubmitNotes = async () => {
     if (!notesContent.trim()) { showWarning('Please enter some notes'); return; }
     try {
-      await addSource.mutateAsync({ type: 'notes', name: notesTitle || 'New Note', content: notesContent } as any);
+      const res = await addSource.mutateAsync({ type: 'notes', name: notesTitle || 'New Note', content: notesContent } as any);
+      broadcastSourceUpdate('added', res.data);
       setAddNotesModalOpen(false); setNotesContent(''); setNotesTitle('New Note');
     } catch (e) { showError('Failed to add note'); }
   };
@@ -222,14 +306,18 @@ export default function StudyNotebookPage() {
   const handleSubmitWebsite = async () => {
     if (!websiteUrl.trim()) { showWarning('Please enter a URL'); return; }
     try {
-      await addSource.mutateAsync({ type: 'website', url: websiteUrl, name: websiteUrl } as any);
+      const res = await addSource.mutateAsync({ type: 'website', url: websiteUrl, name: websiteUrl } as any);
+      broadcastSourceUpdate('added', res.data);
       setAddWebsiteModalOpen(false); setWebsiteUrl('');
     } catch (e) { showError('Failed to add website'); }
   };
 
   const handleRemoveSource = async (sourceId: string) => {
     showConfirm('Are you sure you want to remove this source?', async () => {
-      try { await removeSource.mutateAsync(sourceId); } catch (e) { showError('Failed to remove source'); }
+      try {
+        await removeSource.mutateAsync(sourceId);
+        broadcastSourceUpdate('removed', { _id: sourceId });
+      } catch (e) { showError('Failed to remove source'); }
     }, 'Remove Source');
   };
 
@@ -280,7 +368,32 @@ export default function StudyNotebookPage() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [localMessages]);
 
   if (isLoadingNotebook || createNotebook.isPending) return <LoadingPage />;
-  if (!notebook) return <div className="flex h-screen items-center justify-center p-8"><p className="text-xl font-bold">Notebook not found</p></div>;
+
+  // Handle unauthorized/not found
+  if (notebookError || !notebook) {
+    const isForbidden = (notebookError as any)?.status === 403;
+    return (
+      <div className="flex flex-col h-screen items-center justify-center p-8 text-center">
+        <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-6">
+          <span className="text-4xl">{isForbidden ? '🔒' : '🔍'}</span>
+        </div>
+        <h1 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-2">
+          {isForbidden ? 'Access Denied' : 'Notebook Not Found'}
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">
+          {isForbidden
+            ? "You don't have permission to access this notebook yet. If you were invited, please accept the invitation from your dashboard."
+            : "The notebook you're looking for doesn't exist or has been deleted."}
+        </p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all shadow-lg shadow-indigo-200 dark:shadow-none"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -328,6 +441,14 @@ export default function StudyNotebookPage() {
         onDeleteArtifact={handleDeleteArtifact}
         onEditArtifact={openEditModal}
         selectedArtifact={selectedArtifact}
+        participants={participants}
+        onInvite={() => setInviteModalOpen(true)}
+      />
+
+      <NotebookInviteModal
+        isOpen={inviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+        notebookId={notebookId}
       />
 
       <SourceModals

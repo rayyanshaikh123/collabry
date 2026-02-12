@@ -1,16 +1,16 @@
 
-import { 
-  LayoutDashboard, 
-  PenTool, 
-  Calendar, 
-  Clock, 
-  CreditCard, 
-  User, 
+import {
+  LayoutDashboard,
+  PenTool,
+  Calendar,
+  Clock,
+  CreditCard,
+  User,
   Users,
-  ShieldCheck, 
-  LogOut, 
-  Settings, 
-  Bell, 
+  ShieldCheck,
+  LogOut,
+  Settings,
+  Bell,
   Search,
   BookOpen,
   Trophy,
@@ -54,7 +54,9 @@ import {
   Lock,
   Edit,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  UserPlus,
+  Heart
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -127,6 +129,10 @@ export const ICONS = {
   Edit: Edit,
   TrendingUp: TrendingUp,
   TrendingDown: TrendingDown,
+  UserPlus: UserPlus,
+  Send: Send,
+  Heart: Heart,
+  Bell: Bell,
 };
 
 // ⚠️ REMOVED MOCK DATA - Fetch from backend API instead

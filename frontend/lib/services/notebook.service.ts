@@ -44,65 +44,61 @@ export interface Notebook {
 class NotebookService {
   async getNotebooks(): Promise<ApiResponse<Notebook[]>> {
     const response = await api.get('/notebook/notebooks');
-    return response.data;
+    return response;
   }
 
   async getNotebook(id: string): Promise<ApiResponse<Notebook>> {
     const response = await api.get(`/notebook/notebooks/${id}`);
-    return response.data;
+    return response;
   }
 
   async createNotebook(data: { title?: string; description?: string }): Promise<ApiResponse<Notebook>> {
     const response = await api.post('/notebook/notebooks', data);
-    return response.data;
+    return response;
   }
 
   async updateNotebook(id: string, data: { title?: string; description?: string }) {
     const response = await api.put(`/notebook/notebooks/${id}`, data);
-    return response.data;
+    return response;
   }
 
   async deleteNotebook(id: string) {
     const response = await api.delete(`/notebook/notebooks/${id}`);
-    return response.data;
+    return response;
   }
 
   async addSource(notebookId: string, payload: FormData | Record<string, any>) {
-    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
     const response = await api.post(
       `/notebook/notebooks/${notebookId}/sources`,
-      payload,
-      isFormData
-        ? { headers: { 'Content-Type': 'multipart/form-data' } }
-        : undefined
+      payload
     );
-    return response.data;
+    return response;
   }
 
   async toggleSource(notebookId: string, sourceId: string) {
     const response = await api.patch(
       `/notebook/notebooks/${notebookId}/sources/${sourceId}`
     );
-    return response.data;
+    return response;
   }
 
   async removeSource(notebookId: string, sourceId: string) {
     const response = await api.delete(
       `/notebook/notebooks/${notebookId}/sources/${sourceId}`
     );
-    return response.data;
+    return response;
   }
 
   async getSourceContent(notebookId: string, sourceId: string) {
     const response = await api.get(
       `/notebook/notebooks/${notebookId}/sources/${sourceId}/content`
     );
-    return response.data;
+    return response;
   }
 
   async getContext(notebookId: string) {
     const response = await api.get(`/notebook/notebooks/${notebookId}/context`);
-    return response.data;
+    return response;
   }
 
   async linkArtifact(notebookId: string, data: {
@@ -115,14 +111,70 @@ class NotebookService {
       `/notebook/notebooks/${notebookId}/artifacts`,
       data
     );
-    return response.data;
+    return response;
   }
 
   async unlinkArtifact(notebookId: string, artifactId: string) {
     const response = await api.delete(
       `/notebook/notebooks/${notebookId}/artifacts/${artifactId}`
     );
-    return response.data;
+    return response;
+  }
+
+  // Collaboration
+  async getCollaborators(notebookId: string) {
+    const response = await api.get(`/notebook/notebooks/${notebookId}/collaborators`);
+    return response;
+  }
+
+  async inviteCollaborator(notebookId: string, email: string, role: string = 'editor') {
+    const response = await api.post(`/notebook/notebooks/${notebookId}/collaborators/invite`, {
+      email,
+      role
+    });
+    return response;
+  }
+
+  async removeCollaborator(notebookId: string, userId: string) {
+    const response = await api.delete(`/notebook/notebooks/${notebookId}/collaborators/${userId}`);
+    return response;
+  }
+
+  async updateCollaboratorRole(notebookId: string, userId: string, data: { role?: string; permissions?: any }) {
+    const response = await api.patch(`/notebook/notebooks/${notebookId}/collaborators/${userId}/role`, data);
+    return response;
+  }
+
+  async generateShareLink(notebookId: string) {
+    const response = await api.post(`/notebook/notebooks/${notebookId}/share-link`);
+    return response;
+  }
+
+  async joinViaShareCode(shareCode: string) {
+    const response = await api.post(`/notebook/notebooks/join/${shareCode}`);
+    return response;
+  }
+
+  // Invitation Management
+  async getPendingInvitations() {
+    const response = await api.get('/notebook/invitations/pending');
+    return response;
+  }
+
+  async acceptInvitation(notebookId: string) {
+    const response = await api.post(`/notebook/notebooks/${notebookId}/invitations/accept`);
+    return response;
+  }
+
+  async rejectInvitation(notebookId: string) {
+    const response = await api.post(`/notebook/notebooks/${notebookId}/invitations/reject`);
+    return response;
+  }
+
+  // Friends Integration
+  async getFriendsToInvite(notebookId: string) {
+    const response = await api.get(`/notebook/notebooks/${notebookId}/friends`);
+    return response;
   }
 }
 

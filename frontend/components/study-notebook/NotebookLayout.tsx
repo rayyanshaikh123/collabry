@@ -36,6 +36,10 @@ interface NotebookLayoutProps {
   selectedArtifact: Artifact | null;
   onSelectArtifact: (id: string) => void;
   isGenerating?: boolean;
+
+  // Collaboration
+  participants?: { userId: string; displayName: string; avatar?: string; isOnline: boolean }[];
+  onInvite?: () => void;
 }
 
 const NotebookLayout: React.FC<NotebookLayoutProps> = ({
@@ -61,6 +65,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   selectedArtifact,
   onSelectArtifact,
   isGenerating = false,
+  participants = [],
+  onInvite,
 }) => {
   const router = useRouter();
   const hasSelectedSources = sources.some((s) => s.selected);
@@ -81,8 +87,64 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
           <div className="text-2xl">📓</div>
           <div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-200">Study Notebook</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400">AI-powered collaborative learning</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">AI-powered collaborative workspace</p>
           </div>
+        </div>
+
+        {/* Collaboration Area */}
+        <div className="ml-auto flex items-center gap-6">
+          {/* Online Participants */}
+          {participants.length > 0 && (
+            <div className="flex -space-x-3 overflow-hidden p-1">
+              {participants.slice(0, 5).map((p, idx) => {
+                const colors = [
+                  'bg-rose-500', 'bg-indigo-500', 'bg-amber-500',
+                  'bg-emerald-500', 'bg-sky-500', 'bg-violet-500',
+                  'bg-fuchsia-500', 'bg-orange-500'
+                ];
+                // Deterministic color based on userId
+                const colorClass = colors[p.userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length];
+
+                return (
+                  <div
+                    key={p.userId}
+                    className="relative transition-transform hover:scale-110 hover:z-10 group"
+                    style={{ zIndex: 10 - idx }}
+                  >
+                    <div
+                      className={`h-9 w-9 rounded-full ring-2 ring-white dark:ring-slate-900 shadow-sm overflow-hidden ${p.avatar ? '' : colorClass} flex items-center justify-center border-0`}
+                      title={`${p.displayName} ${p.isOnline ? '(Online)' : '(Away)'}`}
+                    >
+                      {p.avatar ? (
+                        <img src={p.avatar} alt={p.displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold text-white uppercase">{p.displayName.charAt(0)}</span>
+                      )}
+                    </div>
+                    {p.isOnline && (
+                      <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+                    )}
+                  </div>
+                );
+              })}
+              {participants.length > 5 && (
+                <div
+                  className="relative z-0 flex items-center justify-center h-9 w-9 rounded-full ring-2 ring-white dark:ring-slate-900 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-black text-slate-600 dark:text-slate-400 shadow-sm"
+                >
+                  +{participants.length - 5}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Share Button */}
+          <button
+            onClick={onInvite}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all active:scale-95"
+          >
+            <ICONS.Share className="w-4 h-4" />
+            <span>Share</span>
+          </button>
         </div>
       </div>
       {/* Main Content - 3 Column Layout for md+ */}
