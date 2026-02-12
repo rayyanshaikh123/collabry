@@ -17,23 +17,24 @@ logger = logging.getLogger(__name__)
 class UsageLimitMiddleware(BaseHTTPMiddleware):
     """Middleware to check usage limits before processing AI requests."""
     
-    # Subscription tier limits (tokens per day - resets every 24 hours)
+    # Subscription tier limits (AI questions per day)
+    # Synced with backend/src/config/plans.js PLAN_LIMITS.aiQuestionsPerDay
     TIER_LIMITS = {
-        "free": 10000,
-        "basic": 50000,
-        "pro": 200000,
-        "enterprise": 1000000
+        "free": 10,       # 10 questions/day
+        "basic": 100,     # 100 questions/day
+        "pro": -1,        # unlimited
+        "enterprise": -1  # unlimited
     }
     
-    # Endpoints that consume tokens
-    TOKEN_CONSUMING_ENDPOINTS = [
+    # Endpoints that consume question quota
+    QUESTION_CONSUMING_ENDPOINTS = [
         "/ai/chat",
         "/ai/summarize",
         "/ai/qa",
         "/ai/sessions"
     ]
 
-    # POST endpoints that should never count towards token limits
+    # POST endpoints that should never count towards limits
     # (they don't call the LLM; e.g. rendering/conversion endpoints)
     NON_CONSUMING_POST_PATHS = {
     }
@@ -53,11 +54,11 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         if request.method != "GET" and request.url.path in self.NON_CONSUMING_POST_PATHS:
             return await call_next(request)
 
-        # Only check for token-consuming endpoints
-        if not any(request.url.path.startswith(endpoint) for endpoint in self.TOKEN_CONSUMING_ENDPOINTS):
+        # Only check for question-consuming endpoints
+        if not any(request.url.path.startswith(endpoint) for endpoint in self.QUESTION_CONSUMING_ENDPOINTS):
             return await call_next(request)
         
-        # Skip check for GET requests (they don't consume tokens)
+        # Skip check for GET requests (they don't consume quota)
         if request.method == "GET":
             return await call_next(request)
         
@@ -84,20 +85,24 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
         # If we have a user_id, check their usage
         if user_id:
             try:
-                # Get user's usage for today (aggregated daily_stats is efficient)
-                current_tokens = usage_tracker.get_today_tokens(user_id)
+                # Get user's question count for today
+                current_questions = usage_tracker.get_today_operations(user_id)
 
                 # Get tier limit for this user (default to free)
                 tier_limit = self.TIER_LIMITS.get(subscription_tier, self.TIER_LIMITS["free"])
 
-                # Check if user has exceeded daily limit
-                if current_tokens >= tier_limit:
-                    logger.warning(f"User {user_id} exceeded usage limit: {current_tokens}/{tier_limit}")
+                # -1 means unlimited
+                if tier_limit == -1:
+                    return await call_next(request)
+
+                # Check if user has exceeded daily question limit
+                if current_questions >= tier_limit:
+                    logger.warning(f"User {user_id} exceeded question limit: {current_questions}/{tier_limit}")
                     return JSONResponse(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         content={
-                            "message": f"Daily token limit exceeded ({tier_limit:,} tokens). Resets in 24 hours.",
-                            "current_usage": current_tokens,
+                            "message": f"Daily question limit exceeded ({tier_limit} questions/day). Resets in 24 hours.",
+                            "current_usage": current_questions,
                             "limit": tier_limit,
                             "tier": subscription_tier,
                             "suggestion": "Upgrade your plan for higher daily limits or wait for daily reset",
@@ -106,7 +111,7 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
                     )
 
                 # Warn if approaching limit (>90%)
-                usage_percentage = (current_tokens / tier_limit) * 100 if tier_limit > 0 else 0
+                usage_percentage = (current_questions / tier_limit) * 100 if tier_limit > 0 else 0
                 if usage_percentage > 90:
                     logger.info(f"User {user_id} approaching limit: {usage_percentage:.1f}%")
 

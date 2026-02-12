@@ -66,9 +66,9 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ c
   />
 );
 
-export const Badge: React.FC<{
-  children: React.ReactNode;
-  variant?: 'indigo' | 'rose' | 'emerald' | 'amber' | 'slate' | 'success' | 'error';
+export const Badge: React.FC<{ 
+  children: React.ReactNode; 
+  variant?: 'indigo' | 'rose' | 'emerald' | 'amber' | 'slate' | 'cyan' | 'success' | 'error';
   className?: string;
 }> = ({ children, variant = 'indigo', className = '' }) => {
   const colors = {
@@ -77,6 +77,7 @@ export const Badge: React.FC<{
     emerald: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
     amber: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
     slate: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+    cyan: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400",
     // Semantic aliases
     success: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
     error: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",

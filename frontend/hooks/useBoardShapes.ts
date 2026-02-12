@@ -128,13 +128,6 @@ export function buildInfographicShapes(infographic: any) {
 }
 
 export async function buildMindmapShapes(payload: any) {
-  console.log('=== buildMindmapShapes DEBUG ===');
-  console.log('Payload:', payload);
-  console.log('Has payload.svgBase64:', !!payload?.svgBase64);
-  console.log('Has payload.data:', !!payload?.data);
-  console.log('Has payload.data.svgBase64:', !!payload?.data?.svgBase64);
-  console.log('Has payload.data.mermaidCode:', !!payload?.data?.mermaidCode);
-  
   if (!payload) return { shapes: [], assets: [] };
   
   const title = payload.title || 'Mind Map';
@@ -142,34 +135,21 @@ export async function buildMindmapShapes(payload: any) {
   const nodeCount = data?.nodes?.length || 0;
   let svgBase64 = payload.svgBase64 || data?.svgBase64;
   
-  console.log('Initial svgBase64 check:', !!svgBase64);
-  console.log('MermaidCode available:', !!data?.mermaidCode);
-  
   // If no SVG but we have mermaid code, render it to SVG
   if (!svgBase64 && data?.mermaidCode) {
-    console.log('No SVG found, rendering mermaid code to SVG for study board...');
-    console.log('Mermaid code length:', data.mermaidCode.length);
-    console.log('Mermaid code preview:', data.mermaidCode.substring(0, 100));
     try {
       const mermaidModule = await import('mermaid');
       const mermaid = (mermaidModule as any).default || mermaidModule;
       if (mermaid) {
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
         const id = 'board_' + Math.random().toString(36).slice(2, 9);
-        console.log('Calling mermaid.render with id:', id);
         const { svg } = await mermaid.render(id, data.mermaidCode);
-        console.log('Mermaid render returned, svg length:', svg?.length);
-        
         svgBase64 = btoa(svg);
-        console.log('Successfully rendered mermaid to SVG, base64 length:', svgBase64?.length);
       }
     } catch (error) {
       console.error('Failed to render mermaid for study board:', error);
-      console.error('Error details:', error instanceof Error ? error.message : String(error));
     }
   }
-  
-  console.log('Final svgBase64 available:', !!svgBase64);
   
   const originX = 120;
   const originY = 160;
@@ -268,28 +248,17 @@ export async function buildMindmapShapes(payload: any) {
 }
 
 export async function buildShapesFromImport(payload: any) {
-  console.log('=== buildShapesFromImport ===');
-  console.log('Payload:', payload);
-  console.log('Payload type:', typeof payload);
-  console.log('Payload.kind:', payload?.kind);
-  
   if (!payload || typeof payload !== 'object') {
-    console.log('Invalid payload, returning empty');
     return { shapes: [], assets: [] };
   }
   
   if (payload.kind === 'mindmap') {
-    console.log('Building mindmap shapes...');
-    const result = await buildMindmapShapes(payload);
-    console.log('Mindmap shapes result:', result);
-    return result;
+    return await buildMindmapShapes(payload);
   }
   
   if (payload.kind === 'infographic') {
-    console.log('Building infographic shapes...');
     return { shapes: buildInfographicShapes(payload.data), assets: [] };
   }
   
-  console.log('Unknown payload kind, returning empty');
   return { shapes: [], assets: [] };
 }

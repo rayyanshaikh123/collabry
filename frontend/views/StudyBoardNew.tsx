@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Tldraw, createTLStore, defaultShapeUtils, Editor } from 'tldraw';
 import 'tldraw/tldraw.css';
 
 import { useAuthStore } from '@/lib/stores/auth.store';
-import { socketClient } from '@/lib/socket';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
 import { ICONS } from '@/constants';
@@ -57,11 +56,10 @@ interface CursorData {
 const CollaborativeBoard = () => {
   const params = useParams();
   const router = useRouter();
-  const boardId = useMemo(() => {
-    const rawId = params.boardId || params.id;
-    return Array.isArray(rawId) ? rawId[0] : rawId || null;
-  }, [params.boardId, params.id]);
-
+  // Route is /study-board/[id], so the param key is 'id' (not 'boardId')
+  const rawId = params.id ?? params.boardId;
+  const boardId = Array.isArray(rawId) ? rawId[0] : rawId || null;
+  
   const { user, accessToken } = useAuthStore();
 
   // State
@@ -117,14 +115,27 @@ const CollaborativeBoard = () => {
   }, [editor]);
 
   // Socket event handlers
-  const handleUserJoined = useCallback((data: { participants: ParticipantData[] }) => {
-    console.log('User joined:', data);
-    setParticipants(data.participants.filter(p => p.userId !== user?.id));
+  const handleUserJoined = useCallback((data: any) => {
+    if (data.participants) {
+      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
+    } else {
+      // Single user joined — add them
+      if (data.userId && data.userId !== user?.id) {
+        setParticipants(prev => {
+          if (prev.some(p => p.userId === data.userId)) return prev;
+          return [...prev, { userId: data.userId, name: data.email || 'User', email: data.email, color: data.color || '#888', userName: data.email }];
+        });
+      }
+    }
   }, [user]);
 
-  const handleUserLeft = useCallback((data: { participants: ParticipantData[] }) => {
-    console.log('User left:', data);
-    setParticipants(data.participants.filter(p => p.userId !== user?.id));
+  const handleUserLeft = useCallback((data: any) => {
+    if (data.participants) {
+      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
+    } else {
+      // Single user left — remove them
+      setParticipants(prev => prev.filter(p => p.userId !== data.userId));
+    }
   }, [user]);
 
   const handleCursorMove = useCallback((data: { userId: string; position: CursorData }) => {
@@ -135,6 +146,116 @@ const CollaborativeBoard = () => {
       }));
     }
   }, [user]);
+
+  const handleElementCreated = useCallback((data: any) => {
+    if (!editor || !data?.element) return;
+    if (user?.id === data.userId) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      editor.store.mergeRemoteChanges(() => {
+        const el = data.element;
+
+        // Reconstruct assets for image shapes
+        if (el.type === 'image' && el.props?.assetId) {
+          let assetSrc = null;
+
+          if (el.meta?.driveFileId) {
+            const { googleDriveService } = require('@/lib/googleDrive');
+            assetSrc = googleDriveService.getPublicUrl(el.meta.driveFileId);
+          } else if (el.meta?.svgDataUri) {
+            assetSrc = el.meta.svgDataUri;
+          } else if (el.meta?.imageData?.src) {
+            assetSrc = el.meta.imageData.src;
+          }
+
+          if (assetSrc) {
+            editor.store.put([{
+              id: el.props.assetId,
+              type: 'image',
+              typeName: 'asset',
+              props: {
+                name: el.meta?.driveName || el.meta?.imageData?.name || 'image.png',
+                src: assetSrc,
+                w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
+                h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
+                mimeType: el.meta?.driveMimeType || el.meta?.imageData?.mimeType || el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png',
+                isAnimated: false,
+              },
+              meta: {},
+            }]);
+          }
+        }
+
+        const shape: any = {
+          id: el.id,
+          typeName: el.typeName || 'shape',
+          type: el.type,
+          x: el.x || 0,
+          y: el.y || 0,
+          props: el.props || {},
+          parentId: el.parentId || 'page:page',
+          index: el.index || 'a1',
+          rotation: el.rotation || 0,
+          isLocked: el.isLocked || false,
+          opacity: el.opacity || 1,
+          meta: el.meta || {},
+        };
+
+        editor.store.put([shape]);
+      });
+    } catch (error) {
+      console.error('Error in handleElementCreated:', error);
+    } finally {
+      isApplyingRemoteChange.current = false;
+    }
+  }, [editor, user]);
+
+  const handleElementUpdated = useCallback((data: any) => {
+    if (!editor) return;
+    // Backend sends { elementId, changes, userId } — NOT data.element
+    const elementId = data.elementId || data.element?.id;
+    const changes = data.changes || data.changeSet || data.element;
+    if (!elementId || !changes) return;
+    if (user?.id === data.userId) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      editor.store.mergeRemoteChanges(() => {
+        const existingShape = editor.store.get(elementId) as any;
+        if (!existingShape) return;
+
+        const updatedShape = {
+          ...existingShape,
+          ...changes,
+          props: { ...existingShape.props, ...(changes.props || {}) },
+          meta: { ...existingShape.meta, ...(changes.meta || {}) },
+        };
+
+        editor.store.put([updatedShape]);
+      });
+    } catch (error) {
+      console.error('Error in handleElementUpdated:', error);
+    } finally {
+      isApplyingRemoteChange.current = false;
+    }
+  }, [editor, user]);
+
+  const handleElementDeleted = useCallback((data: any) => {
+    if (!editor || !data?.elementId) return;
+    if (user?.id === data.userId) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      editor.store.mergeRemoteChanges(() => {
+        editor.store.remove([data.elementId]);
+      });
+    } catch (error) {
+      console.error('Error in handleElementDeleted:', error);
+    } finally {
+      isApplyingRemoteChange.current = false;
+    }
+  }, [editor, user]);
 
   // Initialize board connection
   useBoardConnection({

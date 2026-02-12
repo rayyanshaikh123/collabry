@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Search, UserPlus, Check, X, Trash2, Ban } from 'lucide-react';
+import { Search, UserPlus, Check, X, Trash2 } from 'lucide-react';
 import friendService, { Friendship, FriendRequest, User } from '@/lib/services/friend.service';
 import { useToast } from '@/hooks/use-toast';
 
@@ -57,7 +56,9 @@ export default function FriendsTab() {
     try {
       const results = await friendService.searchUsers(searchQuery);
       setSearchResults(results);
-      toast({ title: 'Success', description: `Found ${results.length} users` });
+      if (results.length === 0) {
+        toast({ title: 'No results', description: 'No users found matching your search' });
+      }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } finally {
@@ -110,170 +111,167 @@ export default function FriendsTab() {
   };
 
   return (
-    <div className="space-y-6 bg-transparent">
-      <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-        <CardHeader>
-          <CardTitle>Find Friends</CardTitle>
-          <CardDescription>Search for users to add as friends</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Search by name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button onClick={handleSearch} disabled={loading}>
-              <Search className="w-4 h-4 mr-2" />
-              Search
-            </Button>
-          </div>
+    <div className="space-y-5">
+      {/* Search Bar */}
+      <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-4">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Find Friends</h3>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">Search by name or email</p>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Search users..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="h-9 text-sm"
+          />
+          <Button size="sm" onClick={handleSearch} disabled={loading} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4">
+            <Search className="w-4 h-4 mr-1.5" />
+            {loading ? 'Searching...' : 'Search'}
+          </Button>
+        </div>
 
-          {searchResults.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {searchResults.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={user.avatar} />
-                      <AvatarFallback>{user.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
-                    </div>
+        {/* Search Results */}
+        {searchResults.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {searchResults.map((user) => (
+              <div key={user.id} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={user.avatar} />
+                    <AvatarFallback className="text-xs">{user.name[0]}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{user.name}</p>
+                    <p className="text-xs text-slate-400">{user.email}</p>
                   </div>
-                  <Button size="sm" onClick={() => handleSendRequest(user.id)}>
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Friend
-                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => handleSendRequest(user.id)}>
+                  <UserPlus className="w-3.5 h-3.5 mr-1" />
+                  Add
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
+      {/* Friends / Requests Tabs */}
       <Tabs defaultValue="friends">
-        <TabsList className="bg-transparent rounded-2xl border-2 border-slate-200/20 dark:border-slate-700/20 p-1 mb-4">
-          <TabsTrigger value="friends" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
+        <TabsList className="bg-white dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 p-1 mb-4 w-auto inline-flex">
+          <TabsTrigger value="friends" className="text-xs font-semibold text-slate-600 dark:text-slate-300 data-[state=active]:bg-indigo-500 data-[state=active]:text-white rounded-md px-3 py-1.5">
             Friends ({friends.length})
           </TabsTrigger>
-          <TabsTrigger value="pending" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
-            Requests ({pendingRequests.length})
+          <TabsTrigger value="pending" className="text-xs font-semibold text-slate-600 dark:text-slate-300 data-[state=active]:bg-indigo-500 data-[state=active]:text-white rounded-md px-3 py-1.5">
+            Requests {pendingRequests.length > 0 && (
+              <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{pendingRequests.length}</Badge>
+            )}
           </TabsTrigger>
-          <TabsTrigger value="sent" className="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-lg px-4 py-2">
+          <TabsTrigger value="sent" className="text-xs font-semibold text-slate-600 dark:text-slate-300 data-[state=active]:bg-indigo-500 data-[state=active]:text-white rounded-md px-3 py-1.5">
             Sent ({sentRequests.length})
           </TabsTrigger>
         </TabsList>
 
-          <TabsContent value="friends" className="space-y-2">
-            {friends.length === 0 ? (
-            <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-              <CardContent className="p-6 text-center text-slate-600 dark:text-slate-300">
-                No friends yet. Search and add some friends!
-              </CardContent>
-            </Card>
+        {/* Friends List */}
+        <TabsContent value="friends" className="space-y-2">
+          {friends.length === 0 ? (
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-8 text-center">
+              <UserPlus className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No friends yet</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Search and add some friends!</p>
+            </div>
           ) : (
-            friends.map((friendship) => (
-              <Card key={friendship._id} className="rounded-lg border border-slate-100/40 dark:border-slate-800/30 bg-transparent">
-                <CardContent className="p-4 flex items-center justify-between bg-transparent">
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+              {friends.map((friendship) => (
+                <div key={friendship._id} className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors first:rounded-t-xl last:rounded-b-xl">
                   <div className="flex items-center gap-3">
-                    <Avatar>
+                    <Avatar className="w-9 h-9">
                       <AvatarImage src={friendship.user.avatar} />
-                      <AvatarFallback>{friendship.user.name[0]}</AvatarFallback>
+                      <AvatarFallback className="text-sm">{friendship.user.name[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{friendship.user.name}</p>
-                      <p className="text-sm text-muted-foreground">{friendship.user.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Friends since {new Date(friendship.since).toLocaleDateString()}
-                      </p>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{friendship.user.name}</p>
+                      <p className="text-xs text-slate-400">{friendship.user.email}</p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveFriend(friendship._id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 hidden sm:inline">Since {new Date(friendship.since).toLocaleDateString()}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      onClick={() => handleRemoveFriend(friendship._id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </TabsContent>
 
+        {/* Pending Requests */}
         <TabsContent value="pending" className="space-y-2">
           {pendingRequests.length === 0 ? (
-            <Card className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                No pending requests
-              </CardContent>
-            </Card>
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-8 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">No pending requests</p>
+            </div>
           ) : (
-            pendingRequests.map((request) => (
-              <Card key={request._id} className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
-                <CardContent className="p-4 flex items-center justify-between">
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+              {pendingRequests.map((request) => (
+                <div key={request._id} className="flex items-center justify-between p-3 first:rounded-t-xl last:rounded-b-xl">
                   <div className="flex items-center gap-3">
-                    <Avatar>
+                    <Avatar className="w-9 h-9">
                       <AvatarImage src={request.from.avatar} />
-                      <AvatarFallback>{request.from.name[0]}</AvatarFallback>
+                      <AvatarFallback className="text-sm">{request.from.name[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{request.from.name}</p>
-                      <p className="text-sm text-muted-foreground">{request.from.email}</p>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{request.from.name}</p>
+                      <p className="text-xs text-slate-400">{request.from.email}</p>
                       {request.message && (
-                        <p className="text-sm mt-1">{request.message}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 italic">"{request.message}"</p>
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => handleAcceptRequest(request._id)}>
-                      <Check className="w-4 h-4 mr-1" />
+                  <div className="flex gap-1.5">
+                    <Button size="sm" className="h-7 text-xs bg-indigo-500 hover:bg-indigo-600 text-white" onClick={() => handleAcceptRequest(request._id)}>
+                      <Check className="w-3.5 h-3.5 mr-1" />
                       Accept
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleRejectRequest(request._id)}
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Reject
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleRejectRequest(request._id)}>
+                      <X className="w-3.5 h-3.5" />
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))
+                </div>
+              ))}
+            </div>
           )}
         </TabsContent>
 
+        {/* Sent Requests */}
         <TabsContent value="sent" className="space-y-2">
           {sentRequests.length === 0 ? (
-            <Card className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                No sent requests
-              </CardContent>
-            </Card>
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-8 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">No sent requests</p>
+            </div>
           ) : (
-            sentRequests.map((request) => (
-            <Card key={request._id} className="bg-transparent border border-slate-200/20 dark:border-slate-700/20">
-                <CardContent className="p-4 flex items-center justify-between">
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+              {sentRequests.map((request) => (
+                <div key={request._id} className="flex items-center justify-between p-3 first:rounded-t-xl last:rounded-b-xl">
                   <div className="flex items-center gap-3">
-                    <Avatar>
+                    <Avatar className="w-9 h-9">
                       <AvatarImage src={request.to.avatar} />
-                      <AvatarFallback>{request.to.name[0]}</AvatarFallback>
+                      <AvatarFallback className="text-sm">{request.to.name[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{request.to.name}</p>
-                      <p className="text-sm text-muted-foreground">{request.to.email}</p>
-                      <Badge variant="secondary">Pending</Badge>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{request.to.name}</p>
+                      <p className="text-xs text-slate-400">{request.to.email}</p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))
+                  <Badge variant="secondary" className="text-[10px]">Pending</Badge>
+                </div>
+              ))}
+            </div>
           )}
         </TabsContent>
       </Tabs>

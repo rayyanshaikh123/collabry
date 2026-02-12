@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Paperclip, Smile, Reply, Edit2, Trash2 } from 'lucide-react';
+import { Send, Reply, Edit2, Trash2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { showConfirm } from '@/lib/alert';
 import chatSocketClient from '@/lib/chatSocket';
@@ -57,7 +56,6 @@ export default function GroupChat({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
-  // Scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -66,96 +64,51 @@ export default function GroupChat({
     scrollToBottom();
   }, [messages]);
 
-  // Load messages function with useCallback to prevent unnecessary re-renders
   const loadMessages = useCallback(async () => {
     try {
       const apiUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://colab-back.onrender.com/api'}/chat/messages?conversationType=group&groupId=${groupId}&limit=100`;
-      
-      console.log('📥 Loading messages from:', apiUrl);
-      
+
       const response = await fetch(apiUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Failed to load messages:', response.status, errorText);
         throw new Error(`Failed to load messages: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      console.log('✅ Loaded messages:', data.messages?.length || 0);
       setMessages(data.messages || []);
-    } catch (error) {
-      console.error('❌ Error loading messages:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load messages',
-        variant: 'destructive',
-      });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load messages', variant: 'destructive' });
     }
   }, [groupId, token, toast]);
 
-  // Initialize socket connection using shared chatSocketClient
   useEffect(() => {
-    if (!token) {
-      console.warn('⚠️ No token provided');
-      return;
-    }
+    if (!token || !currentUserId || !currentUserEmail) return;
 
-    if (!currentUserId || !currentUserEmail) {
-      console.warn('⚠️ User ID or email missing:', { currentUserId, currentUserEmail });
-      return;
-    }
-
-    console.log('🔌 [GroupChat] Initializing connection...');
-    console.log('🔌 [GroupChat] Group ID:', groupId);
-    console.log('🔌 [GroupChat] User ID:', currentUserId);
-
-    // Connect using shared socket client
     chatSocketClient.connect(currentUserId, currentUserEmail);
-    
-    // Update connection status periodically or listen to socket events
-    const checkConnection = () => {
-      const connected = chatSocketClient.isConnected();
-      setIsConnected(connected);
-      console.log('🔌 [GroupChat] Connection status:', connected);
-    };
-    
-    // Check immediately
+
+    const checkConnection = () => setIsConnected(chatSocketClient.isConnected());
     checkConnection();
-    
-    // Check connection every 2 seconds
     const connectionCheckInterval = setInterval(checkConnection, 2000);
 
-    // Join group room
-    console.log('📥 [GroupChat] Joining group room...');
     chatSocketClient.joinConversation('group', groupId);
-    
-    // Load initial messages
     loadMessages();
 
-    // Listen for new messages
     const handleNewMessage = (message: Message) => {
-      console.log('📨 [GroupChat] New message received:', message);
       if (message.group === groupId) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === message._id)) return prev;
+          return [...prev, message];
+        });
       }
     };
 
-    // Listen for message edits
     const handleMessageEdited = (message: Message) => {
-      console.log('✏️ [GroupChat] Message edited:', message._id);
-      setMessages((prev) =>
-        prev.map((m) => (m._id === message._id ? message : m))
-      );
+      setMessages((prev) => prev.map((m) => (m._id === message._id ? message : m)));
     };
 
-    // Listen for message deletes
     const handleMessageDeleted = (data: { messageId: string }) => {
-      console.log('🗑️ [GroupChat] Message deleted:', data.messageId);
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId ? { ...m, isDeleted: true, content: 'This message was deleted' } : m
@@ -163,7 +116,6 @@ export default function GroupChat({
       );
     };
 
-    // Listen for typing indicators
     const handleUserTyping = (data: { userId: string; userEmail: string }) => {
       if (data.userId !== currentUserId) {
         setTypingUsers((prev) => [...new Set([...prev, data.userEmail])]);
@@ -174,7 +126,6 @@ export default function GroupChat({
       setTypingUsers((prev) => prev.filter((email) => email !== data.userId));
     };
 
-    // Register event listeners
     chatSocketClient.onMessageNew(handleNewMessage);
     chatSocketClient.onMessageEdited(handleMessageEdited);
     chatSocketClient.onMessageDeleted(handleMessageDeleted);
@@ -182,11 +133,8 @@ export default function GroupChat({
     chatSocketClient.onUserStoppedTyping(handleUserStoppedTyping);
 
     return () => {
-      console.log('🔌 [GroupChat] Cleaning up...');
       clearInterval(connectionCheckInterval);
       chatSocketClient.leaveConversation('group', groupId);
-      
-      // Remove event listeners
       chatSocketClient.offMessageNew(handleNewMessage);
       chatSocketClient.offMessageEdited(handleMessageEdited);
       chatSocketClient.offMessageDeleted(handleMessageDeleted);
@@ -194,8 +142,6 @@ export default function GroupChat({
       chatSocketClient.offUserStoppedTyping(handleUserStoppedTyping);
     };
   }, [groupId, currentUserId, currentUserEmail, token, loadMessages]);
-
-
 
   const handleTyping = () => {
     if (!isConnected) return;
@@ -205,12 +151,8 @@ export default function GroupChat({
       chatSocketClient.startTyping('group', groupId);
     }
 
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-    // Set new timeout
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       chatSocketClient.stopTyping('group', groupId);
@@ -218,13 +160,7 @@ export default function GroupChat({
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !isConnected) {
-      console.warn('⚠️ Cannot send message:', {
-        hasMessage: !!newMessage.trim(),
-        isConnected,
-      });
-      return;
-    }
+    if (!newMessage.trim() || !isConnected) return;
 
     const messageData = {
       conversationType: 'group',
@@ -234,35 +170,21 @@ export default function GroupChat({
       replyTo: replyingTo?._id,
     };
 
-    console.log('📤 Sending message:', messageData);
-
     if (editingMessage) {
-      // Edit existing message
       chatSocketClient.editMessage(
         editingMessage._id,
         newMessage.trim(),
         (response: { error?: string; success?: boolean }) => {
-          console.log('📝 Edit response:', response);
           if (response.error) {
-            toast({
-              title: 'Error',
-              description: response.error,
-              variant: 'destructive',
-            });
+            toast({ title: 'Error', description: response.error, variant: 'destructive' });
           }
         }
       );
       setEditingMessage(null);
     } else {
-      // Send new message
       chatSocketClient.sendMessage(messageData, (response: { error?: string; success?: boolean }) => {
-        console.log('📤 Send response:', response);
         if (response.error) {
-          toast({
-            title: 'Error',
-            description: response.error,
-            variant: 'destructive',
-          });
+          toast({ title: 'Error', description: response.error, variant: 'destructive' });
         }
       });
     }
@@ -270,25 +192,17 @@ export default function GroupChat({
     setNewMessage('');
     setReplyingTo(null);
     setIsTyping(false);
-    
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
   };
 
   const handleDeleteMessage = (messageId: string) => {
     if (!isConnected) return;
-
     showConfirm(
       'Delete this message?',
       () => {
         chatSocketClient.deleteMessage(messageId, (response: { error?: string }) => {
           if (response.error) {
-            toast({
-              title: 'Error',
-              description: response.error,
-              variant: 'destructive',
-            });
+            toast({ title: 'Error', description: response.error, variant: 'destructive' });
           }
         });
       },
@@ -298,127 +212,93 @@ export default function GroupChat({
     );
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   return (
-    <Card className="h-150 flex flex-col rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-      <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{groupName}</CardTitle>
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
-            <span className="text-xs text-muted-foreground">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex-1 flex flex-col p-0">
-        {/* Messages Area */}
-        <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4">
+    <div className="flex flex-col h-full">
+      {/* Messages */}
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full p-4">
+          <div className="space-y-3 pb-2">
             {messages.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No messages yet. Start the conversation!</p>
+              <div className="flex items-center justify-center py-12">
+                <p className="text-sm text-slate-400 dark:text-slate-500">No messages yet. Start the conversation!</p>
               </div>
             ) : (
               messages.map((message) => {
-                const isOwnMessage = message.sender._id === currentUserId;
+                const isOwn = message.sender._id === currentUserId;
                 const isDeleted = message.isDeleted;
 
                 return (
-                  <div
-                    key={message._id}
-                    className={`flex gap-3 ${isOwnMessage ? 'flex-row-reverse' : ''}`}
-                  >
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={message.sender.avatar} />
-                      <AvatarFallback>{message.sender.name[0]}</AvatarFallback>
-                    </Avatar>
+                  <div key={message._id} className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                    {!isOwn && (
+                      <Avatar className="w-7 h-7 flex-shrink-0 mt-1">
+                        <AvatarImage src={message.sender.avatar} />
+                        <AvatarFallback className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                          {message.sender.name[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
 
-                    <div
-                      className={`flex flex-col max-w-[70%] ${
-                        isOwnMessage ? 'items-end' : 'items-start'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium">
-                          {isOwnMessage ? 'You' : message.sender.name}
+                    <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                      {!isOwn && (
+                        <span className="text-[10px] font-medium text-slate-400 mb-0.5 px-1">
+                          {message.sender.name}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(message.createdAt).toLocaleTimeString('en-US', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </span>
-                      </div>
+                      )}
 
-                      <div
-                        className={`group relative px-4 py-2 rounded-lg ${
-                          isOwnMessage
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
-                        } ${isDeleted ? 'opacity-50 italic' : ''}`}
-                      >
-                        {replyingTo && message._id === replyingTo._id && (
-                          <div className="text-xs opacity-70 mb-1 pb-1 border-b border-current">
-                            Replying to this message
-                          </div>
-                        )}
-                        
-                        <p className="text-sm whitespace-pre-wrap wrap-break-word">
-                          {message.content}
-                        </p>
+                      <div className={`group relative ${isDeleted ? 'opacity-50' : ''}`}>
+                        <div
+                          className={`rounded-2xl px-3.5 py-2 text-sm ${
+                            isOwn
+                              ? 'bg-indigo-500 text-white rounded-br-md'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-md'
+                          } ${isDeleted ? 'italic' : ''}`}
+                        >
+                          <p className="break-words whitespace-pre-wrap">{message.content}</p>
+                          {message.isEdited && !isDeleted && (
+                            <span className="text-[10px] opacity-70 ml-1">(edited)</span>
+                          )}
+                        </div>
 
-                        {message.isEdited && !isDeleted && (
-                          <span className="text-xs opacity-70 ml-2">(edited)</span>
-                        )}
-
-                        {/* Message actions */}
-                        {!isDeleted && isOwnMessage && (
-                          <div className="absolute -top-2 right-0 hidden group-hover:flex gap-1 bg-transparent border rounded-md shadow-sm">
-                            <Button
-                              size="icon"
-                              className="h-6 w-6 text-emerald-600 hover:bg-emerald-50"
+                        {/* Hover actions — own messages */}
+                        {!isDeleted && isOwn && (
+                          <div className="absolute -top-3 right-0 hidden group-hover:flex gap-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-0.5">
+                            <button
                               onClick={() => {
                                 setEditingMessage(message);
                                 setNewMessage(message.content);
                               }}
+                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
                             >
                               <Edit2 className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              className="h-6 w-6 text-rose-600 hover:bg-rose-50"
+                            </button>
+                            <button
                               onClick={() => handleDeleteMessage(message._id)}
+                              className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
                             >
                               <Trash2 className="w-3 h-3" />
-                            </Button>
+                            </button>
                           </div>
                         )}
 
-                        {!isDeleted && !isOwnMessage && (
-                          <div className="absolute -top-2 left-0 hidden group-hover:flex gap-1 bg-transparent border rounded-md shadow-sm">
-                            <Button
-                              size="icon"
-                              className="h-6 w-6 text-emerald-600 hover:bg-emerald-50"
+                        {/* Hover actions — other's messages */}
+                        {!isDeleted && !isOwn && (
+                          <div className="absolute -top-3 left-0 hidden group-hover:flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md shadow-sm p-0.5">
+                            <button
                               onClick={() => setReplyingTo(message)}
+                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
                             >
                               <Reply className="w-3 h-3" />
-                            </Button>
+                            </button>
                           </div>
                         )}
                       </div>
+
+                      <span className="text-[10px] text-slate-400 mt-0.5 px-1">
+                        {new Date(message.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
                     </div>
                   </div>
                 );
@@ -429,73 +309,69 @@ export default function GroupChat({
 
           {/* Typing indicator */}
           {typingUsers.length > 0 && (
-            <div className="text-xs text-muted-foreground italic mt-2">
-              {typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'}{' '}
-              typing...
-            </div>
+            <p className="text-xs text-indigo-500 italic mt-2 px-1">
+              {typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+            </p>
           )}
         </ScrollArea>
+      </div>
 
-        {/* Reply/Edit indicator */}
-        {(replyingTo || editingMessage) && (
-            <div className="px-4 py-2 bg-transparent border-t flex items-center justify-between">
-            <div className="text-sm">
-              <span className="font-medium">
-                {editingMessage ? 'Editing message' : `Replying to ${replyingTo?.sender.name}`}
-              </span>
-              <p className="text-xs text-muted-foreground truncate max-w-md">
-                {editingMessage?.content || replyingTo?.content}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              className="text-emerald-600"
-              onClick={() => {
-                setReplyingTo(null);
-                setEditingMessage(null);
-                setNewMessage('');
-              }}
-            >
-              Cancel
-            </Button>
+      {/* Reply/Edit bar */}
+      {(replyingTo || editingMessage) && (
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+              {editingMessage ? 'Editing message' : `Replying to ${replyingTo?.sender.name}`}
+            </span>
+            <p className="text-xs text-slate-400 truncate max-w-sm">
+              {editingMessage?.content || replyingTo?.content}
+            </p>
           </div>
-        )}
-
-        {/* Input Area */}
-        <div className="border-t p-4 bg-transparent">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" disabled>
-              <Paperclip className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="icon" disabled>
-              <Smile className="w-4 h-4" />
-            </Button>
-            <Input
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value);
-                handleTyping();
-              }}
-              onKeyPress={handleKeyPress}
-              placeholder={
-                editingMessage
-                  ? 'Edit your message...'
-                  : 'Type a message...'
-              }
-              className="flex-1"
-              disabled={!isConnected}
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!newMessage.trim() || !isConnected}
-              size="icon"
-              className="flex-shrink-0 bg-emerald-400 hover:bg-emerald-500 text-white"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
+          <button
+            onClick={() => {
+              setReplyingTo(null);
+              setEditingMessage(null);
+              setNewMessage('');
+            }}
+            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 flex-shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <Input
+            value={newMessage}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder={editingMessage ? 'Edit your message...' : 'Type a message...'}
+            className="h-9 text-sm"
+            disabled={!isConnected}
+          />
+          <Button
+            onClick={handleSendMessage}
+            size="sm"
+            disabled={!newMessage.trim() || !isConnected}
+            className="bg-indigo-500 hover:bg-indigo-600 text-white h-9 px-3"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+        {!isConnected && (
+          <p className="text-[10px] text-red-400 mt-1">Disconnected — reconnecting...</p>
+        )}
+      </div>
+    </div>
   );
 }

@@ -6,6 +6,47 @@ const config = require('../config/env');
 // boardId -> Map of userId -> sessionData
 const activeSessions = new Map();
 
+// ── Validation helpers ──────────────────────────────────────────────
+const MONGO_ID_RE = /^[a-f\d]{24}$/i;
+
+function isValidMongoId(id) {
+  return typeof id === 'string' && MONGO_ID_RE.test(id);
+}
+
+function isValidElement(el) {
+  if (!el || typeof el !== 'object') return false;
+  if (typeof el.id !== 'string' || el.id.length === 0 || el.id.length > 200) return false;
+  if (typeof el.type !== 'string' || el.type.length === 0 || el.type.length > 50) return false;
+  return true;
+}
+
+function isValidChanges(changes) {
+  return changes && typeof changes === 'object' && !Array.isArray(changes) && Object.keys(changes).length > 0;
+}
+
+// ── Per-socket rate limiter (sliding window) ────────────────────────
+function createRateLimiter(maxPerWindow = 60, windowMs = 1000) {
+  const buckets = new WeakMap(); // socket → timestamp[]
+  return function checkRate(socket) {
+    const now = Date.now();
+    let list = buckets.get(socket);
+    if (!list) {
+      list = [];
+      buckets.set(socket, list);
+    }
+    // Trim timestamps outside the window
+    while (list.length > 0 && list[0] <= now - windowMs) list.shift();
+    if (list.length >= maxPerWindow) return false; // rate-limited
+    list.push(now);
+    return true;
+  };
+}
+
+// 60 element mutations per second per socket (generous for drawing)
+const elementRateCheck = createRateLimiter(60, 1000);
+// 30 cursor moves per second per socket
+const cursorRateCheck = createRateLimiter(30, 1000);
+
 /**
  * Initialize board-specific Socket.IO events
  * @param {Object} io - Socket.IO server instance
@@ -16,11 +57,9 @@ module.exports = (io) => {
 
   // Authentication middleware for board namespace
   boardNamespace.use((socket, next) => {
-    console.log('[Board NS] Auth attempt from:', socket.handshake.address);
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
 
     if (!token) {
-      console.error('[Board NS] No token provided');
       return next(new Error('Authentication required'));
     }
 
@@ -29,16 +68,13 @@ module.exports = (io) => {
       socket.userId = decoded.id;
       socket.userEmail = decoded.email;
       socket.userRole = decoded.role;
-      console.log('[Board NS] Auth success:', decoded.email);
       next();
     } catch (error) {
-      console.error('[Board NS] Token verification failed:', error.message);
       return next(new Error('Invalid token'));
     }
   });
 
   boardNamespace.on('connection', (socket) => {
-    console.log(`📋 Board socket connected: ${socket.userEmail}`);
 
     /**
      * Join a board room
@@ -46,12 +82,10 @@ module.exports = (io) => {
     socket.on('board:join', async ({ boardId }, callback) => {
       console.log(`📡 Join request received from ${socket.userEmail} for board: ${boardId}`);
       try {
-        if (!boardId) {
-          console.warn(`⚠️ Join failed: Missing boardId from ${socket.userEmail}`);
-          if (typeof callback === 'function') return callback({ error: 'Board ID is required' });
+        if (!isValidMongoId(boardId)) {
+          if (typeof callback === 'function') return callback({ error: 'Invalid board ID' });
           return;
         }
-
         // Verify user has access to this board
         // PERFORMANCE: Use .lean() for faster retrieval and plain JS object
         const board = await Board.findById(boardId).lean();
@@ -98,14 +132,18 @@ module.exports = (io) => {
         // Get all active participants (unique users)
         const participants = Array.from(activeSessions.get(boardId).values());
 
-        console.log(`✅ ${socket.userEmail} joined board: ${boardId}. Total participants: ${participants.length}`);
-
         // Notify others that user joined
         socket.to(boardId).emit('user:joined', {
           userId: socket.userId,
           email: socket.userEmail,
           color: sessionData.color,
-          timestamp: new Date()
+          timestamp: new Date(),
+          participants: participants.map(p => ({
+            userId: p.userId,
+            email: p.email,
+            color: p.color,
+            cursor: p.cursor
+          }))
         });
 
         // Send current board state and participants to the joining user
@@ -149,7 +187,7 @@ module.exports = (io) => {
 
         console.log(`✅ ${socket.userEmail} joined board: ${boardId} (Final payload sent)`);
       } catch (error) {
-        console.error('Error joining board:', error);
+        console.error('Error joining board:', error.message);
         if (typeof callback === 'function') {
           callback({ error: error.message });
         }
@@ -168,60 +206,39 @@ module.exports = (io) => {
      */
     socket.on('element:create', async ({ boardId, element }, callback) => {
       try {
-        // Use atomic update to push new element
-        const updatedBoard = await Board.findOneAndUpdate(
-          {
-            _id: boardId,
-            'elements.id': { $ne: element.id } // Prevent duplicate IDs
-          },
-          {
-            $push: {
-              elements: {
-                ...element,
-                id: element.id || generateId(),
-                createdBy: socket.userId,
-                createdAt: new Date(),
-                updatedAt: new Date()
-              }
-            },
-            $set: { updatedAt: new Date() }
-          },
-          { new: true, runValidators: false }
-        );
-
-        if (!updatedBoard) {
-          // Check if it failed because board doesn't exist or element already exists
-          const existingBoard = await Board.findById(boardId).lean();
-          if (!existingBoard) {
-            console.error(`[Board ${boardId}] Board not found`);
-            if (callback && typeof callback === 'function') {
-              return callback({ error: 'Board not found' });
-            }
-            return;
-          }
-
-          const alreadyExists = existingBoard.elements.some(el => el.id === element.id);
-          if (alreadyExists) {
-            console.warn(`[Board ${boardId}] Element ${element.id} already exists, skipping create`);
-            if (callback && typeof callback === 'function') {
-              return callback({ success: true, message: 'Element already exists' });
-            }
-            return;
-          }
+        // Validate inputs
+        if (!isValidMongoId(boardId) || !isValidElement(element)) {
+          if (callback && typeof callback === 'function') return callback({ error: 'Invalid input' });
+          return;
         }
-
-        console.log(`[Board ${boardId}] Element saved to DB atomically. Total elements: ${updatedBoard ? updatedBoard.elements.length : 'unknown'}`);
-
-        // Clean element for tldraw - remove Mongoose fields
-        const savedElement = updatedBoard.elements.find(el => el.id === element.id);
-        if (!savedElement) {
-          console.error(`[Board ${boardId}] Failed to find saved element in board elements`);
+        // Rate limit
+        if (!elementRateCheck(socket)) {
+          if (callback && typeof callback === 'function') return callback({ error: 'Rate limited' });
+          return;
+        }
+        
+        const board = await Board.findById(boardId);
+        if (!board) {
           if (callback && typeof callback === 'function') {
             return callback({ error: 'Failed to confirm element save' });
           }
           return;
         }
 
+        // Add element with metadata
+        const newElement = {
+          ...element,
+          id: element.id || generateId(),
+          createdBy: socket.userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        board.elements.push(newElement);
+        board.updatedAt = new Date();
+        await board.save();
+
+        // Clean element for tldraw - remove Mongoose fields
         const cleanElement = {
           id: savedElement.id,
           type: savedElement.type,
@@ -244,13 +261,11 @@ module.exports = (io) => {
           timestamp: new Date()
         });
 
-        console.log(`[Board ${boardId}] Broadcasted element:created to room`);
-
         if (callback && typeof callback === 'function') {
           callback({ success: true, element: cleanElement });
         }
       } catch (error) {
-        console.error(`[Board ${boardId}] Error creating element:`, error);
+        console.error(`Error creating element on board ${boardId}:`, error.message);
         if (callback && typeof callback === 'function') {
           callback({ error: error.message });
         }
@@ -262,20 +277,17 @@ module.exports = (io) => {
      */
     socket.on('element:update', async ({ boardId, elementId, changes }, callback) => {
       try {
-        console.log(`[Board ${boardId}] Receiving update for ${elementId}`, Object.keys(changes));
-
-        // Build the update object using positional operator
-        const updateObj = {
-          'elements.$.updatedAt': new Date(),
-          updatedAt: new Date()
-        };
-
-        // Add each change to the update object with the positional prefix
-        Object.keys(changes).forEach(key => {
-          updateObj[`elements.$.${key}`] = changes[key];
-        });
-
-        // Use findOneAndUpdate for atomic operation
+        // Validate inputs
+        if (!isValidMongoId(boardId) || typeof elementId !== 'string' || !elementId || !isValidChanges(changes)) {
+          if (callback && typeof callback === 'function') return callback({ error: 'Invalid input' });
+          return;
+        }
+        // Rate limit
+        if (!elementRateCheck(socket)) {
+          if (callback && typeof callback === 'function') return callback({ error: 'Rate limited' });
+          return;
+        }
+        // Use findOneAndUpdate with upsert for atomic operation
         const board = await Board.findOneAndUpdate(
           {
             _id: boardId,
@@ -333,15 +345,17 @@ module.exports = (io) => {
             }
 
             element = retryBoard.elements.find(el => el.id === elementId);
-            console.log(`[Board ${boardId}] Element already existed, updated on retry: ${elementId}`);
-          } else {
-            element = updatedBoard.elements.find(el => el.id === elementId);
-            wasCreated = true;
-            console.log(`[Board ${boardId}] Created new element via update fallback: ${elementId}`);
+            // Don't broadcast since it was likely already created
+            if (typeof callback === 'function') {
+              return callback({ success: true });
+            }
+            return;
           }
+
+          element = updatedBoard.elements.find(el => el.id === elementId);
+          wasCreated = true;
         } else {
           element = board.elements.find(el => el.id === elementId);
-          console.log(`[Board ${boardId}] Updated existing element: ${elementId}`);
         }
 
         console.log(`[Board ${boardId}] Element update saved to DB. Total elements: ${element ? 'present' : 'error'}`);
@@ -371,7 +385,6 @@ module.exports = (io) => {
             userId: socket.userId,
             timestamp: new Date()
           });
-          console.log(`[Board ${boardId}] Broadcasted element:created to room`);
         } else {
           // Get the full element for broadcasting
           const elementObj = element.toObject ? element.toObject() : element;
@@ -402,14 +415,13 @@ module.exports = (io) => {
           };
 
           socket.to(boardId).emit('element:updated', broadcastData);
-          console.log(`[Board ${boardId}] Broadcasted element:updated to room`);
         }
 
         if (callback && typeof callback === 'function') {
           callback({ success: true });
         }
       } catch (error) {
-        console.error(`[Board ${boardId}] Error updating element:`, error);
+        console.error(`Error updating element on board ${boardId}:`, error.message);
         if (callback && typeof callback === 'function') {
           callback({ error: error.message });
         }
@@ -421,8 +433,17 @@ module.exports = (io) => {
      */
     socket.on('element:delete', async ({ boardId, elementId }, callback) => {
       try {
-        console.log(`[Board ${boardId}] Deleting element:`, elementId);
-
+        // Validate inputs
+        if (!isValidMongoId(boardId) || typeof elementId !== 'string' || !elementId) {
+          if (typeof callback === 'function') return callback({ error: 'Invalid input' });
+          return;
+        }
+        // Rate limit
+        if (!elementRateCheck(socket)) {
+          if (typeof callback === 'function') return callback({ error: 'Rate limited' });
+          return;
+        }
+        
         // Use atomic operation to avoid version conflicts
         const board = await Board.findOneAndUpdate(
           { _id: boardId },
@@ -434,14 +455,11 @@ module.exports = (io) => {
         );
 
         if (!board) {
-          console.error(`[Board ${boardId}] Board not found`);
           if (typeof callback === 'function') {
             return callback({ error: 'Board not found' });
           }
           return;
         }
-
-        console.log(`[Board ${boardId}] Element deleted from DB atomically. Remaining elements: ${board.elements.length}`);
 
         // Broadcast to all users in the room except sender
         socket.to(boardId).emit('element:deleted', {
@@ -450,13 +468,11 @@ module.exports = (io) => {
           timestamp: new Date()
         });
 
-        console.log(`[Board ${boardId}] Broadcasted element:deleted to room`);
-
         if (typeof callback === 'function') {
           callback({ success: true });
         }
       } catch (error) {
-        console.error(`[Board ${boardId}] Error deleting element:`, error);
+        console.error(`Error deleting element on board ${boardId}:`, error.message);
         if (typeof callback === 'function') {
           callback({ error: error.message });
         }
@@ -467,6 +483,9 @@ module.exports = (io) => {
      * Update cursor position
      */
     socket.on('cursor:move', ({ boardId, position }) => {
+      if (!boardId || !position || typeof position.x !== 'number' || typeof position.y !== 'number') return;
+      if (!cursorRateCheck(socket)) return;
+
       // Update cursor in active sessions
       const sessions = activeSessions.get(boardId);
       if (sessions && sessions.has(socket.userId)) {
@@ -489,8 +508,15 @@ module.exports = (io) => {
      */
     socket.on('elements:batch-update', async ({ boardId, updates }, callback) => {
       try {
-        console.log(`[Board ${boardId}] Batch updating ${updates.length} elements`);
-
+        if (!isValidMongoId(boardId) || !Array.isArray(updates) || updates.length === 0 || updates.length > 100) {
+          if (typeof callback === 'function') return callback({ error: 'Invalid input' });
+          return;
+        }
+        if (!elementRateCheck(socket)) {
+          if (typeof callback === 'function') return callback({ error: 'Rate limited' });
+          return;
+        }
+        
         // Use atomic operations for each update to avoid version conflicts
         const updatePromises = updates.map(({ elementId, changes }) => {
           return Board.findOneAndUpdate(
@@ -510,8 +536,6 @@ module.exports = (io) => {
         // Update board timestamp
         await Board.findByIdAndUpdate(boardId, { updatedAt: new Date() });
 
-        console.log(`[Board ${boardId}] Batch update completed`);
-
         // Broadcast to all users
         socket.to(boardId).emit('elements:batch-updated', {
           updates,
@@ -523,7 +547,7 @@ module.exports = (io) => {
           callback({ success: true });
         }
       } catch (error) {
-        console.error(`[Board ${boardId}] Error batch updating elements:`, error);
+        console.error(`Error batch updating on board ${boardId}:`, error.message);
         if (typeof callback === 'function') {
           callback({ error: error.message });
         }
@@ -550,20 +574,29 @@ module.exports = (io) => {
     const sessions = activeSessions.get(boardId);
     if (sessions && sessions.has(socket.userId)) {
       sessions.delete(socket.userId);
-      console.log(`👋 ${socket.userEmail} left board: ${boardId}. Remaining participants: ${sessions.size}`);
 
       // Clean up empty session maps
       if (sessions.size === 0) {
         activeSessions.delete(boardId);
-        console.log(`🗑️ Removed empty board session: ${boardId}`);
       }
     }
 
     // Notify others that user left
+    const remainingSessions = activeSessions.get(boardId);
+    const remainingParticipants = remainingSessions
+      ? Array.from(remainingSessions.values()).map(p => ({
+          userId: p.userId,
+          email: p.email,
+          color: p.color,
+          cursor: p.cursor
+        }))
+      : [];
+
     socket.to(boardId).emit('user:left', {
       userId: socket.userId,
       email: socket.userEmail,
-      timestamp: new Date()
+      timestamp: new Date(),
+      participants: remainingParticipants
     });
   }
 
@@ -593,5 +626,5 @@ module.exports = (io) => {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  console.log('📋 Board namespace initialized');
+  console.log('Board namespace initialized');
 };

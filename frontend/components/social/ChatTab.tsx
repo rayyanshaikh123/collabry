@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -35,18 +34,16 @@ export default function ChatTab() {
   if (!user) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground">Please log in to use chat</p>
+        <p className="text-sm text-slate-400">Please log in to use chat</p>
       </div>
     );
   }
 
   useEffect(() => {
     if (user) {
-      // Connect chat socket
       chatSocketClient.connect(user.id, user.email);
       loadConversations();
 
-      // Listen for new messages
       chatSocketClient.onMessageNew(handleNewMessage);
       chatSocketClient.onUserTyping(handleUserTyping);
       chatSocketClient.onUserStoppedTyping(handleUserStoppedTyping);
@@ -62,8 +59,7 @@ export default function ChatTab() {
   useEffect(() => {
     if (selectedConversation && selectedConversation.friend) {
       loadMessages();
-      
-      // Create consistent room name for direct messages by sorting IDs
+
       const userIds = [user.id, selectedConversation.friend.id].sort();
       const conversationId = `${userIds[0]}:${userIds[1]}`;
       chatSocketClient.joinConversation('direct', conversationId);
@@ -98,7 +94,6 @@ export default function ChatTab() {
       });
       setMessages(data);
 
-      // Mark messages as read
       const unreadIds = data
         .filter((m) => m.sender.id !== user?.id && !m.readBy.some((r) => r.user === user?.id))
         .map((m) => m._id);
@@ -112,7 +107,6 @@ export default function ChatTab() {
   };
 
   const handleNewMessage = (message: Message) => {
-    // Use ref to get current value instead of stale closure
     const currentConversation = selectedConversationRef.current;
 
     if (!currentConversation) {
@@ -120,30 +114,22 @@ export default function ChatTab() {
       return;
     }
 
-    // Check if message is for current direct conversation
     const isRelevant =
       currentConversation.friend &&
       (message.sender?.id === user?.id || message.sender?.id === currentConversation.friend.id);
 
     if (isRelevant) {
       setMessages((prev) => {
-        // Avoid duplicates
-        if (prev.some((m) => m._id === message._id)) {
-          return prev;
-        }
+        if (prev.some((m) => m._id === message._id)) return prev;
         return [...prev, message];
       });
-
-      // Scroll after update
       setTimeout(scrollToBottom, 100);
 
-      // Mark as read if not from current user
       if (message.sender?.id !== user?.id) {
         chatSocketClient.markAsRead([message._id]);
       }
     }
 
-    // Update conversations list
     loadConversations();
   };
 
@@ -166,11 +152,9 @@ export default function ChatTab() {
     const content = newMessage.trim();
     setNewMessage('');
 
-    // Create consistent room ID
     const userIds = [user.id, selectedConversation.friend.id].sort();
     const conversationId = `${userIds[0]}:${userIds[1]}`;
 
-    // Stop typing
     chatSocketClient.stopTyping('direct', conversationId);
 
     try {
@@ -194,7 +178,6 @@ export default function ChatTab() {
   const handleTyping = () => {
     if (!selectedConversation || !selectedConversation.friend) return;
 
-    // Create consistent room ID
     const userIds = [user.id, selectedConversation.friend.id].sort();
     const conversationId = `${userIds[0]}:${userIds[1]}`;
 
@@ -203,12 +186,10 @@ export default function ChatTab() {
       chatSocketClient.startTyping('direct', conversationId);
     }
 
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set new timeout
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       chatSocketClient.stopTyping('direct', conversationId);
@@ -216,175 +197,170 @@ export default function ChatTab() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px] bg-transparent">
-      <div className="md:col-span-1">
-        <Card className="h-full rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-          <CardHeader>
-            <CardTitle>Direct Messages</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[500px]">
-              {conversations.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No conversations yet</p>
-                  <p className="text-sm">Add friends to start chatting!</p>
-                </div>
-              ) : (
-                conversations.map((conv) => (
-                  <div
-                    key={conv.friend?.id}
-                    onClick={() => setSelectedConversation(conv)}
-                    className={`p-4 border-b cursor-pointer transition-colors ${
-                      selectedConversation?.friend?.id === conv.friend?.id
-                        ? 'bg-primary/10'
-                        : 'hover:bg-accent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={conv.friend?.avatar} />
-                        <AvatarFallback>{conv.friend?.name[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium truncate">{conv.friend?.name}</p>
-                          {conv.unreadCount > 0 && (
-                            <Badge variant="destructive" className="ml-2">
-                              {conv.unreadCount}
-                            </Badge>
-                          )}
-                        </div>
-                        {conv.lastMessage && (
-                          <p className="text-sm text-muted-foreground truncate">
-                            {conv.lastMessage.content}
-                          </p>
-                        )}
-                      </div>
+    <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[500px]">
+      {/* ── Left: Conversations ── */}
+      <div className="w-72 flex-shrink-0 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Direct Messages</h3>
+        </div>
+        <ScrollArea className="flex-1">
+          {conversations.length === 0 ? (
+            <div className="p-6 text-center">
+              <MessageCircle className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">No conversations yet</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Add friends to start chatting!</p>
+            </div>
+          ) : (
+            <div className="p-2 space-y-1">
+              {conversations.map((conv) => (
+                <div
+                  key={conv.friend?.id}
+                  onClick={() => setSelectedConversation(conv)}
+                  className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all duration-150 ${
+                    selectedConversation?.friend?.id === conv.friend?.id
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
+                  }`}
+                >
+                  <Avatar className="w-9 h-9">
+                    <AvatarImage src={conv.friend?.avatar} />
+                    <AvatarFallback className="text-sm">{conv.friend?.name[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium truncate text-slate-800 dark:text-slate-200">{conv.friend?.name}</p>
+                      {conv.unreadCount > 0 && (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 ml-1.5">
+                          {conv.unreadCount}
+                        </Badge>
+                      )}
                     </div>
+                    {conv.lastMessage && (
+                      <p className="text-xs text-slate-400 truncate">{conv.lastMessage.content}</p>
+                    )}
                   </div>
-                ))
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </div>
 
-      <div className="md:col-span-2">
-        <Card className="h-full flex flex-col rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-          {selectedConversation ? (
-            <>
-              <CardHeader className="border-b flex-shrink-0">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={selectedConversation.friend?.avatar} />
-                    <AvatarFallback>{selectedConversation.friend?.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <CardTitle>{selectedConversation.friend?.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {typingUser ? `${typingUser} is typing...` : 'Online'}
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <div className="flex-1 overflow-hidden">
-                <ScrollArea className="h-full p-4">
-                  <div className="space-y-4 pb-4">
-                    {messages.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-muted-foreground">
-                        <p>No messages yet. Start the conversation!</p>
-                      </div>
-                    ) : (
-                      messages.map((message) => {
-                        const isOwn = message.sender.id === user?.id;
-                        return (
-                          <div
-                            key={message._id}
-                            className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}
-                          >
+      {/* ── Right: Chat Area ── */}
+      <div className="flex-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col min-w-0">
+        {selectedConversation ? (
+          <>
+            {/* Chat Header */}
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 flex-shrink-0">
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={selectedConversation.friend?.avatar} />
+                <AvatarFallback className="text-sm">{selectedConversation.friend?.name[0]}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{selectedConversation.friend?.name}</p>
+                <p className="text-xs text-slate-400">
+                  {typingUser ? <span className="text-indigo-500 italic">{typingUser} is typing...</span> : 'Online'}
+                </p>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full p-4">
+                <div className="space-y-3 pb-2">
+                  {messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full py-12 text-slate-400">
+                      <p className="text-sm">No messages yet. Start the conversation!</p>
+                    </div>
+                  ) : (
+                    messages.map((message) => {
+                      const isOwn = message.sender.id === user?.id;
+                      return (
+                        <div
+                          key={message._id}
+                          className={`flex gap-2 ${isOwn ? 'justify-end' : 'justify-start'}`}
+                        >
+                          {!isOwn && (
+                            <Avatar className="w-7 h-7 flex-shrink-0 mt-1">
+                              <AvatarImage src={message.sender.avatar} />
+                              <AvatarFallback className="text-xs">{message.sender.name[0]}</AvatarFallback>
+                            </Avatar>
+                          )}
+                          <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[70%]`}>
                             {!isOwn && (
-                              <Avatar className="w-8 h-8 flex-shrink-0">
-                                <AvatarImage src={message.sender.avatar} />
-                                <AvatarFallback>{message.sender.name[0]}</AvatarFallback>
-                              </Avatar>
-                            )}
-                            <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[75%]`}>
-                              {!isOwn && (
-                                <span className="text-xs font-medium text-muted-foreground mb-1 px-2">
-                                  {message.sender.name}
-                                </span>
-                              )}
-                              <div
-                                className={`rounded-2xl px-4 py-2 shadow-sm ${
-                                  isOwn
-                                    ? 'bg-primary text-primary-foreground rounded-br-sm'
-                                    : 'bg-muted text-foreground rounded-bl-sm'
-                                }`}
-                              >
-                                <p className="text-sm break-words whitespace-pre-wrap">{message.content}</p>
-                              </div>
-                              <span className="text-xs text-muted-foreground mt-1 px-2">
-                                {new Date(message.createdAt).toLocaleTimeString([], { 
-                                  hour: '2-digit', 
-                                  minute: '2-digit' 
-                                })}
+                              <span className="text-[10px] font-medium text-slate-400 mb-0.5 px-1">
+                                {message.sender.name}
                               </span>
-                            </div>
-                            {isOwn && (
-                              <Avatar className="w-8 h-8 flex-shrink-0">
-                                <AvatarImage src={user.avatar} />
-                                <AvatarFallback>{user.name[0]}</AvatarFallback>
-                              </Avatar>
                             )}
+                            <div
+                              className={`rounded-2xl px-3.5 py-2 text-sm ${
+                                isOwn
+                                  ? 'bg-indigo-500 text-white rounded-br-md'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-md'
+                              }`}
+                            >
+                              <p className="break-words whitespace-pre-wrap">{message.content}</p>
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-0.5 px-1">
+                              {new Date(message.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
                           </div>
-                        );
-                      })
-                    )}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-              </div>
-              
-              <div className="p-4 border-t bg-transparent flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => {
-                      setNewMessage(e.target.value);
-                      handleTyping();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    placeholder="Type a message..."
-                    className="flex-1"
-                  />
-                  <Button 
-                    onClick={handleSendMessage} 
-                    size="icon"
-                    disabled={!newMessage.trim()}
-                    className="flex-shrink-0 bg-emerald-400 hover:bg-emerald-500 text-white"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                          {isOwn && (
+                            <Avatar className="w-7 h-7 flex-shrink-0 mt-1">
+                              <AvatarImage src={user.avatar} />
+                              <AvatarFallback className="text-xs">{user.name[0]}</AvatarFallback>
+                            </Avatar>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
+              </ScrollArea>
+            </div>
+
+            {/* Input */}
+            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newMessage}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Type a message..."
+                  className="h-9 text-sm"
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  size="sm"
+                  disabled={!newMessage.trim()}
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white h-9 px-3"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
               </div>
-            </>
-          ) : (
-            <CardContent className="flex-1 flex items-center justify-center">
-              <div className="text-center text-muted-foreground">
-                <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <h3 className="text-lg font-semibold mb-2">No Conversation Selected</h3>
-                <p>Select a conversation to start chatting</p>
-              </div>
-            </CardContent>
-          )}
-        </Card>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <MessageCircle className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+              <h3 className="text-base font-semibold text-slate-600 dark:text-slate-400 mb-1">No Conversation Selected</h3>
+              <p className="text-sm text-slate-400 dark:text-slate-500">Select a conversation to start chatting</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

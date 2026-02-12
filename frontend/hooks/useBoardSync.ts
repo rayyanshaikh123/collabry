@@ -108,6 +108,22 @@ export function useBoardSync({
             if (record.type === 'draw') {
               isDrawingRef.current = true;
               drawingShapeIdRef.current = record.id;
+
+              socketClient.createElement(boardId, {
+                id: record.id,
+                type: record.type,
+                typeName: record.typeName || 'shape',
+                x: record.x || 0,
+                y: record.y || 0,
+                props: record.props || {},
+                parentId: record.parentId || 'page:page',
+                index: record.index || 'a1',
+                rotation: record.rotation || 0,
+                isLocked: record.isLocked || false,
+                opacity: record.opacity || 1,
+                meta: meta,
+              });
+              return;
             }
 
             socketClient.createElement(boardId, {

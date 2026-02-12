@@ -34,14 +34,12 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
       return;
     }
 
-    console.log('Sending invitation to:', email, 'with role:', role);
     setIsLoading(true);
     setError(null);
 
     try {
       if (onInvite) {
         await onInvite(email, role);
-        console.log('Invitation sent successfully');
       }
       setSuccess(true);
       setEmail('');
@@ -50,7 +48,6 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
         setSuccess(false);
       }, 3000);
     } catch (err: any) {
-      console.error('Invitation error:', err);
       setError(err.message || 'Failed to send invitation');
     } finally {
       setIsLoading(false);

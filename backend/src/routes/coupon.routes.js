@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { protect } = require('../middlewares/auth.middleware');
-const { isAdmin } = require('../middleware/adminAuth');
+const authorizeRoles = require('../middlewares/role.middleware');
 const couponController = require('../controllers/coupon.controller');
 
 // Rate limit coupon validation to prevent brute-force code guessing
@@ -28,30 +28,30 @@ router.get('/:code', couponController.getCouponInfo);
 // ============= ADMIN ROUTES =============
 
 // Create a new coupon
-router.post('/admin', protect, isAdmin, couponController.createCoupon);
+router.post('/admin', protect, authorizeRoles('admin'), couponController.createCoupon);
 
 // Bulk create coupons
-router.post('/admin/bulk', protect, isAdmin, couponController.bulkCreateCoupons);
+router.post('/admin/bulk', protect, authorizeRoles('admin'), couponController.bulkCreateCoupons);
 
 // Get campaign statistics
-router.get('/admin/campaign/:campaign/stats', protect, isAdmin, couponController.getCampaignStats);
+router.get('/admin/campaign/:campaign/stats', protect, authorizeRoles('admin'), couponController.getCampaignStats);
 
 // Get all coupons
-router.get('/admin', protect, isAdmin, couponController.getAllCoupons);
+router.get('/admin', protect, authorizeRoles('admin'), couponController.getAllCoupons);
 
 // Get coupon by ID
-router.get('/admin/:id', protect, isAdmin, couponController.getCouponById);
+router.get('/admin/:id', protect, authorizeRoles('admin'), couponController.getCouponById);
 
 // Get coupon statistics
-router.get('/admin/:id/stats', protect, isAdmin, couponController.getCouponStats);
+router.get('/admin/:id/stats', protect, authorizeRoles('admin'), couponController.getCouponStats);
 
 // Update a coupon
-router.put('/admin/:id', protect, isAdmin, couponController.updateCoupon);
+router.put('/admin/:id', protect, authorizeRoles('admin'), couponController.updateCoupon);
 
 // Deactivate a coupon
-router.post('/admin/:id/deactivate', protect, isAdmin, couponController.deactivateCoupon);
+router.post('/admin/:id/deactivate', protect, authorizeRoles('admin'), couponController.deactivateCoupon);
 
 // Delete a coupon
-router.delete('/admin/:id', protect, isAdmin, couponController.deleteCoupon);
+router.delete('/admin/:id', protect, authorizeRoles('admin'), couponController.deleteCoupon);
 
 module.exports = router;

@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Users, Settings, Copy, LogOut } from 'lucide-react';
+import { Plus, Users, Copy, LogOut, Lock, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import groupService, { Group } from '@/lib/services/group.service';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,6 +24,7 @@ export default function GroupsTab() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isJoinOpen, setIsJoinOpen] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [newGroup, setNewGroup] = useState({
     name: '',
@@ -44,8 +44,7 @@ export default function GroupsTab() {
   };
 
   useEffect(() => {
-    loadGroups();
-    setIsLoading(false);
+    loadGroups().finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -91,6 +90,7 @@ export default function GroupsTab() {
       toast({ title: 'Success', description: 'Left group successfully' });
       loadGroups();
       setSelectedGroup(null);
+      setShowDetails(false);
     } catch (error) {
       toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to leave group', variant: 'destructive' });
     }
@@ -102,20 +102,22 @@ export default function GroupsTab() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 bg-transparent items-start">
-      <div className="md:w-80 flex-shrink-0 space-y-4">
+    <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[500px]">
+      {/* ── Left Sidebar: Group List ── */}
+      <div className="w-72 flex-shrink-0 flex flex-col gap-3">
+        {/* Action Buttons */}
         <div className="flex gap-2">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-md rounded-md">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button size="sm" className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm rounded-lg text-xs font-semibold">
+                <Plus className="w-3.5 h-3.5 mr-1.5" />
                 Create Group
               </Button>
-              </DialogTrigger>
+            </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Group</DialogTitle>
-                <DialogDescription>Create a private group for your team or friends</DialogDescription>
+                <DialogDescription>Create a group for your team or friends</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
@@ -132,6 +134,7 @@ export default function GroupsTab() {
                     value={newGroup.description}
                     onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
                     placeholder="What's this group about?"
+                    rows={3}
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -143,14 +146,14 @@ export default function GroupsTab() {
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateGroup} className="bg-emerald-400 hover:bg-emerald-500 text-white">Create Group</Button>
+                <Button onClick={handleCreateGroup} className="bg-indigo-500 hover:bg-indigo-600 text-white">Create Group</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
           <Dialog open={isJoinOpen} onOpenChange={setIsJoinOpen}>
             <DialogTrigger asChild>
-                <Button className="flex-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-transparent dark:text-emerald-300 dark:hover:bg-emerald-900/20 border border-emerald-200/40 rounded-md">
+              <Button size="sm" variant="outline" className="flex-1 rounded-lg text-xs font-semibold">
                 Join Group
               </Button>
             </DialogTrigger>
@@ -168,183 +171,193 @@ export default function GroupsTab() {
                 />
               </div>
               <DialogFooter>
-                <Button onClick={handleJoinGroup} className="bg-emerald-400 hover:bg-emerald-500 text-white">Join Group</Button>
+                <Button onClick={handleJoinGroup} className="bg-indigo-500 hover:bg-indigo-600 text-white">Join Group</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
 
-        <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-          <CardHeader>
-            <CardTitle>Your Groups</CardTitle>
-            <CardDescription>{groups.length} groups</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
+        {/* Groups List */}
+        <div className="flex-1 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Your Groups</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">{groups.length} group{groups.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {groups.length === 0 ? (
-              <p className="text-sm text-slate-600 dark:text-slate-300 text-center py-4">
-                No groups yet. Create or join one!
-              </p>
+              <div className="text-center py-8">
+                <Users className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">No groups yet</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Create or join one!</p>
+              </div>
             ) : (
               groups.map((group) => (
-                  <div
+                <div
                   key={group._id}
                   onClick={() => {
-                    console.log('🎯 [GroupsTab] Group selected:', group.name, group._id);
-                    console.log('📊 [GroupsTab] Current state:', { 
-                      isLoading, 
-                      hasCurrentUser: !!currentUser, 
-                      hasToken: !!token,
-                      currentUser 
-                    });
                     setSelectedGroup(group);
+                    setShowDetails(false);
                   }}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedGroup?._id === group._id ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
+                  className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all duration-150 ${
+                    selectedGroup?._id === group._id
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800'
+                      : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={group.avatar} />
-                      <AvatarFallback>{group.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{group.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {group.members.length} members
-                      </p>
+                  <Avatar className="w-9 h-9">
+                    <AvatarImage src={group.avatar} />
+                    <AvatarFallback className="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 text-sm font-semibold">
+                      {group.name[0].toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate text-slate-800 dark:text-slate-200">{group.name}</p>
+                      {group.isPrivate && <Lock className="w-3 h-3 text-slate-400 flex-shrink-0" />}
                     </div>
-                    {group.isPrivate && <Badge variant="secondary">Private</Badge>}
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      {group.members.length} member{group.members.length !== 1 ? 's' : ''}
+                    </p>
                   </div>
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1">
+      {/* ── Main Area: Chat + Details ── */}
+      <div className="flex-1 flex flex-col min-w-0">
         {(() => {
-          console.log('🔍 [GroupsTab] Render check:', { 
-            isLoading, 
-            hasSelectedGroup: !!selectedGroup,
-            selectedGroupId: selectedGroup?._id,
-            hasCurrentUser: !!currentUser,
-            currentUserId: currentUser?._id || currentUser?.id,
-            hasToken: !!token 
-          });
-          
           if (isLoading) {
             return (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <p className="text-muted-foreground">Loading...</p>
-                </CardContent>
-              </Card>
-            );
-          }
-          
-          if (selectedGroup && currentUser && token) {
-            console.log('✅ [GroupsTab] Rendering GroupChat');
-            console.log('🔍 [GroupsTab] Passing currentUserId:', currentUser._id || currentUser.id || '');
-            console.log('🔍 [GroupsTab] currentUser object:', currentUser);
-              return (
-              <div className="space-y-4">
-                {/* Group Chat */}
-                <GroupChat
-                  groupId={selectedGroup._id}
-                  groupName={selectedGroup.name}
-                  currentUserId={currentUser._id || currentUser.id || ''}
-                  currentUserEmail={currentUser.email}
-                  token={token}
-                />
-
-                {/* Group Details */}
-                <Card className="rounded-2xl bg-transparent border-2 border-slate-200/30 dark:border-slate-700/30 shadow-lg">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <Avatar className="w-16 h-16">
-                      <AvatarImage src={selectedGroup.avatar} />
-                      <AvatarFallback className="text-2xl">{selectedGroup.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <CardTitle>{selectedGroup.name}</CardTitle>
-                      <CardDescription>{selectedGroup.description}</CardDescription>
-                      <div className="flex gap-2 mt-2">
-                        {selectedGroup.isPrivate && <Badge>Private</Badge>}
-                        <Badge variant="secondary">{selectedGroup.members.length} members</Badge>
-                      </div>
-                    </div>
-                  </div>
-                  <Button className="text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" size="icon">
-                    <Settings className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6 bg-transparent">
-                {selectedGroup.inviteCode && (
-                  <div>
-                    <Label>Invite Code</Label>
-                    <div className="flex gap-2 mt-2">
-                      <Input value={selectedGroup.inviteCode} readOnly />
-                      <Button
-                        size="icon"
-                        className="border-emerald-200/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                        onClick={() => copyInviteCode(selectedGroup.inviteCode!)}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <Label className="text-base">Members</Label>
-                    <div className="mt-3 space-y-2">
-                    {selectedGroup.members.map((member) => (
-                      <div key={member.user._id} className="flex items-center justify-between p-3 border rounded-lg bg-transparent">
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={member.user.avatar} />
-                            <AvatarFallback>{member.user.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{member.user.name}</p>
-                            <p className="text-sm text-muted-foreground">{member.user.email}</p>
-                          </div>
-                        </div>
-                        <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                          {member.role}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Button
-                  onClick={() => handleLeaveGroup(selectedGroup._id)}
-                  className="w-full bg-rose-500 hover:bg-rose-600 text-white"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Leave Group
-                </Button>
-              </CardContent>
-            </Card>
+              <div className="flex-1 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
               </div>
             );
           }
-          
-          console.log('ℹ️ [GroupsTab] Showing "No Group Selected" message');
+
+          if (selectedGroup && currentUser && token) {
+            return (
+              <div className="flex-1 flex flex-col gap-3 min-h-0">
+                {/* Group Chat — fills available space */}
+                <div className="flex-1 min-h-0">
+                  <GroupChat
+                    groupId={selectedGroup._id}
+                    groupName={selectedGroup.name}
+                    currentUserId={currentUser._id || currentUser.id || ''}
+                    currentUserEmail={currentUser.email}
+                    token={token}
+                  />
+                </div>
+
+                {/* Collapsible Group Details */}
+                <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex-shrink-0">
+                  <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 text-slate-400" />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Group Details</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        {selectedGroup.members.length} members
+                      </Badge>
+                    </div>
+                    {showDetails ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {showDetails && (
+                    <div className="px-4 pb-4 border-t border-slate-100 dark:border-slate-800 space-y-4 pt-3">
+                      {/* Group Info */}
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-12 h-12">
+                          <AvatarImage src={selectedGroup.avatar} />
+                          <AvatarFallback className="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 text-lg font-bold">
+                            {selectedGroup.name[0].toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-200">{selectedGroup.name}</h4>
+                          {selectedGroup.description && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{selectedGroup.description}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Invite Code */}
+                      {selectedGroup.inviteCode && (
+                        <div>
+                          <Label className="text-xs text-slate-500">Invite Code</Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input value={selectedGroup.inviteCode} readOnly className="text-xs h-8 font-mono" />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-2"
+                              onClick={() => copyInviteCode(selectedGroup.inviteCode!)}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Members List */}
+                      <div>
+                        <Label className="text-xs text-slate-500">Members</Label>
+                        <div className="mt-2 space-y-1.5 max-h-40 overflow-y-auto">
+                          {selectedGroup.members.map((member) => (
+                            <div key={member.user._id} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="w-7 h-7">
+                                  <AvatarImage src={member.user.avatar} />
+                                  <AvatarFallback className="text-xs">{member.user.name[0]}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{member.user.name}</p>
+                                  <p className="text-[10px] text-slate-400">{member.user.email}</p>
+                                </div>
+                              </div>
+                              <Badge variant={member.role === 'admin' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                                {member.role}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Leave Group */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleLeaveGroup(selectedGroup._id)}
+                        className="w-full text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:hover:bg-red-900/20 text-xs"
+                      >
+                        <LogOut className="w-3.5 h-3.5 mr-1.5" />
+                        Leave Group
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
           return (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Users className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">No Group Selected</h3>
-                <p className="text-muted-foreground">
-                  Select a group from the list to view details and members
+            <div className="flex-1 flex items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <div className="text-center">
+                <Users className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                <h3 className="text-base font-semibold text-slate-600 dark:text-slate-400 mb-1">No Group Selected</h3>
+                <p className="text-sm text-slate-400 dark:text-slate-500">
+                  Select a group to start chatting
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })()}
       </div>

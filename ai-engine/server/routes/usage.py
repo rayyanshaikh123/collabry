@@ -24,12 +24,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai/usage", tags=["usage"])
 
 
-# Subscription tier limits (tokens per month)
+# Subscription tier limits (AI questions per day)
+# Synced with backend/src/config/plans.js PLAN_LIMITS.aiQuestionsPerDay
 SUBSCRIPTION_LIMITS = {
-    "free": 10000,
-    "basic": 50000,
-    "pro": 200000,
-    "enterprise": 1000000
+    "free": 10,       # 10 questions/day
+    "basic": 100,     # 100 questions/day
+    "pro": -1,        # unlimited
+    "enterprise": -1  # unlimited
 }
 
 
@@ -100,15 +101,19 @@ async def get_my_usage(
         
         # Get user subscription tier from JWT token
         subscription_tier = request.state.subscription_tier if hasattr(request.state, 'subscription_tier') else "free"
-        limit = SUBSCRIPTION_LIMITS.get(subscription_tier, 10000)
+        limit = SUBSCRIPTION_LIMITS.get(subscription_tier, 10)
         
-        # Calculate usage percentage
-        total_tokens = usage_data.get("total_tokens", 0)
-        usage_percentage = (total_tokens / limit * 100) if limit > 0 else 0
+        # Calculate usage percentage based on question count (operations)
+        total_questions = usage_data.get("total_operations", 0)
+        if limit == -1:
+            usage_percentage = 0  # unlimited plans show 0%
+        else:
+            usage_percentage = (total_questions / limit * 100) if limit > 0 else 0
         
         # Add subscription info
         usage_data["subscription_limit"] = limit
         usage_data["usage_percentage"] = round(usage_percentage, 2)
+        usage_data["total_questions"] = total_questions
         
         return UsageStatsResponse(**usage_data)
         

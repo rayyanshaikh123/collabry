@@ -17,11 +17,12 @@ export interface UsageStats {
   total_operations: number;
   successful_operations: number;
   failed_operations: number;
-  total_tokens: number;
+  total_tokens: number; // legacy — kept for AI engine compat
+  total_questions: number; // new: maps to total_operations for question counting
   avg_response_time_ms: number;
   success_rate: number;
   operations_by_type: Record<string, number>;
-  daily_usage: Record<string, { operations: number; tokens: number }>;
+  daily_usage: Record<string, { operations: number; tokens: number; questions?: number }>;
   most_recent_activity: string | null;
   subscription_limit?: number;
   usage_percentage?: number;
@@ -32,7 +33,8 @@ export interface GlobalUsage {
   total_operations: number;
   successful_operations: number;
   failed_operations: number;
-  total_tokens: number;
+  total_tokens: number; // legacy
+  total_questions: number; // new
   unique_users: number;
   avg_response_time_ms: number;
   success_rate: number;

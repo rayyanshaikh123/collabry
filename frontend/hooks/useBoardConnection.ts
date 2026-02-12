@@ -54,19 +54,16 @@ export function useBoardConnection({
         try {
           await socketClient.connectBoards(accessToken);
           if (!isMounted) return;
-          console.log('[Board] Socket connected, joining board...');
         } catch (error: any) {
           if (!isMounted) return;
-          console.error('[Board] Socket connection failed:', error.message);
-          alert('Failed to connect to server. Please check if the backend is running.');
-          setIsLoading(false);
-          return;
+          console.warn('[Board] Socket initial connect timed out, will retry in background');
+          // Don't return — the socket is still reconnecting in the background
+          // joinBoard will wait for the connect event
         }
 
         // Set join timeout
         joinTimeoutId = setTimeout(() => {
           if (!isMounted) return;
-          console.error('[Board] Join board timeout');
           alert('Failed to load board. The board may not exist or you may not have access.');
           router.push('/study-board');
         }, 15000);
@@ -79,19 +76,16 @@ export function useBoardConnection({
           joinTimeoutId = null;
 
           if (response?.error || !response) {
-            console.error('[Board] Join error:', response?.error || 'No response');
             alert(response?.error || 'Failed to join board. Please try again.');
             router.push('/study-board');
             return;
           }
 
-          console.log('[Board] Successfully joined board');
           setCurrentBoard(response.board);
 
           // Load template shapes from sessionStorage
           const templateShapes = sessionStorage.getItem(`board-${boardId}-template`);
           if (templateShapes) {
-            console.log('[Board] Loading template shapes from sessionStorage');
             try {
               const shapes = JSON.parse(templateShapes);
               setPendingElements(shapes || []);
@@ -100,13 +94,12 @@ export function useBoardConnection({
               console.error('Failed to parse template shapes:', e);
             }
           } else {
-            setPendingElements(response.elements || []);
+            setPendingElements(response.board?.elements || response.elements || []);
           }
 
           // Load import payload from sessionStorage (mindmap/infographic)
           const importPayload = sessionStorage.getItem(`board-${boardId}-import`);
           if (importPayload) {
-            console.log('[Board] Found import payload in sessionStorage');
             try {
               importPayloadRef.current = JSON.parse(importPayload);
               sessionStorage.removeItem(`board-${boardId}-import`);
