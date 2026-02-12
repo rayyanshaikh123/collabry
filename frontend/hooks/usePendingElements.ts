@@ -63,7 +63,9 @@ export const usePendingElements = ({
         const records = [...assets, ...shapes];
         if (records.length > 0) {
           console.log('Putting', records.length, 'records into editor store');
-          editor.store.put(records);
+          editor.store.mergeRemoteChanges(() => {
+            editor.store.put(records);
+          });
           console.log('Successfully added shapes to board');
         } else {
           console.warn('No records to add to board');
@@ -175,30 +177,41 @@ export const usePendingElements = ({
         }
         
         // Add assets first, then shapes
-        if (assets.length > 0) {
-          console.log('Recreating', assets.length, 'assets for image shapes');
-          editor.store.put(assets);
-        }
-        
-        if (shapes.length > 0) {
-          editor.store.put(shapes);
-        }
+        editor.store.mergeRemoteChanges(() => {
+          if (assets.length > 0) {
+            console.log('Recreating', assets.length, 'assets for image shapes');
+            editor.store.put(assets);
+          }
+          
+          if (shapes.length > 0) {
+            editor.store.put(shapes);
+          }
+        });
         setTimeout(() => setPendingElements([]), 0);
       } catch (error) {
         console.error('Error loading pending elements:', error);
       } finally {
-        setTimeout(() => {
-          isApplyingRemoteChange.current = false;
-        }, 100);
+        isApplyingRemoteChange.current = false;
       }
     }
 
     // Setup element event listeners
+    const bs = socketClient.getBoardSocket();
+    console.log('[PendingElements] Registering listeners. boardSocket exists:', !!bs, 'connected:', bs?.connected);
+    
+    // Raw debug listener to verify events arrive at all
+    const debugCreated = (data: any) => console.log('[DEBUG RAW] element:created received on boardSocket:', !!data, 'userId:', data?.userId);
+    const debugUpdated = (data: any) => console.log('[DEBUG RAW] element:updated received on boardSocket:', !!data, 'userId:', data?.userId);
+    bs?.on('element:created', debugCreated);
+    bs?.on('element:updated', debugUpdated);
+    
     socketClient.onElementCreated(handleElementCreated);
     socketClient.onElementUpdated(handleElementUpdated);
     socketClient.onElementDeleted(handleElementDeleted);
 
     return () => {
+      bs?.off('element:created', debugCreated);
+      bs?.off('element:updated', debugUpdated);
       socketClient.off('element:created', handleElementCreated);
       socketClient.off('element:updated', handleElementUpdated);
       socketClient.off('element:deleted', handleElementDeleted);

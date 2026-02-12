@@ -1,7 +1,7 @@
-import { useEffect, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { socketClient } from '@/lib/socket';
 import { googleDriveService } from '@/lib/googleDrive';
-import { sanitizeShape } from './useBoardShapes';
+
 
 interface TLEditor {
   store: {
@@ -84,6 +84,8 @@ export function useBoardSync({
       
       if (!hasShapeChanges) return;
 
+      console.log('[useBoardSync] Shape changes detected — added:', Object.keys(added || {}).length, 'updated:', Object.keys(updated || {}).length, 'removed:', Object.keys(removed || {}).length);
+
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
@@ -147,6 +149,7 @@ export function useBoardSync({
             if (record.type === 'draw') {
               isDrawingRef.current = true;
               drawingShapeIdRef.current = record.id;
+
               socketClient.createElement(boardId, {
                 id: record.id,
                 type: record.type,
@@ -236,7 +239,7 @@ export function useBoardSync({
       }
     };
 
-    const dispose = editor.store.listen(handleStoreChange);
+    const dispose = editor.store.listen(handleStoreChange, { source: 'user', scope: 'document' });
 
     return () => dispose();
   }, [editor, boardId, isConnected, debouncedUpdateElement, throttledDrawUpdate]);
@@ -259,143 +262,4 @@ export function useBoardSync({
       window.removeEventListener('mouseup', handlePointerUp);
     };
   }, [editor, boardId, isConnected]);
-
-  const handleElementCreated = useCallback((data: any) => {
-    if (!editor || editor.store.get(data.element.id)) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      const shapeRecord: any = sanitizeShape({
-        id: data.element.id,
-        typeName: data.element.typeName || 'shape',
-        type: data.element.type,
-        x: data.element.x || 0,
-        y: data.element.y || 0,
-        props: data.element.props || {},
-        parentId: data.element.parentId || 'page:page',
-        index: data.element.index || 'a1',
-        rotation: data.element.rotation || 0,
-        isLocked: data.element.isLocked || false,
-        opacity: data.element.opacity || 1,
-        meta: data.element.meta || {},
-      });
-      
-      if (shapeRecord.type === 'image' && shapeRecord.props?.assetId) {
-        let asset = null;
-        let assetSrc = null;
-        
-        if (shapeRecord.meta?.driveFileId) {
-          console.log('Recreating asset from Google Drive for remote shape:', shapeRecord.id);
-          assetSrc = googleDriveService.getPublicUrl(shapeRecord.meta.driveFileId);
-        }
-        
-        if (!assetSrc && shapeRecord.meta?.svgDataUri) {
-          console.log('Recreating SVG asset for remote image shape:', shapeRecord.id);
-          assetSrc = shapeRecord.meta.svgDataUri;
-          asset = {
-            id: shapeRecord.props.assetId,
-            type: 'image',
-            typeName: 'asset',
-            props: {
-              name: `${shapeRecord.meta.title || 'mindmap'}.svg`,
-              src: assetSrc,
-              w: shapeRecord.props.w || 800,
-              h: shapeRecord.props.h || 600,
-              mimeType: 'image/svg+xml',
-              isAnimated: false,
-            },
-            meta: {},
-          };
-        }
-        else if (!assetSrc && shapeRecord.meta?.imageData?.src) {
-          console.log('Recreating general image asset for remote shape:', shapeRecord.id);
-          assetSrc = shapeRecord.meta.imageData.src;
-        }
-        
-        if (assetSrc && !asset) {
-          asset = {
-            id: shapeRecord.props.assetId,
-            type: 'image',
-            typeName: 'asset',
-            props: {
-              name: shapeRecord.meta?.driveName || shapeRecord.meta?.imageData?.name || 'image.png',
-              src: assetSrc,
-              w: shapeRecord.meta?.w || shapeRecord.meta?.imageData?.w || shapeRecord.props.w || 800,
-              h: shapeRecord.meta?.h || shapeRecord.meta?.imageData?.h || shapeRecord.props.h || 600,
-              mimeType: shapeRecord.meta?.driveMimeType || shapeRecord.meta?.imageData?.mimeType || 'image/png',
-              isAnimated: false,
-            },
-            meta: {},
-          };
-        }
-        
-        if (asset) {
-          editor.store.put([asset]);
-        }
-      }
-      
-      editor.store.put([shapeRecord]);
-    } catch (error) {
-      console.error('Error adding remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  const handleElementUpdated = useCallback((data: any) => {
-    if (!editor) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      const existing = editor.store.get(data.elementId);
-      const updates = data.changes || data.changeSet;
-      
-      if (existing && updates) {
-        editor.store.put([{
-          ...existing,
-          ...updates,
-        }]);
-      }
-    } catch (error) {
-      console.error('Error updating remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  const handleElementDeleted = useCallback((data: any) => {
-    if (!editor) return;
-    
-    isApplyingRemoteChange.current = true;
-    
-    try {
-      if (editor.store.get(data.elementId)) {
-        editor.store.remove([data.elementId]);
-      }
-    } catch (error) {
-      console.error('Error deleting remote shape:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 0);
-    }
-  }, [editor]);
-
-  useEffect(() => {
-    socketClient.onElementCreated(handleElementCreated);
-    socketClient.onElementUpdated(handleElementUpdated);
-    socketClient.onElementDeleted(handleElementDeleted);
-
-    return () => {
-      socketClient.off('element:created');
-      socketClient.off('element:updated');
-      socketClient.off('element:deleted');
-    };
-  }, [handleElementCreated, handleElementUpdated, handleElementDeleted]);
 }

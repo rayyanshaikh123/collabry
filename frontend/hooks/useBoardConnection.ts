@@ -108,7 +108,7 @@ export function useBoardConnection({
               console.error('Failed to parse template shapes:', e);
             }
           } else {
-            setPendingElements(response.elements || []);
+            setPendingElements(response.board?.elements || response.elements || []);
           }
 
           // Load import payload from sessionStorage (mindmap/infographic)

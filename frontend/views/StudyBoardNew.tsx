@@ -56,7 +56,9 @@ interface CursorData {
 const CollaborativeBoard = () => {
   const params = useParams();
   const router = useRouter();
-  const boardId = Array.isArray(params.boardId) ? params.boardId[0] : params.boardId || null;
+  // Route is /study-board/[id], so the param key is 'id' (not 'boardId')
+  const rawId = params.id ?? params.boardId;
+  const boardId = Array.isArray(rawId) ? rawId[0] : rawId || null;
   
   const { user, accessToken } = useAuthStore();
 
@@ -107,110 +109,98 @@ const CollaborativeBoard = () => {
   }, [user]);
 
   const handleElementCreated = useCallback((data: any) => {
+    console.log('[handleElementCreated] FIRED. editor:', !!editor, 'data:', !!data, 'data.element:', !!data?.element, 'data.userId:', data?.userId, 'myId:', user?.id);
     if (!editor || !data?.element) return;
     if (user?.id === data.userId) return;
 
-    console.log('element:created received:', data);
     isApplyingRemoteChange.current = true;
-
     try {
-      const el = data.element;
-      
-      // Reconstruct assets for image shapes
-      if (el.type === 'image' && el.props?.assetId) {
-        let assetSrc = null;
-        
-        // Drive image
-        if (el.meta?.driveFileId) {
-          const { googleDriveService } = require('@/lib/googleDrive');
-          assetSrc = googleDriveService.getPublicUrl(el.meta.driveFileId);
-        }
-        // SVG data
-        else if (el.meta?.svgDataUri) {
-          assetSrc = el.meta.svgDataUri;
-        }
-        // Local image data
-        else if (el.meta?.imageData?.src) {
-          assetSrc = el.meta.imageData.src;
+      editor.store.mergeRemoteChanges(() => {
+        const el = data.element;
+
+        // Reconstruct assets for image shapes
+        if (el.type === 'image' && el.props?.assetId) {
+          let assetSrc = null;
+
+          if (el.meta?.driveFileId) {
+            const { googleDriveService } = require('@/lib/googleDrive');
+            assetSrc = googleDriveService.getPublicUrl(el.meta.driveFileId);
+          } else if (el.meta?.svgDataUri) {
+            assetSrc = el.meta.svgDataUri;
+          } else if (el.meta?.imageData?.src) {
+            assetSrc = el.meta.imageData.src;
+          }
+
+          if (assetSrc) {
+            editor.store.put([{
+              id: el.props.assetId,
+              type: 'image',
+              typeName: 'asset',
+              props: {
+                name: el.meta?.driveName || el.meta?.imageData?.name || 'image.png',
+                src: assetSrc,
+                w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
+                h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
+                mimeType: el.meta?.driveMimeType || el.meta?.imageData?.mimeType || el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png',
+                isAnimated: false,
+              },
+              meta: {},
+            }]);
+          }
         }
 
-        if (assetSrc) {
-          const asset: any = {
-            id: el.props.assetId,
-            type: 'image',
-            typeName: 'asset',
-            props: {
-              name: el.meta?.driveName || el.meta?.imageData?.name || 'image.png',
-              src: assetSrc,
-              w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
-              h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
-              mimeType: el.meta?.driveMimeType || el.meta?.imageData?.mimeType || el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png',
-              isAnimated: false,
-            },
-            meta: {},
-          };
-          editor.store.put([asset]);
-        }
-      }
+        const shape: any = {
+          id: el.id,
+          typeName: el.typeName || 'shape',
+          type: el.type,
+          x: el.x || 0,
+          y: el.y || 0,
+          props: el.props || {},
+          parentId: el.parentId || 'page:page',
+          index: el.index || 'a1',
+          rotation: el.rotation || 0,
+          isLocked: el.isLocked || false,
+          opacity: el.opacity || 1,
+          meta: el.meta || {},
+        };
 
-      const shape: any = {
-        id: el.id,
-        typeName: el.typeName || 'shape',
-        type: el.type,
-        x: el.x || 0,
-        y: el.y || 0,
-        props: el.props || {},
-        parentId: el.parentId || 'page:page',
-        index: el.index || 'a1',
-        rotation: el.rotation || 0,
-        isLocked: el.isLocked || false,
-        opacity: el.opacity || 1,
-        meta: el.meta || {},
-      };
-
-      editor.store.put([shape]);
-      console.log('Successfully added remote shape:', shape.id);
+        editor.store.put([shape]);
+      });
     } catch (error) {
       console.error('Error in handleElementCreated:', error);
     } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
+      isApplyingRemoteChange.current = false;
     }
   }, [editor, user]);
 
   const handleElementUpdated = useCallback((data: any) => {
-    if (!editor || !data?.element) return;
+    console.log('[handleElementUpdated] FIRED. editor:', !!editor, 'data keys:', data ? Object.keys(data) : 'null');
+    if (!editor) return;
+    // Backend sends { elementId, changes, userId } — NOT data.element
+    const elementId = data.elementId || data.element?.id;
+    const changes = data.changes || data.changeSet || data.element;
+    if (!elementId || !changes) return;
     if (user?.id === data.userId) return;
 
-    console.log('element:updated received:', data);
     isApplyingRemoteChange.current = true;
-
     try {
-      const el = data.element;
-      const existingShape = editor.store.get(el.id) as any;
-      if (!existingShape) {
-        console.warn('Shape not found for update:', el.id);
-        return;
-      }
+      editor.store.mergeRemoteChanges(() => {
+        const existingShape = editor.store.get(elementId) as any;
+        if (!existingShape) return;
 
-      const updatedShape = {
-        ...existingShape,
-        x: el.x ?? existingShape.x,
-        y: el.y ?? existingShape.y,
-        props: { ...existingShape.props, ...el.props },
-        rotation: el.rotation ?? existingShape.rotation,
-        opacity: el.opacity ?? existingShape.opacity,
-        meta: { ...existingShape.meta, ...el.meta },
-      };
+        const updatedShape = {
+          ...existingShape,
+          ...changes,
+          props: { ...existingShape.props, ...(changes.props || {}) },
+          meta: { ...existingShape.meta, ...(changes.meta || {}) },
+        };
 
-      editor.store.put([updatedShape]);
+        editor.store.put([updatedShape]);
+      });
     } catch (error) {
       console.error('Error in handleElementUpdated:', error);
     } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
+      isApplyingRemoteChange.current = false;
     }
   }, [editor, user]);
 
@@ -218,17 +208,15 @@ const CollaborativeBoard = () => {
     if (!editor || !data?.elementId) return;
     if (user?.id === data.userId) return;
 
-    console.log('element:deleted received:', data);
     isApplyingRemoteChange.current = true;
-
     try {
-      editor.store.remove([data.elementId]);
+      editor.store.mergeRemoteChanges(() => {
+        editor.store.remove([data.elementId]);
+      });
     } catch (error) {
       console.error('Error in handleElementDeleted:', error);
     } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
+      isApplyingRemoteChange.current = false;
     }
   }, [editor, user]);
 

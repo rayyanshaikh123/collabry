@@ -15,9 +15,9 @@ export const ParticipantAvatar = memo<ParticipantAvatarProps>(({ participant, in
     key={`${participant.userId}-${index}`}
     className="w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white font-black text-xs shadow-md"
     style={{ backgroundColor: participant.color }}
-    title={participant.name}
+    title={participant.name || participant.email || 'User'}
   >
-    {participant.name.charAt(0).toUpperCase()}
+    {(participant.name || participant.email || 'U').charAt(0).toUpperCase()}
   </div>
 ));
 ParticipantAvatar.displayName = 'ParticipantAvatar';

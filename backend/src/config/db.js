@@ -1,5 +1,12 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
 const config = require('./env');
+
+// Fix for Node.js c-ares DNS resolver failing SRV lookups on some machines.
+// The OS resolves fine, but Node's internal resolver (c-ares) may refuse
+// connections to the local router DNS for SRV queries.
+// Using public DNS servers (Google + Cloudflare) as fallback.
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 const connectDB = async () => {
   const maxRetries = 5;
