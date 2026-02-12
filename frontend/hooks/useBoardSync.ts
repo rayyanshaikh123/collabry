@@ -1,22 +1,13 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { socketClient } from '@/lib/socket';
-import { googleDriveService } from '@/lib/googleDrive';
-
+import { sanitizeShape } from './useBoardShapes';
 
 interface TLEditor {
   store: {
-    get: (id: string) => unknown;
-    put: (records: unknown[]) => void;
+    get: (id: string) => any;
+    put: (records: any[]) => void;
     remove: (ids: string[]) => void;
-    listen: (callback: (event: TLStoreEvent) => void) => () => void;
-  };
-}
-
-interface TLStoreEvent {
-  changes: {
-    added: Record<string, unknown>;
-    updated: Record<string, [unknown, unknown]>;
-    removed: Record<string, unknown>;
+    listen: (callback: (event: any) => void) => () => void;
   };
 }
 
@@ -29,7 +20,7 @@ interface UseBoardSyncProps {
   drawingShapeIdRef: React.MutableRefObject<string | null>;
 }
 
-function debounce<T extends (...args: never[]) => unknown>(func: T, wait: number) {
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number) {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);
@@ -37,26 +28,31 @@ function debounce<T extends (...args: never[]) => unknown>(func: T, wait: number
   };
 }
 
-export function useBoardSync({ 
-  editor, 
-  boardId, 
+/**
+ * Hook for synchronizing tldraw store changes with the backend via Socket.IO.
+ * Handles both outgoing changes (local -> server) and incoming changes (server -> local).
+ */
+export function useBoardSync({
+  editor,
+  boardId,
   isConnected,
   isApplyingRemoteChange,
   isDrawingRef,
-  drawingShapeIdRef 
+  drawingShapeIdRef
 }: UseBoardSyncProps) {
 
+  // Outgoing sync handlers
   const debouncedUpdateElement = useMemo(
     () => debounce((boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
       socketClient.updateElement(boardId, elementId, changeSet);
-    }, 100),
+    }, 150),
     []
   );
 
   const throttledDrawUpdate = useMemo(() => {
     let lastCall = 0;
-    const throttleMs = 50;
-    
+    const throttleMs = 40;
+
     return (boardId: string, elementId: string, changeSet: Record<string, unknown>) => {
       const now = Date.now();
       if (now - lastCall >= throttleMs) {
@@ -66,81 +62,49 @@ export function useBoardSync({
     };
   }, []);
 
+  // Handle local store changes
   useEffect(() => {
     if (!editor || !boardId || !isConnected) return;
 
     const handleStoreChange = (event: any) => {
+      // Prevent loop when applying remote changes
       if (isApplyingRemoteChange.current) return;
-      
-      const changes = event?.changes;
-      if (!changes) return;
 
-      const { added, updated, removed } = changes;
-      
-      const hasShapeChanges = 
-        (added && Object.values(added).some((r: unknown) => (r as { typeName?: string })?.typeName === 'shape')) ||
-        (updated && Object.values(updated).some((r: unknown) => Array.isArray(r) && (r[1] as { typeName?: string })?.typeName === 'shape')) ||
-        (removed && Object.values(removed).some((r: unknown) => (r as { typeName?: string })?.typeName === 'shape'));
-      
+      const { added, updated, removed } = event?.changes || {};
+
+      // Filter for shape changes only (tldraw uses types like 'shape', 'page', 'instance')
+      const hasShapeChanges =
+        (added && Object.values(added).some((r: any) => r?.typeName === 'shape')) ||
+        (updated && Object.values(updated).some((r: any) => r[1]?.typeName === 'shape')) ||
+        (removed && Object.values(removed).some((r: any) => r?.typeName === 'shape'));
+
       if (!hasShapeChanges) return;
 
+      // 1. Process New shapes
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            console.log('Outgoing: created shape', record.id);
+
+            // Handle image asset metadata optimization
             let meta = record.meta || {};
-            
-            if (record.type === 'image' && record.props?.assetId && !meta.driveFileId && !meta.imageData) {
-              const asset = editor?.store.get(record.props.assetId) as any;
+            if (record.type === 'image' && record.props?.assetId && !meta.imageData) {
+              const asset = editor.store.get(record.props.assetId);
               if (asset?.props?.src) {
-                
-                (async () => {
-                  try {
-                    const isAuth = googleDriveService.isAuthenticated();
-                    if (!isAuth) {
-                      const granted = await googleDriveService.requestAccess();
-                      if (!granted) {
-                        console.warn('Google Drive access denied, storing locally');
-                        throw new Error('Drive access denied');
-                      }
-                    }
-                    
-                    const filename = asset.props.name || `image-${Date.now()}.png`;
-                    const driveFile = await googleDriveService.uploadImage(
-                      asset.props.src,
-                      filename,
-                      asset.props.mimeType || 'image/png'
-                    );
-                    
-                    const updatedMeta = {
-                      ...record.meta,
-                      driveFileId: driveFile.id,
-                      driveMimeType: asset.props.mimeType,
-                      driveName: filename,
-                      w: asset.props.w,
-                      h: asset.props.h,
-                    };
-                    
-                    editor?.store.put([{ ...record, meta: updatedMeta }]);
-                  } catch (driveError) {
-                    console.error('Drive upload failed, falling back to local storage:', driveError);
-                    
-                    const fallbackMeta = {
-                      ...record.meta,
-                      imageData: {
-                        src: asset.props.src,
-                        w: asset.props.w,
-                        h: asset.props.h,
-                        mimeType: asset.props.mimeType,
-                        name: asset.props.name,
-                      }
-                    };
-                    
-                    editor?.store.put([{ ...record, meta: fallbackMeta }]);
+                meta = {
+                  ...meta,
+                  imageData: {
+                    src: asset.props.src,
+                    name: asset.props.name || 'image.png',
+                    w: asset.props.w,
+                    h: asset.props.h,
+                    mimeType: asset.props.mimeType
                   }
-                })();
+                };
               }
             }
-            
+
+            // For draw shapes, we track drawing state
             if (record.type === 'draw') {
               isDrawingRef.current = true;
               drawingShapeIdRef.current = record.id;
@@ -161,45 +125,23 @@ export function useBoardSync({
               });
               return;
             }
-            
+
             socketClient.createElement(boardId, {
-              id: record.id,
-              type: record.type,
-              typeName: record.typeName || 'shape',
-              x: record.x || 0,
-              y: record.y || 0,
-              props: record.props || {},
-              parentId: record.parentId || 'page:page',
-              index: record.index || 'a1',
-              rotation: record.rotation || 0,
-              isLocked: record.isLocked || false,
-              opacity: record.opacity || 1,
-              meta: meta,
+              ...record,
+              meta // Include reconstructed meta
             });
           }
         });
       }
 
+      // 2. Process Updated shapes
       if (updated) {
         Object.values(updated).forEach(([from, to]: any) => {
           if (to?.typeName === 'shape') {
+            // Specialized handling for high-frequency draw shapes
             if (to.type === 'draw') {
-              const fullShapeData: any = {
-                x: to.x || 0,
-                y: to.y || 0,
-                rotation: to.rotation || 0,
-                opacity: to.opacity || 1,
-                isLocked: to.isLocked || false,
-                props: to.props || {},
-                type: to.type,
-                typeName: to.typeName || 'shape',
-                parentId: to.parentId || 'page:page',
-                index: to.index || 'a1',
-                meta: to.meta || {}
-              };
-              
-              throttledDrawUpdate(boardId, to.id, fullShapeData);
-              
+              throttledDrawUpdate(boardId, to.id, to); // Send full shape for simplicity with drawn paths
+
               const toProps = to.props as { isComplete?: boolean };
               if (toProps?.isComplete) {
                 isDrawingRef.current = false;
@@ -207,17 +149,16 @@ export function useBoardSync({
               }
               return;
             }
-            
+
+            // Shallow diff for other shapes
             const changeSet: any = {};
-            if (from.x !== to.x) changeSet.x = to.x;
-            if (from.y !== to.y) changeSet.y = to.y;
-            if (from.rotation !== to.rotation) changeSet.rotation = to.rotation;
-            if (from.opacity !== to.opacity) changeSet.opacity = to.opacity;
-            if (from.isLocked !== to.isLocked) changeSet.isLocked = to.isLocked;
-            if (from.type !== to.type) changeSet.type = to.type;
-            if (from.typeName !== to.typeName) changeSet.typeName = to.typeName;
-            if (JSON.stringify(from.props) !== JSON.stringify(to.props)) changeSet.props = to.props;
-            
+            const keys = ['x', 'y', 'rotation', 'opacity', 'isLocked', 'parentId', 'index', 'props', 'meta'];
+            keys.forEach(key => {
+              if (JSON.stringify(from[key]) !== JSON.stringify(to[key])) {
+                changeSet[key] = to[key];
+              }
+            });
+
             if (Object.keys(changeSet).length > 0) {
               debouncedUpdateElement(boardId, to.id, changeSet);
             }
@@ -225,36 +166,129 @@ export function useBoardSync({
         });
       }
 
+      // 3. Process Removed shapes
       if (removed) {
         Object.values(removed).forEach((record: any) => {
           if (record?.typeName === 'shape') {
+            console.log('Outgoing: deleted shape', record.id);
             socketClient.deleteElement(boardId, record.id);
           }
         });
       }
     };
 
-    const dispose = editor.store.listen(handleStoreChange, { source: 'user', scope: 'document' });
-
+    const dispose = editor.store.listen(handleStoreChange);
     return () => dispose();
-  }, [editor, boardId, isConnected, debouncedUpdateElement, throttledDrawUpdate]);
+  }, [editor, boardId, isConnected, debouncedUpdateElement, throttledDrawUpdate, isApplyingRemoteChange, isDrawingRef, drawingShapeIdRef]);
 
+
+  // Incoming sync handlers (Remote -> Local)
+  const handleElementCreated = useCallback((data: any) => {
+    if (!editor || !data?.element) return;
+
+    // Prevent applying our own changes
+    const existing = editor.store.get(data.element.id);
+    if (existing) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      const el = data.element;
+      console.log('Incoming: created remote shape', el.id);
+
+      // Reconstruct image assets if necessary
+      if (el.type === 'image' && el.props?.assetId) {
+        let assetSrc = el.meta?.svgDataUri || el.meta?.imageData?.src;
+        if (assetSrc) {
+          editor.store.put([{
+            id: el.props.assetId,
+            type: 'image',
+            typeName: 'asset',
+            props: {
+              name: el.meta?.imageData?.name || 'image.png',
+              src: assetSrc,
+              w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
+              h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
+              mimeType: el.meta?.imageData?.mimeType || (el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png'),
+              isAnimated: false,
+            },
+            meta: {},
+          }]);
+        }
+      }
+
+      editor.store.put([sanitizeShape(el)]);
+    } catch (error) {
+      console.error('Error applying remote element:', error);
+    } finally {
+      setTimeout(() => { isApplyingRemoteChange.current = false; }, 40);
+    }
+  }, [editor, isApplyingRemoteChange]);
+
+  const handleElementUpdated = useCallback((data: any) => {
+    if (!editor || !data?.elementId) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      const existing = editor.store.get(data.elementId);
+      if (!existing) {
+        // If it doesn't exist yet, we can't update it. 
+        // Note: Real-time systems usually handle this by fetching if missing.
+        return;
+      }
+
+      console.log('Incoming: updated remote shape', data.elementId);
+      const updates = data.changes || {};
+      editor.store.put([{
+        ...existing,
+        ...updates
+      }]);
+    } catch (error) {
+      console.error('Error applying remote update:', error);
+    } finally {
+      setTimeout(() => { isApplyingRemoteChange.current = false; }, 40);
+    }
+  }, [editor, isApplyingRemoteChange]);
+
+  const handleElementDeleted = useCallback((data: any) => {
+    if (!editor || !data?.elementId) return;
+
+    isApplyingRemoteChange.current = true;
+    try {
+      console.log('Incoming: deleted remote shape', data.elementId);
+      if (editor.store.get(data.elementId)) {
+        editor.store.remove([data.elementId]);
+      }
+    } catch (error) {
+      console.error('Error applying remote deletion:', error);
+    } finally {
+      setTimeout(() => { isApplyingRemoteChange.current = false; }, 40);
+    }
+  }, [editor, isApplyingRemoteChange]);
+
+  // Setup socket listeners
   useEffect(() => {
-    if (!editor || !boardId || !isConnected) return;
+    if (!isConnected) return;
 
-    const handlePointerUp = () => {
-      if (isDrawingRef.current && drawingShapeIdRef.current) {
+    socketClient.onElementCreated(handleElementCreated);
+    socketClient.onElementUpdated(handleElementUpdated);
+    socketClient.onElementDeleted(handleElementDeleted);
+
+    return () => {
+      socketClient.off('element:created');
+      socketClient.off('element:updated');
+      socketClient.off('element:deleted');
+    };
+  }, [isConnected, handleElementCreated, handleElementUpdated, handleElementDeleted]);
+
+  // Drawing state cleanup
+  useEffect(() => {
+    const handleUp = () => {
+      if (isDrawingRef.current) {
         isDrawingRef.current = false;
         drawingShapeIdRef.current = null;
       }
     };
-
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('mouseup', handlePointerUp);
-
-    return () => {
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('mouseup', handlePointerUp);
-    };
-  }, [editor, boardId, isConnected]);
+    window.addEventListener('pointerup', handleUp);
+    return () => window.removeEventListener('pointerup', handleUp);
+  }, [isDrawingRef, drawingShapeIdRef]);
 }

@@ -11,9 +11,9 @@ interface ParticipantAvatarProps {
 }
 
 export const ParticipantAvatar = memo<ParticipantAvatarProps>(({ participant, index }) => (
-  <div 
+  <div
     key={`${participant.userId}-${index}`}
-    className="w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white font-black text-xs shadow-md"
+    className="w-10 h-10 rounded-2xl border-4 border-white dark:border-slate-900 flex items-center justify-center text-white font-black text-xs shadow-md"
     style={{ backgroundColor: participant.color }}
     title={participant.name || participant.email || 'User'}
   >
@@ -43,11 +43,11 @@ export function BoardHeader({
   const participantCount = participants.length;
 
   return (
-    <div className="bg-white/80 backdrop-blur-md border-b-2 border-slate-100 px-8 py-4 flex items-center justify-between z-20">
+    <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b-2 border-slate-100 dark:border-slate-800 px-8 py-4 flex items-center justify-between z-20">
       <div className="flex items-center gap-5">
-        <Button 
-          variant="secondary" 
-          size="icon" 
+        <Button
+          variant="secondary"
+          size="icon"
           className="rounded-2xl h-10 w-10 border-b-2"
           onClick={onBack}
         >
@@ -56,17 +56,17 @@ export function BoardHeader({
           </svg>
         </Button>
         <div>
-          <h2 className="text-xl font-black text-slate-800 flex items-center gap-3">
+          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-3">
             {boardTitle || 'Untitled Board'}
             {isConnected && (
-              <div className="flex items-center bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider animate-pulse">
+              <div className="flex items-center bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider animate-pulse">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></span>
                 Live Session
               </div>
             )}
           </h2>
           <p className="text-xs text-slate-400 font-bold uppercase tracking-tight">
-            {participantCount > 0 
+            {participantCount > 0
               ? `${participantCount} other${participantCount > 1 ? 's' : ''} studying here`
               : 'You are alone in this board'}
           </p>
@@ -79,19 +79,19 @@ export function BoardHeader({
             <ParticipantAvatar key={p.userId} participant={p} index={i} />
           ))}
           {participantCount > 3 && (
-            <div className="w-10 h-10 rounded-2xl border-4 border-white bg-indigo-500 text-[11px] font-black text-white flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 rounded-2xl border-4 border-white dark:border-slate-900 bg-indigo-500 text-[11px] font-black text-white flex items-center justify-center shadow-md">
               +{participantCount - 3}
             </div>
           )}
         </div>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="gap-2 px-6"
           onClick={onInvite}
         >
           <ICONS.Share size={18} /> Invite
         </Button>
-        <Button 
+        <Button
           variant="secondary"
           size="icon"
           className="rounded-2xl h-10 w-10"

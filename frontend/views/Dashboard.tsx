@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card } from '../components/UIElements';
+import { Card, LoadingPage } from '../components/UIElements';
 import { AppRoute } from '@/types';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { gamificationService, GamificationStats, LeaderboardEntry } from '@/lib/services/gamification.service';
@@ -20,7 +20,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { user } = useAuthStore();
-  
+
   // State management
   const [gamificationStats, setGamificationStats] = useState<GamificationStats | null>(null);
   const [personalProgress, setPersonalProgress] = useState<any>(null);
@@ -75,6 +75,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     };
   }, []);
 
+  if (loading) {
+    return <LoadingPage />;
+  }
+
   const getColorForPlan = (index: number) => {
     const colors = [
       'bg-indigo-500',
@@ -86,12 +90,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     ];
     return colors[index % colors.length];
   };
-  
+
   return (
-    <div className="space-y-8 pb-10 text-slate-800 dark:text-slate-200">
+    <div className="space-y-8 pb-10 text-slate-800 dark:text-slate-200 animate-in fade-in duration-700">
       {/* Hero / Profile Stats */}
-      <DashboardHero 
-        user={user} 
+      <DashboardHero
+        user={user}
         gamificationStats={gamificationStats}
         onNavigate={onNavigate}
       />
@@ -152,9 +156,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
                 Your progress compared to last week
               </p>
-              <PersonalProgress 
-                currentStats={personalProgress.current} 
-                previousStats={personalProgress.previous} 
+              <PersonalProgress
+                currentStats={personalProgress.current}
+                previousStats={personalProgress.previous}
               />
             </Card>
           )}

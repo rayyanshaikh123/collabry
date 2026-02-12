@@ -84,7 +84,7 @@ class ConversationManager:
             limit: Maximum number of messages to retrieve (most recent)
         
         Returns:
-            List of message dicts: [{role: "user"|"assistant", content: str}, ...]
+            List of message dicts: [{role, content, sender_id?, sender_name?}, ...]
         """
         conversation = self.conversations.find_one({
             "user_id": user_id,
@@ -100,11 +100,16 @@ class ConversationManager:
         if limit and len(messages) > limit:
             messages = messages[-limit:]
         
-        # Return in LangChain format
-        return [
-            {"role": msg["role"], "content": msg["content"]}
-            for msg in messages
-        ]
+        # Return in LangChain format with optional sender attribution
+        result = []
+        for msg in messages:
+            entry = {"role": msg["role"], "content": msg["content"]}
+            if "sender_id" in msg:
+                entry["sender_id"] = msg["sender_id"]
+            if "sender_name" in msg:
+                entry["sender_name"] = msg["sender_name"]
+            result.append(entry)
+        return result
     
     def save_turn(
         self,
@@ -113,7 +118,9 @@ class ConversationManager:
         user_message: str,
         assistant_message: str,
         notebook_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        sender_id: Optional[str] = None,
+        sender_name: Optional[str] = None
     ):
         """
         Save a conversation turn (user message + assistant response).
@@ -125,23 +132,28 @@ class ConversationManager:
             assistant_message: Assistant's response
             notebook_id: Optional notebook context
             metadata: Optional metadata (tool_calls, sources, etc.)
+            sender_id: Optional sender user ID (for collaborative sessions)
+            sender_name: Optional sender display name (for collaborative sessions)
         """
         now = datetime.utcnow()
         
-        # Create turn messages
-        turn_messages = [
-            {
-                "role": "user",
-                "content": user_message,
-                "timestamp": now
-            },
-            {
-                "role": "assistant",
-                "content": assistant_message,
-                "timestamp": now,
-                "metadata": metadata or {}
-            }
-        ]
+        # Create turn messages with optional sender attribution
+        user_msg = {
+            "role": "user",
+            "content": user_message,
+            "timestamp": now,
+            "sender_id": sender_id or user_id,
+            "sender_name": sender_name or "Unknown",
+        }
+        
+        assistant_msg = {
+            "role": "assistant",
+            "content": assistant_message,
+            "timestamp": now,
+            "metadata": metadata or {}
+        }
+        
+        turn_messages = [user_msg, assistant_msg]
         
         # Upsert conversation document
         self.conversations.update_one(

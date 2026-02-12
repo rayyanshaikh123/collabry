@@ -24,25 +24,26 @@ const notificationSchema = new mongoose.Schema(
         'streak_milestone',
         'streak_at_risk',
         'plan_completed',
-        
+
         // Study Board
         'board_invitation',
         'board_member_joined',
         'board_updated',
         'board_comment',
-        
+
         // Study Notebook/AI
         'document_processed',
         'quiz_generated',
         'mindmap_generated',
         'ai_session_complete',
-        
+        'notebook_invite',
+
         // Reports/Admin
         'report_submitted',
         'report_resolved',
         'content_flagged',
         'user_suspended',
-        
+
         // General
         'welcome',
         'daily_motivation',
@@ -152,7 +153,7 @@ notificationSchema.statics.markAllAsRead = async function (userId) {
 notificationSchema.statics.deleteOldNotifications = async function (userId, daysOld = 30) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-  
+
   return this.deleteMany({
     userId,
     isRead: true,

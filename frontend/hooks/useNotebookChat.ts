@@ -11,6 +11,11 @@ interface UseNotebookChatProps {
   setIsChatLoading: (value: boolean) => void;
   clearSessionMessages: any; // React Query mutation
   sourceIds?: string[];
+  senderName?: string;
+  isCollaborative?: boolean;
+  onToken?: (token: string, messageId: string) => void;
+  onComplete?: (message: string, messageId: string) => void;
+  onMessageSent?: (message: ChatMessage) => void;
 }
 
 export function useNotebookChat({
@@ -22,6 +27,11 @@ export function useNotebookChat({
   setIsChatLoading,
   clearSessionMessages,
   sourceIds,
+  senderName,
+  isCollaborative,
+  onToken,
+  onComplete,
+  onMessageSent,
 }: UseNotebookChatProps) {
   const chatAbortRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -58,7 +68,15 @@ export function useNotebookChat({
       const loadingId = `assistant-${Date.now()}`;
 
       if (includeUserMessage && userMsgId) {
-        setLocalMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: userText, timestamp: new Date().toISOString() }]);
+        const newMessage: ChatMessage = {
+          id: userMsgId,
+          role: 'user',
+          content: userText,
+          timestamp: new Date().toISOString(),
+          senderName
+        };
+        setLocalMessages((prev) => [...prev, newMessage]);
+        if (onMessageSent) onMessageSent(newMessage);
       }
 
       setLocalMessages((prev) => [...prev, { id: loadingId, role: 'assistant', content: '', isLoading: true, timestamp: new Date().toISOString() }]);
@@ -100,6 +118,8 @@ export function useNotebookChat({
             session_id: sessionId,
             notebook_id: notebookId,
             source_ids: sourceIds,
+            sender_name: senderName,
+            is_collaborative: isCollaborative,
             // Best-effort: enable retrieval when available; backend can ignore if unsupported.
             use_rag: true,
           }),
@@ -211,6 +231,7 @@ export function useNotebookChat({
             if (appended) {
               fullResponse += appended;
               scheduleRender();
+              if (onToken) onToken(appended, loadingId);
             }
           }
 
@@ -218,6 +239,7 @@ export function useNotebookChat({
         }
 
         scheduleRender();
+        if (onComplete) onComplete(fullResponse, loadingId);
         setIsStreaming(false);
         setIsChatLoading(false);
 
@@ -322,5 +344,6 @@ export function useNotebookChat({
     handleEditPrompt,
     handleClearChat,
     handleRegenerateResponse,
+    setLocalMessages,
   };
 }

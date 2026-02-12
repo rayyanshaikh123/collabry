@@ -8,6 +8,8 @@ import 'tldraw/tldraw.css';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
+import { ICONS } from '@/constants';
+import { LoadingPage } from '@/components/UIElements';
 import type { BoardParticipant } from '@/types/studyBoard.types';
 import type { StudyBoard } from '@/types';
 
@@ -69,7 +71,7 @@ const CollaborativeBoard = () => {
   const [participants, setParticipants] = useState<ParticipantData[]>([]);
   const [cursors, setCursors] = useState<Record<string, CursorData>>({});
   const [pendingElements, setPendingElements] = useState<any[]>([]);
-  
+
   // Modals
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -84,7 +86,33 @@ const CollaborativeBoard = () => {
   // Editor mount handler
   const handleMount = useCallback((mountedEditor: Editor) => {
     setEditor(mountedEditor);
+    mountedEditor.updateInstanceState({ isGridMode: true });
   }, []);
+
+  // Sync theme changes with tldraw
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      // tldraw's internal preference for theme
+      editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+    };
+
+    // Initial sync
+    syncTheme();
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          syncTheme();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, [editor]);
 
   // Socket event handlers
   const handleUserJoined = useCallback((data: any) => {
@@ -272,14 +300,14 @@ const CollaborativeBoard = () => {
     setPendingElements,
     isApplyingRemoteChange,
     importPayloadRef,
-    importAppliedRef,
-    handleElementCreated,
-    handleElementUpdated,
-    handleElementDeleted
+    importAppliedRef
   });
 
+  // Memoized participant list
+  const visibleParticipants = useMemo(() => participants.slice(0, 3), [participants]);
+
   // Convert ParticipantData to BoardParticipant format
-  const boardParticipants: BoardParticipant[] = useMemo(() => 
+  const boardParticipants: BoardParticipant[] = useMemo(() =>
     participants.map(p => ({
       userId: p.userId,
       userName: p.userName || p.name,
@@ -293,22 +321,17 @@ const CollaborativeBoard = () => {
     [participants]
   );
 
+  const visibleBoardParticipants = useMemo(() => boardParticipants.slice(0, 3), [boardParticipants]);
+
   if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading board...</p>
-        </div>
-      </div>
-    );
+    return <LoadingPage />;
   }
 
   if (!boardId) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
+      <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">No board selected</p>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">No board selected</p>
           <Button onClick={() => router.push('/study-board')}>
             Back to Boards
           </Button>
@@ -318,7 +341,7 @@ const CollaborativeBoard = () => {
   }
 
   return (
-    <div className="h-full flex flex-col relative bg-slate-50 overflow-hidden -m-4 md:-m-8">
+    <div className="h-full flex flex-col relative bg-slate-50 dark:bg-slate-950 overflow-hidden -m-4 md:-m-8">
       {/* Board Header */}
       <BoardHeader
         boardTitle={currentBoard?.title}
@@ -332,13 +355,13 @@ const CollaborativeBoard = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
         {/* tldraw Canvas */}
-        <div className="flex-1 relative p-0 whiteboard-grid">
-          <Tldraw 
+        <div className="flex-1 relative p-0 overflow-hidden">
+          <Tldraw
             store={store}
             autoFocus
             onMount={handleMount}
           />
-          
+
           {/* Live Cursors Overlay */}
           <LiveCursors cursors={cursors} participants={boardParticipants} />
         </div>

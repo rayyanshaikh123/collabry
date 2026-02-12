@@ -61,13 +61,6 @@ export function useBoardConnection({
           // joinBoard will wait for the connect event
         }
 
-        // Initialize Google Drive
-        try {
-          await googleDriveService.initialize();
-        } catch (error) {
-          // Google Drive is optional — continue without it
-        }
-
         // Set join timeout
         joinTimeoutId = setTimeout(() => {
           if (!isMounted) return;
@@ -119,7 +112,7 @@ export function useBoardConnection({
           setParticipants(
             (response.participants || []).filter((p: any) => p.userId !== user.id)
           );
-          
+
           setIsConnected(true);
           setIsLoading(false);
         });
@@ -141,7 +134,7 @@ export function useBoardConnection({
 
     return () => {
       isMounted = false;
-      
+
       if (joinTimeoutId) {
         clearTimeout(joinTimeoutId);
       }
@@ -153,7 +146,7 @@ export function useBoardConnection({
           console.error('Error leaving board:', error);
         }
       }
-      
+
       socketClient.off('user:joined', handleUserJoined);
       socketClient.off('user:left', handleUserLeft);
       socketClient.off('cursor:moved', handleCursorMove);

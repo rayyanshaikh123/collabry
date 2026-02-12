@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Trash2, RotateCcw, AlertTriangle, BookOpen, PenTool, Clock, Search, Loader2, XCircle } from 'lucide-react';
 import recycleBinService, { RecycleBinItem } from '@/lib/services/recycleBin.service';
+import { LoadingPage, LoadingOverlay } from '../components/UIElements';
 
 type FilterTab = 'all' | 'notebook' | 'board';
 
@@ -92,7 +93,9 @@ export default function RecycleBin() {
         .filter(i => !search || i.title.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <div className="p-4 md:p-0 max-w-6xl mx-auto space-y-6">
+        <div className="p-4 md:p-0 max-w-6xl mx-auto space-y-6 relative">
+            {loading && <LoadingPage />}
+            {actionLoading && <LoadingOverlay message={actionLoading === 'empty' ? 'Emptying bin...' : 'Processing...'} />}
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -198,13 +201,6 @@ export default function RecycleBin() {
                 </div>
             )}
 
-            {/* ── Loading ────────────────────────────────────────────────────── */}
-            {loading && (
-                <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
-                    <p className="text-sm font-bold text-slate-400 dark:text-slate-500">Loading recycle bin...</p>
-                </div>
-            )}
 
             {/* ── Empty State ────────────────────────────────────────────────── */}
             {!loading && filtered.length === 0 && (

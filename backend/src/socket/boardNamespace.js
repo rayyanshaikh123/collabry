@@ -58,7 +58,7 @@ module.exports = (io) => {
   // Authentication middleware for board namespace
   boardNamespace.use((socket, next) => {
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
-    
+
     if (!token) {
       return next(new Error('Authentication required'));
     }
@@ -80,14 +80,16 @@ module.exports = (io) => {
      * Join a board room
      */
     socket.on('board:join', async ({ boardId }, callback) => {
+      console.log(`📡 Join request received from ${socket.userEmail} for board: ${boardId}`);
       try {
         if (!isValidMongoId(boardId)) {
           if (typeof callback === 'function') return callback({ error: 'Invalid board ID' });
           return;
         }
         // Verify user has access to this board
-        const board = await Board.findById(boardId);
-        
+        // PERFORMANCE: Use .lean() for faster retrieval and plain JS object
+        const board = await Board.findById(boardId).lean();
+
         if (!board) {
           if (typeof callback === 'function') {
             return callback({ error: 'Board not found' });
@@ -96,8 +98,8 @@ module.exports = (io) => {
         }
 
         // Check if user is a member or owner
-        const isMember = board.owner.toString() === socket.userId || 
-                        board.members.some(m => m.userId.toString() === socket.userId);
+        const isMember = board.owner.toString() === socket.userId ||
+          board.members.some(m => m.userId.toString() === socket.userId);
 
         if (!isMember && !board.isPublic) {
           if (typeof callback === 'function') {
@@ -145,8 +147,11 @@ module.exports = (io) => {
         });
 
         // Send current board state and participants to the joining user
+        const originalElementCount = board.elements?.length || 0;
+        console.log(`[Board ${boardId}] Sending board data with ${originalElementCount} elements to ${socket.userEmail}`);
+
         // Clean board elements before sending (remove Mongoose fields, ensure required tldraw fields)
-        const cleanElements = board.elements.map(el => ({
+        const cleanElements = (board.elements || []).map(el => ({
           id: el.id,
           type: el.type,
           typeName: el.typeName || 'shape',
@@ -159,15 +164,18 @@ module.exports = (io) => {
           meta: el.meta || {},
           parentId: el.parentId || 'page:page',
           index: el.index || 'a1'
-        })).filter(el => el.type); // Filter out elements without type
+        })).filter(el => el.type);
+
+        console.log(`[Board ${boardId}] Sending ${cleanElements.length} cleaned elements (Payload optimized)`);
+
+        // PERFORMANCE: Create a lean board object WITHOUT the duplicate elements array
+        const { elements: _, ...leanBoard } = board;
 
         if (typeof callback === 'function') {
-          callback({ 
+          callback({
             success: true,
-            board: {
-              ...board.toObject(),
-              elements: cleanElements
-            },
+            board: leanBoard,
+            elements: cleanElements,
             participants: participants.map(p => ({
               userId: p.userId,
               email: p.email,
@@ -177,6 +185,7 @@ module.exports = (io) => {
           });
         }
 
+        console.log(`✅ ${socket.userEmail} joined board: ${boardId} (Final payload sent)`);
       } catch (error) {
         console.error('Error joining board:', error.message);
         if (typeof callback === 'function') {
@@ -211,7 +220,7 @@ module.exports = (io) => {
         const board = await Board.findById(boardId);
         if (!board) {
           if (callback && typeof callback === 'function') {
-            return callback({ error: 'Board not found' });
+            return callback({ error: 'Failed to confirm element save' });
           }
           return;
         }
@@ -231,18 +240,18 @@ module.exports = (io) => {
 
         // Clean element for tldraw - remove Mongoose fields
         const cleanElement = {
-          id: newElement.id,
-          type: newElement.type,
-          x: newElement.x,
-          y: newElement.y,
-          rotation: newElement.rotation,
-          isLocked: newElement.isLocked,
-          opacity: newElement.opacity,
-          props: newElement.props,
-          meta: newElement.meta,
-          parentId: newElement.parentId,
-          index: newElement.index,
-          typeName: newElement.typeName || 'shape'
+          id: savedElement.id,
+          type: savedElement.type,
+          x: savedElement.x,
+          y: savedElement.y,
+          rotation: savedElement.rotation,
+          isLocked: savedElement.isLocked,
+          opacity: savedElement.opacity,
+          props: savedElement.props,
+          meta: savedElement.meta,
+          parentId: savedElement.parentId,
+          index: savedElement.index,
+          typeName: savedElement.typeName || 'shape'
         };
 
         // Broadcast to all users in the room except sender
@@ -280,21 +289,11 @@ module.exports = (io) => {
         }
         // Use findOneAndUpdate with upsert for atomic operation
         const board = await Board.findOneAndUpdate(
-          { 
-            _id: boardId,
-            'elements.id': elementId 
-          },
           {
-            $set: {
-              'elements.$.id': elementId,
-              ...Object.keys(changes).reduce((acc, key) => {
-                acc[`elements.$.${key}`] = changes[key];
-                return acc;
-              }, {}),
-              'elements.$.updatedAt': new Date(),
-              updatedAt: new Date()
-            }
+            _id: boardId,
+            'elements.id': elementId
           },
+          { $set: updateObj },
           { new: true }
         );
 
@@ -303,9 +302,10 @@ module.exports = (io) => {
 
         // If element wasn't found (no update happened), create it
         if (!board) {
+          console.log(`[Board ${boardId}] Element ${elementId} not found for update, attempting push as new`);
           // Element doesn't exist, so add it - use $addToSet pattern to prevent duplicates
           const updatedBoard = await Board.findOneAndUpdate(
-            { 
+            {
               _id: boardId,
               'elements.id': { $ne: elementId }  // Only push if element doesn't exist
             },
@@ -326,26 +326,18 @@ module.exports = (io) => {
 
           if (!updatedBoard) {
             // Either board doesn't exist OR element was already added by another request
-            // Try to update it instead
+            // If it was already added, it might have been an update that just missed the first check
             const retryBoard = await Board.findOneAndUpdate(
-              { 
-                _id: boardId,
-                'elements.id': elementId 
-              },
               {
-                $set: {
-                  ...Object.keys(changes).reduce((acc, key) => {
-                    acc[`elements.$.${key}`] = changes[key];
-                    return acc;
-                  }, {}),
-                  'elements.$.updatedAt': new Date(),
-                  updatedAt: new Date()
-                }
+                _id: boardId,
+                'elements.id': elementId
               },
+              { $set: updateObj },
               { new: true }
             );
 
             if (!retryBoard) {
+              console.error(`[Board ${boardId}] Board not found even on retry for ${elementId}`);
               if (callback && typeof callback === 'function') {
                 return callback({ error: 'Board not found' });
               }
@@ -366,6 +358,8 @@ module.exports = (io) => {
           element = board.elements.find(el => el.id === elementId);
         }
 
+        console.log(`[Board ${boardId}] Element update saved to DB. Total elements: ${element ? 'present' : 'error'}`);
+
         // Broadcast - if it was created, send full element; otherwise send changes
         if (wasCreated) {
           // Convert Mongoose document to plain object and remove Mongoose-specific fields
@@ -385,7 +379,7 @@ module.exports = (io) => {
             index: elementObj.index,
             typeName: elementObj.typeName || 'shape'
           };
-          
+
           socket.to(boardId).emit('element:created', {
             element: cleanElement,
             userId: socket.userId,
@@ -394,7 +388,7 @@ module.exports = (io) => {
         } else {
           // Get the full element for broadcasting
           const elementObj = element.toObject ? element.toObject() : element;
-          
+
           // For draw shapes, send complete shape data instead of just changes
           const broadcastData = elementObj.type === 'draw' ? {
             elementId,
@@ -419,7 +413,7 @@ module.exports = (io) => {
             userId: socket.userId,
             timestamp: new Date()
           };
-          
+
           socket.to(boardId).emit('element:updated', broadcastData);
         }
 
@@ -453,7 +447,7 @@ module.exports = (io) => {
         // Use atomic operation to avoid version conflicts
         const board = await Board.findOneAndUpdate(
           { _id: boardId },
-          { 
+          {
             $pull: { elements: { id: elementId } },
             $set: { updatedAt: new Date() }
           },
@@ -611,17 +605,17 @@ module.exports = (io) => {
    */
   function generateUserColor(userId) {
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', 
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
       '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
       '#F8B739', '#52B788', '#E76F51', '#2A9D8F'
     ];
-    
+
     // Generate consistent index from userId
     let hash = 0;
     for (let i = 0; i < userId.length; i++) {
       hash = userId.charCodeAt(i) + ((hash << 5) - hash);
     }
-    
+
     return colors[Math.abs(hash) % colors.length];
   }
 

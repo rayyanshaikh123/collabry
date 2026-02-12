@@ -1,6 +1,7 @@
 const Notebook = require('../models/Notebook');
 const Quiz = require('../models/Quiz');
 const MindMap = require('../models/MindMap');
+const Friendship = require('../models/Friendship');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const axios = require('axios');
@@ -22,6 +23,11 @@ fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
  * Helper function to extract text content from source
  */
 async function extractSourceContent(source) {
+  // Check for cached content first (Performance optimization)
+  if (source.content && source.content.trim().length > 0) {
+    return source.content;
+  }
+
   if (source.type === 'text' || source.type === 'notes') {
     return source.content || '';
   } else if (source.type === 'pdf' || source.type === 'document') {
@@ -283,8 +289,21 @@ async function ingestSourceToRAG(notebook, source, authToken) {
  * @access  Private
  */
 exports.getNotebooks = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const userId = new mongoose.Types.ObjectId(req.user._id);
+
   const notebooks = await Notebook.find({
-    userId: req.user._id,
+    $or: [
+      { userId: userId },
+      {
+        collaborators: {
+          $elemMatch: {
+            userId: userId,
+            status: 'accepted'
+          }
+        }
+      }
+    ],
     isArchived: false,
     deletedAt: null
   })
@@ -304,13 +323,17 @@ exports.getNotebooks = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.getNotebook = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id)
+    .populate('userId', 'name email avatar')
+    .populate('collaborators.userId', 'name email avatar');
 
-  if (!notebook) {
+  if (!notebook || notebook.deletedAt) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  const role = notebook.canAccess(req.user._id);
+  if (!role) {
+    throw new AppError('You do not have access to this notebook', 403);
   }
 
   // Create AI session if missing (for notebooks created before AI engine was running)
@@ -319,7 +342,10 @@ exports.getNotebook = asyncHandler(async (req, res) => {
     try {
       const aiResponse = await axios.post(
         `${AI_ENGINE_URL}/ai/sessions`,
-        { title: notebook.title || 'Notebook Session' },
+        {
+          title: notebook.title || 'Notebook Session',
+          notebook_id: notebook._id
+        },
         { headers: { Authorization: token } }
       );
       notebook.aiSessionId = aiResponse.data.id;
@@ -348,28 +374,30 @@ exports.getNotebook = asyncHandler(async (req, res) => {
 exports.createNotebook = asyncHandler(async (req, res) => {
   const { title, description } = req.body;
 
+  const notebook = new Notebook({
+    userId: req.user._id,
+    title: title || 'Untitled Notebook',
+    description
+  });
+
   // Create AI session for this notebook
   const token = req.headers.authorization;
-  let aiSessionId = null;
-
   try {
     const aiResponse = await axios.post(
       `${AI_ENGINE_URL}/ai/sessions`,
-      { title: title || 'New Notebook Session' },
+      {
+        title: title || 'New Notebook Session',
+        notebook_id: notebook._id
+      },
       { headers: { Authorization: token } }
     );
-    aiSessionId = aiResponse.data.id;
+    notebook.aiSessionId = aiResponse.data.id;
   } catch (error) {
     console.error('Failed to create AI session:', error.message);
     // Continue without AI session - can be created later
   }
 
-  const notebook = await Notebook.create({
-    userId: req.user._id,
-    title: title || 'Untitled Notebook',
-    description,
-    aiSessionId
-  });
+  await notebook.save();
 
   res.status(201).json({
     success: true,
@@ -385,13 +413,15 @@ exports.createNotebook = asyncHandler(async (req, res) => {
 exports.updateNotebook = asyncHandler(async (req, res) => {
   const { title, description } = req.body;
 
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  const role = notebook.canAccess(req.user._id);
+  if (role !== 'owner' && role !== 'editor') {
+    throw new AppError('You do not have permission to update this notebook', 403);
   }
 
   if (title) notebook.title = title;
@@ -421,8 +451,9 @@ exports.deleteNotebook = asyncHandler(async (req, res) => {
     throw new AppError('Notebook not found', 404);
   }
 
-  // Soft-delete: move to recycle bin
+  // Soft-delete: move to recycle bin and wipe collaborators
   notebook.deletedAt = new Date();
+  notebook.collaborators = [];
   await notebook.save();
 
   res.json({
@@ -437,13 +468,14 @@ exports.deleteNotebook = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.addSource = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  if (!notebook.hasPermission(req.user._id, 'canAddSources')) {
+    throw new AppError('You do not have permission to add sources to this notebook', 403);
   }
 
   const { type, name, url, content } = req.body;
@@ -453,7 +485,8 @@ exports.addSource = asyncHandler(async (req, res) => {
     type,
     name: name || file?.originalname || 'Untitled Source',
     selected: true,
-    dateAdded: new Date()
+    dateAdded: new Date(),
+    uploadedBy: req.user._id
   };
 
   // Handle different source types
@@ -469,6 +502,17 @@ exports.addSource = asyncHandler(async (req, res) => {
 
     source.filePath = filePath;
     source.size = file.size;
+
+    // PERFORMANCE: Extract text immediately during upload for caching
+    try {
+      console.log(`[PERF] Early extraction for ${source.name}`);
+      const text = await extractSourceContent(source);
+      if (text && !text.startsWith('[PDF Document:')) {
+        source.content = text;
+      }
+    } catch (err) {
+      console.warn(`[PERF] Early extraction failed: ${err.message}`);
+    }
   } else if (type === 'website') {
     if (!url) {
       throw new AppError('URL is required for website sources', 400);
@@ -542,12 +586,17 @@ exports.addSource = asyncHandler(async (req, res) => {
       // Send notification about document processing completion
       try {
         const notification = await notificationService.notifyDocumentProcessed(
-          notebook.userId,
+          notebook.userId, // Always notify owner
           addedSource.name
         );
 
         const io = getIO();
         emitNotificationToUser(io, notebook.userId, notification);
+
+        // Also notify uploader if different from owner
+        if (notebook.userId.toString() !== req.user._id.toString()) {
+          emitNotificationToUser(io, req.user._id, notification);
+        }
       } catch (err) {
         console.error('Failed to send document notification:', err);
       }
@@ -569,10 +618,7 @@ exports.addSource = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.removeSource = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
@@ -582,6 +628,14 @@ exports.removeSource = asyncHandler(async (req, res) => {
 
   if (!source) {
     throw new AppError('Source not found', 404);
+  }
+
+  // Check permissions: Owner can remove any source, collaborators only their own
+  const role = notebook.canAccess(req.user._id);
+  const isUploader = source.uploadedBy && source.uploadedBy.toString() === req.user._id.toString();
+
+  if (role !== 'owner' && !isUploader) {
+    throw new AppError('You do not have permission to remove this source', 403);
   }
 
   // Delete file if exists
@@ -630,13 +684,15 @@ exports.removeSource = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.toggleSource = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  const role = notebook.canAccess(req.user._id);
+  if (!role || role === 'viewer') {
+    throw new AppError('You do not have permission to toggle sources', 403);
   }
 
   const source = notebook.sources.id(req.params.sourceId);
@@ -660,13 +716,14 @@ exports.toggleSource = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.getSourceContent = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  if (!notebook.canAccess(req.user._id)) {
+    throw new AppError('Access denied', 403);
   }
 
   const source = notebook.sources.id(req.params.sourceId);
@@ -700,13 +757,14 @@ exports.getSourceContent = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.linkArtifact = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  if (!notebook.hasPermission(req.user._id, 'canGenerateArtifacts')) {
+    throw new AppError('You do not have permission to link artifacts', 403);
   }
 
   const { type, referenceId, title, data } = req.body;
@@ -766,13 +824,15 @@ exports.linkArtifact = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.unlinkArtifact = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
+  }
+
+  const role = notebook.canAccess(req.user._id);
+  if (role !== 'owner' && role !== 'editor') {
+    throw new AppError('You do not have permission to unlink artifacts', 403);
   }
 
   const artifact = notebook.artifacts.id(req.params.artifactId);
@@ -796,25 +856,36 @@ exports.unlinkArtifact = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.getNotebookContext = asyncHandler(async (req, res) => {
-  const notebook = await Notebook.findOne({
-    _id: req.params.id,
-    userId: req.user._id
-  });
+  const notebook = await Notebook.findById(req.params.id);
 
   if (!notebook) {
     throw new AppError('Notebook not found', 404);
   }
 
+  if (!notebook.canAccess(req.user._id)) {
+    throw new AppError('Access denied', 403);
+  }
+
   const selectedSources = notebook.sources.filter(s => s.selected);
   const context = [];
 
-  for (const source of selectedSources) {
-    let content = '';
+  let hasMisingContent = false;
 
-    try {
-      content = await extractSourceContent(source);
-    } catch (error) {
-      content = `[Error extracting content: ${source.name}]`;
+  for (const source of selectedSources) {
+    let content = source.content || '';
+
+    // Lazy caching: if content missing, extract it now
+    if (!content || content.length < 10) {
+      try {
+        console.log(`[PERF] Lazy caching content for source: ${source.name}`);
+        content = await extractSourceContent(source);
+        if (content && !content.startsWith('[PDF Document:')) {
+          source.content = content;
+          hasMisingContent = true;
+        }
+      } catch (error) {
+        content = `[Error extracting content: ${source.name}]`;
+      }
     }
 
     context.push({
@@ -823,6 +894,12 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
       type: source.type,
       content: content.substring(0, 10000) // Limit to prevent huge payloads
     });
+  }
+
+  // Save changes if any sources were lazy-cached
+  if (hasMisingContent) {
+    console.log(`[PERF] Saving notebook ${notebook._id} with lazy-cached source content`);
+    await notebook.save();
   }
 
   res.json({
@@ -835,4 +912,385 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
   });
 });
 
+
+/**
+ * @desc    Get all collaborators for a notebook
+ * @route   GET /api/notebook/notebooks/:id/collaborators
+ * @access  Private
+ */
+exports.getCollaborators = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id)
+    .populate('collaborators.userId', 'name email avatar')
+    .populate('collaborators.invitedBy', 'name');
+
+  if (!notebook) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  if (!notebook.canAccess(req.user._id)) {
+    throw new AppError('Access denied', 403);
+  }
+
+  res.json({
+    success: true,
+    data: notebook.collaborators
+  });
+});
+
+/**
+ * @desc    Invite collaborator to notebook
+ * @route   POST /api/notebook/notebooks/:id/collaborators/invite
+ * @access  Private
+ */
+exports.inviteCollaborator = asyncHandler(async (req, res) => {
+  const { email, role = 'editor' } = req.body;
+
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  const notebook = await Notebook.findById(req.params.id);
+
+  if (!notebook || notebook.deletedAt) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  // Only owner or those with 'canInvite' permission
+  if (!notebook.hasPermission(req.user._id, 'canInvite')) {
+    throw new AppError('You do not have permission to invite collaborators', 403);
+  }
+
+  // Find user by email
+  const User = require('../models/User');
+  const userToInvite = await User.findOne({ email: email.toLowerCase().trim() });
+
+  if (!userToInvite) {
+    throw new AppError('User not found with this email', 404);
+  }
+
+  // Check if already a collaborator or owner
+  if (notebook.userId.toString() === userToInvite._id.toString()) {
+    throw new AppError('User is already the owner of this notebook', 400);
+  }
+
+  const existingCollab = notebook.collaborators.find(
+    c => c.userId.toString() === userToInvite._id.toString()
+  );
+
+  if (existingCollab) {
+    if (existingCollab.status === 'accepted' || !existingCollab.status) {
+      throw new AppError('User is already a collaborator in this notebook', 400);
+    }
+    // If already pending, we'll just resend the notification below
+  } else {
+    // Add collaborator with pending status
+    notebook.collaborators.push({
+      userId: userToInvite._id,
+      role,
+      invitedBy: req.user._id,
+      status: 'pending'
+    });
+    await notebook.save();
+  }
+
+  // Send notification to invited user
+  try {
+    const notification = await notificationService.notifyNotebookInvite(
+      userToInvite._id,
+      notebook.title,
+      req.user.name,
+      notebook._id
+    );
+
+    const io = getIO();
+    emitNotificationToUser(io, userToInvite._id, notification);
+  } catch (err) {
+    console.error('Failed to send invite notification:', err);
+  }
+
+  res.json({
+    success: true,
+    message: 'Invitation sent successfully'
+  });
+});/**
+ * @desc    Remove collaborator from notebook
+ * @route   DELETE /api/notebook/notebooks/:id/collaborators/:userId
+ * @access  Private
+ */
+exports.removeCollaborator = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+
+  if (!notebook) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  // Only owner can remove collaborators (or a collaborator can remove themselves)
+  const isOwner = notebook.userId.toString() === req.user._id.toString();
+  const isSelf = req.params.userId === req.user._id.toString();
+
+  if (!isOwner && !isSelf) {
+    throw new AppError('You do not have permission to remove collaborators', 403);
+  }
+
+  notebook.collaborators = notebook.collaborators.filter(
+    c => c.userId.toString() !== req.params.userId
+  );
+
+  await notebook.save();
+
+  res.json({
+    success: true,
+    message: 'Collaborator removed successfully'
+  });
+});
+
+/**
+ * @desc    Update collaborator role/permissions
+ * @route   PATCH /api/notebook/notebooks/:id/collaborators/:userId/role
+ * @access  Private
+ */
+exports.updateCollaboratorRole = asyncHandler(async (req, res) => {
+  const { role, permissions } = req.body;
+
+  const notebook = await Notebook.findById(req.params.id);
+
+  if (!notebook) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  // Only owner can update roles
+  if (notebook.userId.toString() !== req.user._id.toString()) {
+    throw new AppError('Only the owner can update collaborator roles', 403);
+  }
+
+  const collab = notebook.collaborators.find(
+    c => c.userId.toString() === req.params.userId
+  );
+
+  if (!collab) {
+    throw new AppError('Collaborator not found', 404);
+  }
+
+  if (role) collab.role = role;
+  if (permissions) {
+    collab.permissions = { ...collab.permissions.toObject(), ...permissions };
+  }
+
+  await notebook.save();
+
+  res.json({
+    success: true,
+    message: 'Collaborator role updated successfully'
+  });
+});
+
+/**
+ * @desc    Generate/get share code for notebook
+ * @route   POST /api/notebook/notebooks/:id/share-link
+ * @access  Private
+ */
+exports.generateShareLink = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+
+  if (!notebook) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  if (notebook.userId.toString() !== req.user._id.toString()) {
+    throw new AppError('Only the owner can manage share links', 403);
+  }
+
+  const shareCode = notebook.generateShareCode();
+  notebook.isShared = true;
+  await notebook.save();
+
+  res.json({
+    success: true,
+    data: {
+      shareCode,
+      shareUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/notebooks/join/${shareCode}`
+    }
+  });
+});
+
+/**
+ * @desc    Join notebook via share code
+ * @route   POST /api/notebook/notebooks/join/:shareCode
+ * @access  Private
+ */
+exports.joinViaShareCode = asyncHandler(async (req, res) => {
+  const { shareCode } = req.params;
+
+  const notebook = await Notebook.findOne({ shareCode, isShared: true });
+
+  if (!notebook) {
+    throw new AppError('Invalid or expired share link', 404);
+  }
+
+  // Check if already owner or collaborator
+  const existingRole = notebook.canAccess(req.user._id);
+  if (existingRole) {
+    return res.json({
+      success: true,
+      message: 'You already have access to this notebook',
+      data: { notebookId: notebook._id }
+    });
+  }
+
+  // Add as collaborator (default to editor or viewer based on notebook settings)
+  notebook.collaborators.push({
+    userId: req.user._id,
+    role: notebook.settings?.defaultShareRole || 'editor',
+    status: 'accepted',
+    joinedAt: new Date()
+  });
+
+  await notebook.save();
+
+  res.json({
+    success: true,
+    message: 'Successfully joined notebook',
+    data: { notebookId: notebook._id }
+  });
+});
+
 module.exports = exports;
+
+/**
+ * @desc    Get friends that can be invited to a notebook
+ * @route   GET /api/notebook/notebooks/:id/friends
+ * @access  Private
+ */
+exports.getFriendsToInvite = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+  if (!notebook || notebook.deletedAt) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  // Get active friendships
+  const friendships = await Friendship.find({
+    $or: [{ user1: req.user._id }, { user2: req.user._id }],
+    status: 'active'
+  }).populate('user1 user2', 'name email avatar');
+
+  // Extract friend user objects
+  const friends = friendships.map(f => {
+    return f.user1._id.toString() === req.user._id.toString() ? f.user2 : f.user1;
+  });
+
+  // Filter out those who are already collaborators OR the owner
+  const collaboratorIds = notebook.collaborators.map(c => c.userId.toString());
+  collaboratorIds.push(notebook.userId.toString());
+
+  const inviteableFriends = friends.filter(friend =>
+    !collaboratorIds.includes(friend._id.toString())
+  );
+
+  res.json({
+    success: true,
+    data: inviteableFriends
+  });
+});
+
+/**
+ * @desc    Get all pending invitations for the current user
+ * @route   GET /api/notebook/invitations/pending
+ * @access  Private
+ */
+exports.getPendingInvitations = asyncHandler(async (req, res) => {
+  const notebooks = await Notebook.find({
+    deletedAt: null, // Only non-deleted notebooks
+    collaborators: {
+      $elemMatch: {
+        userId: req.user._id,
+        status: 'pending'
+      }
+    }
+  }).populate('userId', 'name email avatar').select('title description userId collaborators createdAt');
+
+  // Format response to include who invited them
+  const invitations = notebooks.map(nb => {
+    const collabInfo = nb.collaborators.find(c => c.userId.toString() === req.user._id.toString());
+
+    // Safety check just in case
+    if (!collabInfo) return null;
+
+    return {
+      notebookId: nb._id,
+      title: nb.title,
+      description: nb.description,
+      owner: nb.userId,
+      invitedBy: collabInfo.invitedBy,
+      role: collabInfo.role,
+      invitedAt: collabInfo.status === 'pending' ? collabInfo.invitedAt : collabInfo.joinedAt
+    };
+  }).filter(Boolean); // Remove nulls if safety check triggered
+
+  res.json({
+    success: true,
+    data: invitations
+  });
+});
+
+/**
+ * @desc    Accept a notebook invitation
+ * @route   POST /api/notebook/notebooks/:id/invitations/accept
+ * @access  Private
+ */
+exports.acceptInvitation = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+  if (!notebook || notebook.deletedAt) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  const collaborator = notebook.collaborators.find(
+    c => c.userId.toString() === req.user._id.toString()
+  );
+
+  if (!collaborator) {
+    throw new AppError('Invitation not found', 404);
+  }
+
+  if (collaborator.status === 'accepted') {
+    return res.json({ success: true, message: 'Invitation already accepted' });
+  }
+
+  collaborator.status = 'accepted';
+  collaborator.joinedAt = new Date();
+
+  await notebook.save();
+
+  res.json({
+    success: true,
+    message: 'Invitation accepted successfully'
+  });
+});
+
+/**
+ * @desc    Reject a notebook invitation
+ * @route   POST /api/notebook/notebooks/:id/invitations/reject
+ * @access  Private
+ */
+exports.rejectInvitation = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+  if (!notebook || notebook.deletedAt) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  // Remove the user from collaborators array
+  const initialCount = notebook.collaborators.length;
+  notebook.collaborators = notebook.collaborators.filter(
+    c => c.userId.toString() !== req.user._id.toString()
+  );
+
+  if (notebook.collaborators.length === initialCount) {
+    throw new AppError('Invitation not found', 404);
+  }
+
+  await notebook.save();
+
+  res.json({
+    success: true,
+    message: 'Invitation rejected successfully'
+  });
+});

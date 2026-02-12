@@ -42,6 +42,11 @@ def format_thread_id(user_id: str, session_id: str) -> str:
     return f"{user_id}:{session_id}"
 
 
+def format_notebook_thread_id(notebook_id: str) -> str:
+    """Thread ID format for collaborative notebooks (shared across users)."""
+    return f"notebook:{notebook_id}"
+
+
 def parse_thread_id(thread_id: str) -> tuple[str, str]:
     """Parse thread_id into (user_id, session_id)."""
     parts = thread_id.split(":", 1)
@@ -248,6 +253,16 @@ class MemoryManager:
         logger.info(f"✓ Created new session: {session_id} for user: {self.user_id}")
         return session_id
         return self._mongo_store.get_all_threads(user_id=self.user_id)
+    
+    @classmethod
+    def for_notebook(cls, notebook_id: str, user_id: str):
+        """
+        Factory method for notebook-scoped memory.
+        All collaborators share the same thread_id = "notebook:{notebook_id}".
+        """
+        mm = cls(user_id=user_id, session_id=f"nb-{notebook_id}")
+        mm.thread_id = format_notebook_thread_id(notebook_id)
+        return mm
 
     def close(self):
         """Close MongoDB connection."""
