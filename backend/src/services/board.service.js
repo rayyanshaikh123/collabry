@@ -24,8 +24,8 @@ class BoardService {
    * Get all boards for a user
    */
   async getUserBoards(userId, options = {}) {
-    const { 
-      includeArchived = false, 
+    const {
+      includeArchived = false,
       isPublic = null,
       limit = 50,
       skip = 0,
@@ -37,7 +37,8 @@ class BoardService {
       $or: [
         { owner: userId },
         { 'members.userId': userId }
-      ]
+      ],
+      deletedAt: null
     };
 
     if (!includeArchived) {
@@ -101,7 +102,7 @@ class BoardService {
 
     // Allowed fields to update
     const allowedUpdates = ['title', 'description', 'isPublic', 'settings', 'tags', 'thumbnail'];
-    
+
     allowedUpdates.forEach(field => {
       if (updates[field] !== undefined) {
         board[field] = updates[field];
@@ -116,10 +117,10 @@ class BoardService {
   }
 
   /**
-   * Delete a board
+   * Delete a board (soft-delete → moves to recycle bin)
    */
   async deleteBoard(boardId, userId) {
-    const board = await Board.findById(boardId);
+    const board = await Board.findOne({ _id: boardId, deletedAt: null });
 
     if (!board) {
       throw new AppError('Board not found', 404);
@@ -130,8 +131,9 @@ class BoardService {
       throw new AppError('Only the board owner can delete the board', 403);
     }
 
-    await board.deleteOne();
-    return { message: 'Board deleted successfully' };
+    board.deletedAt = new Date();
+    await board.save();
+    return { message: 'Board moved to recycle bin' };
   }
 
   /**
@@ -342,7 +344,7 @@ class BoardService {
 
     // Check if user is already a member
     const isAlreadyMember = board.owner.toString() === user._id.toString() ||
-                           board.members.some(m => m.userId.toString() === user._id.toString());
+      board.members.some(m => m.userId.toString() === user._id.toString());
 
     if (isAlreadyMember) {
       throw new AppError('User is already a member of this board', 400);

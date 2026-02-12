@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCreateNotebook } from '@/hooks/useNotebook';
 import { ICONS } from '../../constants';
 import { Button, Card, Input } from '../UIElements';
@@ -10,27 +11,38 @@ import { showError, showAlert } from '@/lib/alert';
 
 export default function CreateNotebookForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const createNotebook = useCreateNotebook();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const list = Array.from(e.target.files);
+      // Dedupe by name+size+lastModified to avoid uploading the same file twice
+      const seen = new Set<string>();
+      const deduped = list.filter((f) => {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setFiles(deduped);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (submittingRef.current) return;
     if (!title.trim()) {
       showAlert('Please enter a title', 'warning', 'Missing Title');
       return;
     }
-
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     try {
@@ -69,6 +81,8 @@ export default function CreateNotebookForm() {
             console.error('Failed to upload source:', file.name, error);
           }
         }
+        // Invalidate notebook cache so the page shows the newly added sources
+        queryClient.invalidateQueries({ queryKey: ['notebooks', notebookId] });
       }
 
       // Redirect to the new notebook
@@ -76,6 +90,7 @@ export default function CreateNotebookForm() {
     } catch (error) {
       console.error('Failed to create notebook:', error);
       showError('Failed to create notebook. Please try again.');
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };

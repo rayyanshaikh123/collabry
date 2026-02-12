@@ -9,7 +9,7 @@ import json
 from typing import Optional, List
 from datetime import datetime, timedelta
 from langchain_core.tools import tool
-from core.llm import get_async_openai_client
+from core.llm import get_async_openai_client, get_llm_config
 from rag.retriever import get_retriever
 
 
@@ -21,7 +21,8 @@ async def generate_study_plan(
     duration_days: int = 7,
     daily_hours: float = 2.0,
     difficulty: str = "intermediate",
-    notebook_id: Optional[str] = None
+    notebook_id: Optional[str] = None,
+    source_ids: Optional[List[str]] = None,
 ) -> str:
     """
     Generate a structured study plan with daily tasks and milestones.
@@ -85,7 +86,7 @@ async def generate_study_plan(
         context = ""
         if notebook_id:
             try:
-                retriever = get_retriever(user_id=user_id, notebook_id=notebook_id)
+                retriever = get_retriever(user_id=user_id, notebook_id=notebook_id, source_ids=source_ids)
                 query = f"{subject} {' '.join(topic_list[:3])}"
                 docs = retriever.invoke(query)
                 if docs:
@@ -158,8 +159,9 @@ Guidelines:
 Return ONLY the JSON, no additional text."""
 
         # Generate study plan
+        llm_config = get_llm_config()
         response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=llm_config.model,
             messages=[
                 {"role": "system", "content": "You are an expert educational planner. Create realistic, well-structured study plans. Return only valid JSON."},
                 {"role": "user", "content": prompt}

@@ -14,14 +14,14 @@ interface NavItemProps {
   setMobileOpen: (open: boolean) => void;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ 
-  id, 
-  label, 
-  icon: Icon, 
-  currentRoute, 
-  isCollapsed, 
-  onNavigate, 
-  setMobileOpen 
+const NavItem: React.FC<NavItemProps> = ({
+  id,
+  label,
+  icon: Icon,
+  currentRoute,
+  isCollapsed,
+  onNavigate,
+  setMobileOpen
 }) => {
   const isActive = currentRoute === id;
   return (
@@ -30,13 +30,12 @@ const NavItem: React.FC<NavItemProps> = ({
         onNavigate(id);
         setMobileOpen(false);
       }}
-      className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-4 px-4 py-3.5'} rounded-[1.5rem] transition-all mb-2 bouncy-hover press-effect border-b-2 ${
-        isActive 
-          ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50 border-indigo-700 dark:border-indigo-800' 
-          : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-500 dark:hover:text-indigo-400 border-transparent'
-      }`}
+      className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0 py-2.5' : 'gap-4 px-4 py-3.5'} rounded-[1.5rem] transition-all mb-2 bouncy-hover press-effect border-b-2 ${isActive
+        ? 'bg-indigo-500 dark:bg-indigo-600 text-white shadow-lg shadow-indigo-100 dark:shadow-indigo-900/50 border-indigo-700 dark:border-indigo-800'
+        : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-500 dark:hover:text-indigo-400 border-transparent'
+        }`}
     >
-      <span className={`${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'} flex items-center justify-center` }>
+      <span className={`${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'} flex items-center justify-center`}>
         <Icon size={22} strokeWidth={isActive ? 3 : 2} />
       </span>
       {!isCollapsed && <span className="font-black text-sm text-left truncate">{label}</span>}
@@ -69,13 +68,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
   const studentItems = [
     { id: AppRoute.DASHBOARD, label: 'Learning Path', icon: ICONS.Dashboard },
     { id: AppRoute.STUDY_BOARD, label: 'Study Boards', icon: ICONS.StudyBoard },
-   
-    
+
+
     { id: AppRoute.SOCIAL, label: 'Social Hub', icon: ICONS.Profile },
     { id: AppRoute.STUDY_NOTEBOOK, label: 'Study Notebook', icon: ICONS.Book },
-    { id: AppRoute.VOICE_TUTOR, label: 'Voice Tutor', icon: ICONS.Mic },
     { id: AppRoute.PLANNER, label: 'Plan It', icon: ICONS.Planner },
-    
+    { id: AppRoute.RECYCLE_BIN, label: 'Recycle Bin', icon: ICONS.Trash },
+
   ];
 
   const adminItems = [
@@ -97,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
   return (
     <>
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-indigo-900/10 dark:bg-indigo-950/30 backdrop-blur-md z-40 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
@@ -108,7 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
           <div className={`flex items-center mb-12 px-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
             {!isCollapsed && (
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={handleLogoClick}
                   className={`w-12 h-12 bg-linear-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 border-b-4 border-indigo-700 transition-all active:translate-y-1 active:border-b-0 ${isAnimating ? 'animate-logo-pop' : ''}`}
                   title="Click to cycle theme!"
@@ -118,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                 <h1 className="text-2xl font-black text-slate-800 dark:text-slate-200 font-display tracking-tight">Collabry</h1>
               </div>
             )}
-            <button 
+            <button
               onClick={() => setIsCollapsed(!isCollapsed)}
               className="p-2 text-slate-400 dark:text-slate-500 hover:bg-white dark:hover:bg-slate-800 rounded-xl hidden lg:block border-2 border-transparent hover:border-slate-100 dark:hover:border-slate-700"
             >
@@ -133,8 +132,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
               {userRole === 'admin' ? 'COMMAND CENTER' : 'MAIN'}
             </p>
             {currentMenuItems.map(item => (
-              <NavItem 
-                key={item.id} 
+              <NavItem
+                key={item.id}
                 {...item}
                 currentRoute={currentRoute}
                 isCollapsed={isCollapsed}
@@ -149,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                 <p className={`text-[11px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.2em] mb-4 px-4 ${isCollapsed ? 'text-center' : ''}`}>
                   PERSONAL
                 </p>
-                <NavItem 
+                <NavItem
                   id={AppRoute.PROFILE}
                   label="My Journey"
                   icon={ICONS.Profile}
@@ -158,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />
-                <NavItem 
+                <NavItem
                   id={AppRoute.PROFILE_USAGE}
                   label="AI Usage"
                   icon={ICONS.Focus}
@@ -167,7 +166,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />
-                <NavItem 
+                <NavItem
                   id={AppRoute.SUBSCRIPTION}
                   label="Subscription"
                   icon={ICONS.Settings}
@@ -176,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />
-                <NavItem 
+                <NavItem
                   id={AppRoute.PRICING}
                   label="Pricing"
                   icon={ICONS.Download}
@@ -190,7 +189,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
           </nav>
 
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
-            <button 
+            <button
               onClick={onLogout}
               className={`w-full flex items-center gap-4 px-4 py-4 rounded-[1.5rem] text-rose-400 dark:text-rose-500 font-black hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-all bouncy-hover ${isCollapsed ? 'justify-center' : ''}`}
             >

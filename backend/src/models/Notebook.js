@@ -64,19 +64,19 @@ const NotebookSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  
+
   // Sources stored locally
   sources: [SourceSchema],
-  
+
   // AI Chat Session ID from AI Engine
   aiSessionId: {
     type: String,
     index: true
   },
-  
+
   // Generated artifacts (references to Quiz/MindMap collections)
   artifacts: [ArtifactSchema],
-  
+
   // Metadata
   lastAccessed: {
     type: Date,
@@ -85,6 +85,10 @@ const NotebookSchema = new mongoose.Schema({
   isArchived: {
     type: Boolean,
     default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -95,17 +99,17 @@ NotebookSchema.index({ userId: 1, createdAt: -1 });
 NotebookSchema.index({ userId: 1, lastAccessed: -1 });
 
 // Update lastAccessed on any modification
-NotebookSchema.pre('save', function() {
+NotebookSchema.pre('save', function () {
   this.lastAccessed = new Date();
 });
 
 // Virtual for source count
-NotebookSchema.virtual('sourceCount').get(function() {
+NotebookSchema.virtual('sourceCount').get(function () {
   return this.sources.length;
 });
 
 // Virtual for artifact count  
-NotebookSchema.virtual('artifactCount').get(function() {
+NotebookSchema.virtual('artifactCount').get(function () {
   return this.artifacts.length;
 });
 

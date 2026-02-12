@@ -10,6 +10,7 @@ interface UseNotebookChatProps {
   setIsStreaming: (value: boolean) => void;
   setIsChatLoading: (value: boolean) => void;
   clearSessionMessages: any; // React Query mutation
+  sourceIds?: string[];
 }
 
 export function useNotebookChat({
@@ -20,29 +21,10 @@ export function useNotebookChat({
   setIsStreaming,
   setIsChatLoading,
   clearSessionMessages,
+  sourceIds,
 }: UseNotebookChatProps) {
   const chatAbortRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
-
-  const getCookieValue = (name: string): string | null => {
-    if (typeof document === 'undefined') return null;
-    const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-    return match ? decodeURIComponent(match[1]) : null;
-  };
-
-  const ensureCsrfCookie = async (signal?: AbortSignal) => {
-    // Backend sets csrfToken cookie on any response via middleware.
-    // We do a safe GET first so the cookie exists before sending POST.
-    try {
-      await fetch('/api/ai/health', {
-        method: 'GET',
-        credentials: 'include',
-        signal,
-      });
-    } catch {
-      // Best-effort: if this fails, the POST may still work if cookie already exists.
-    }
-  };
 
   /**
    * Extract answer from JSON response format: {"answer": "..."}
@@ -100,26 +82,24 @@ export function useNotebookChat({
         if (!accessToken) {
           throw new Error('Not authenticated');
         }
-
-        await ensureCsrfCookie(abortController.signal);
-        const csrfToken = getCookieValue('csrfToken');
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        };
-
-        if (csrfToken) {
-          headers['x-csrf-token'] = csrfToken;
+        if (!sessionId) {
+          throw new Error('Notebook AI session not initialized');
         }
 
-        const response = await fetch('/api/ai/chat/stream', {
+        const apiUrl = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
+        const endpoint = `${apiUrl}/ai/sessions/${sessionId}/chat/stream`;
+
+        const response = await fetch(endpoint, {
           method: 'POST',
-          headers,
-          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
           body: JSON.stringify({
             message: userText,
             session_id: sessionId,
+            notebook_id: notebookId,
+            source_ids: sourceIds,
             // Best-effort: enable retrieval when available; backend can ignore if unsupported.
             use_rag: true,
           }),

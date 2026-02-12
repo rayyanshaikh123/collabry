@@ -10,10 +10,10 @@ import { Source as SourcePanelType } from '../../../../components/study-notebook
 import { ChatMessage } from '../../../../components/study-notebook/ChatPanel';
 import { Artifact as ArtifactPanelType, ArtifactType } from '../../../../components/study-notebook/StudioPanel';
 import { Notebook, Source, Artifact } from '@/lib/services/notebook.service';
-import { 
-  useNotebook, 
-  useAddSource, 
-  useToggleSource, 
+import {
+  useNotebook,
+  useAddSource,
+  useToggleSource,
   useRemoveSource,
   useLinkArtifact,
   useUnlinkArtifact,
@@ -46,7 +46,7 @@ export default function StudyNotebookPage() {
 
   // Create notebook if 'default'
   const createNotebook = useCreateNotebook();
-  
+
   // Fetch notebook data
   const { data: notebookData, isLoading: isLoadingNotebook } = useNotebook(
     notebookId !== 'default' ? notebookId : undefined
@@ -78,11 +78,16 @@ export default function StudyNotebookPage() {
     return unique;
   }, [notebook?.sources]);
 
+  // Selected source IDs for filtering
+  const selectedSourceIds = React.useMemo(() => {
+    return dedupedSources.filter(s => s.selected).map(s => s._id);
+  }, [dedupedSources]);
+
   // AI operations
   const generateQuiz = useGenerateQuiz();
   const generateMindMap = useGenerateMindMap();
   const createQuiz = useCreateQuiz();
-  
+
   // Chat state - Hook already handles enabled check internally
   const { data: sessionMessagesData } = useSessionMessages(notebook?.aiSessionId || '');
   const saveMessage = useSaveMessage();
@@ -107,7 +112,7 @@ export default function StudyNotebookPage() {
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   // Local edits for artifact prompts (frontend-only)
   const [artifactEdits, setArtifactEdits] = useState<Record<string, { prompt?: string; numberOfQuestions?: number; difficulty?: string }>>({});
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -120,21 +125,21 @@ export default function StudyNotebookPage() {
   const [addTextModalOpen, setAddTextModalOpen] = useState(false);
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
-  
+
   const [addNotesModalOpen, setAddNotesModalOpen] = useState(false);
   const [notesContent, setNotesContent] = useState('');
   const [notesTitle, setNotesTitle] = useState('New Note');
-  
+
   const [addWebsiteModalOpen, setAddWebsiteModalOpen] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState('');
 
   // Initialize custom hooks
-  const { 
-    handleSendMessage, 
-    handleRegeneratePrompt, 
-    handleEditPrompt, 
-    handleClearChat, 
-    handleRegenerateResponse 
+  const {
+    handleSendMessage,
+    handleRegeneratePrompt,
+    handleEditPrompt,
+    handleClearChat,
+    handleRegenerateResponse
   } = useNotebookChat({
     notebookId,
     sessionId: notebook?.aiSessionId || '',
@@ -143,6 +148,7 @@ export default function StudyNotebookPage() {
     setIsStreaming,
     setIsChatLoading,
     clearSessionMessages,
+    sourceIds: selectedSourceIds,
   });
 
   const { handleGenerateArtifact } = useArtifactGenerator({
@@ -160,11 +166,11 @@ export default function StudyNotebookPage() {
     showInfo,
   });
 
-  const { 
-    handleSaveQuizToStudio, 
-    handleSaveMindMapToStudio, 
-    handleSaveInfographicToStudio, 
-    handleSaveFlashcardsToStudio 
+  const {
+    handleSaveQuizToStudio,
+    handleSaveMindMapToStudio,
+    handleSaveInfographicToStudio,
+    handleSaveFlashcardsToStudio
   } = useStudioSave({
     notebook,
     artifactEdits,
@@ -214,7 +220,7 @@ export default function StudyNotebookPage() {
             formData.append('file', file);
             formData.append('type', 'pdf');
             formData.append('name', file.name);
-            
+
             await addSource.mutateAsync(formData as any);
             showSuccess('PDF uploaded successfully');
           } catch (error) {
@@ -246,7 +252,7 @@ export default function StudyNotebookPage() {
         name: textTitle,
         content: textContent,
       } as any);
-      
+
       setAddTextModalOpen(false);
       setTextContent('');
       setTextTitle('');
@@ -270,7 +276,7 @@ export default function StudyNotebookPage() {
         name: notesTitle || 'New Note',
         content: notesContent,
       } as any);
-      
+
       setAddNotesModalOpen(false);
       setNotesContent('');
       setNotesTitle('New Note');
@@ -294,7 +300,7 @@ export default function StudyNotebookPage() {
         url: websiteUrl,
         name: websiteUrl,
       } as any);
-      
+
       setAddWebsiteModalOpen(false);
       setWebsiteUrl('');
       showSuccess('Website added successfully');
@@ -346,7 +352,7 @@ export default function StudyNotebookPage() {
         difficulty: editDifficulty,
       }
     }));
-    
+
     if (selectedArtifact?.id === editingArtifactId) {
       setSelectedArtifact((prev) => prev ? ({
         ...prev,
@@ -374,7 +380,7 @@ export default function StudyNotebookPage() {
       console.log('Selected artifact from notebook:', artifact);
       console.log('Artifact data:', artifact.data);
       console.log('Artifact type:', artifact.type);
-      
+
       const edits = artifactEdits[artifact._id] || {};
       const selectedData = {
         id: artifact._id,
@@ -383,7 +389,7 @@ export default function StudyNotebookPage() {
         createdAt: artifact.createdAt,
         data: artifact.data || { referenceId: artifact.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
       };
-      
+
       console.log('Setting selectedArtifact:', selectedData);
       setSelectedArtifact(selectedData);
     }
@@ -446,94 +452,94 @@ export default function StudyNotebookPage() {
 
   return (
     <>
-    <NotebookLayout
-      sources={dedupedSources.map((s) => ({
-        id: s._id,
-        type: s.type as SourcePanelType['type'],
-        name: s.name,
-        size: s.size ? `${(s.size / 1024 / 1024).toFixed(2)} MB` : undefined,
-        dateAdded: s.dateAdded ? new Date(s.dateAdded).toLocaleString() : '—',
-        selected: s.selected,
-        url: s.url
-      }))}
-      onToggleSource={handleToggleSource}
-      onAddSource={handleAddSource}
-      onRemoveSource={handleRemoveSource}
-      messages={localMessages}
-      onSendMessage={handleSendMessage}
-      onRegeneratePrompt={handleRegeneratePrompt}
-      onEditPrompt={handleEditPrompt}
-      onClearChat={() => handleClearChat(showConfirm, showSuccess, showError)}
-      onRegenerateResponse={handleRegenerateResponse}
-      isChatLoading={isChatLoading}
-      onSaveQuizToStudio={handleSaveQuizToStudio}
-      onSaveMindMapToStudio={handleSaveMindMapToStudio}
-      onSaveInfographicToStudio={handleSaveInfographicToStudio}
-      onSaveFlashcardsToStudio={handleSaveFlashcardsToStudio}
-      artifacts={notebook.artifacts.map((a) => {
-        const edits = artifactEdits[a._id] || {};
-        return ({
-          id: a._id,
-          type: a.type as ArtifactType,
-          title: edits.numberOfQuestions ? `${a.title} (${edits.numberOfQuestions} q)` : a.title,
-          createdAt: a.createdAt,
-          // Preserve inline data (flashcards, infographics) and also include metadata
-          data: a.data || { referenceId: a.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
-        });
-      })}
-      onGenerateArtifact={handleGenerateArtifact}
-      onSelectArtifact={handleSelectArtifact}
-      isGenerating={isGenerating}
-      onDeleteArtifact={handleDeleteArtifact}
-      onEditArtifact={openEditModal}
-      selectedArtifact={selectedArtifact}
-    />
+      <NotebookLayout
+        sources={dedupedSources.map((s) => ({
+          id: s._id,
+          type: s.type as SourcePanelType['type'],
+          name: s.name,
+          size: s.size ? `${(s.size / 1024 / 1024).toFixed(2)} MB` : undefined,
+          dateAdded: s.dateAdded ? new Date(s.dateAdded).toLocaleString() : '—',
+          selected: s.selected,
+          url: s.url
+        }))}
+        onToggleSource={handleToggleSource}
+        onAddSource={handleAddSource}
+        onRemoveSource={handleRemoveSource}
+        messages={localMessages}
+        onSendMessage={handleSendMessage}
+        onRegeneratePrompt={handleRegeneratePrompt}
+        onEditPrompt={handleEditPrompt}
+        onClearChat={() => handleClearChat(showConfirm, showSuccess, showError)}
+        onRegenerateResponse={handleRegenerateResponse}
+        isChatLoading={isChatLoading}
+        onSaveQuizToStudio={handleSaveQuizToStudio}
+        onSaveMindMapToStudio={handleSaveMindMapToStudio}
+        onSaveInfographicToStudio={handleSaveInfographicToStudio}
+        onSaveFlashcardsToStudio={handleSaveFlashcardsToStudio}
+        artifacts={notebook.artifacts.map((a) => {
+          const edits = artifactEdits[a._id] || {};
+          return ({
+            id: a._id,
+            type: a.type as ArtifactType,
+            title: edits.numberOfQuestions ? `${a.title} (${edits.numberOfQuestions} q)` : a.title,
+            createdAt: a.createdAt,
+            // Preserve inline data (flashcards, infographics) and also include metadata
+            data: a.data || { referenceId: a.referenceId, prompt: edits.prompt, numberOfQuestions: edits.numberOfQuestions, difficulty: edits.difficulty }
+          });
+        })}
+        onGenerateArtifact={handleGenerateArtifact}
+        onSelectArtifact={handleSelectArtifact}
+        isGenerating={isGenerating}
+        onDeleteArtifact={handleDeleteArtifact}
+        onEditArtifact={openEditModal}
+        selectedArtifact={selectedArtifact}
+      />
 
-    <SourceModals
-      addTextModalOpen={addTextModalOpen}
-      textTitle={textTitle}
-      textContent={textContent}
-      setTextTitle={setTextTitle}
-      setTextContent={setTextContent}
-      onSubmitText={handleSubmitText}
-      onCloseTextModal={() => {
-        setAddTextModalOpen(false);
-        setTextContent('');
-        setTextTitle('');
-      }}
-      addNotesModalOpen={addNotesModalOpen}
-      notesTitle={notesTitle}
-      notesContent={notesContent}
-      setNotesTitle={setNotesTitle}
-      setNotesContent={setNotesContent}
-      onSubmitNotes={handleSubmitNotes}
-      onCloseNotesModal={() => {
-        setAddNotesModalOpen(false);
-        setNotesContent('');
-        setNotesTitle('New Note');
-      }}
-      addWebsiteModalOpen={addWebsiteModalOpen}
-      websiteUrl={websiteUrl}
-      setWebsiteUrl={setWebsiteUrl}
-      onSubmitWebsite={handleSubmitWebsite}
-      onCloseWebsiteModal={() => {
-        setAddWebsiteModalOpen(false);
-        setWebsiteUrl('');
-      }}
-    />
+      <SourceModals
+        addTextModalOpen={addTextModalOpen}
+        textTitle={textTitle}
+        textContent={textContent}
+        setTextTitle={setTextTitle}
+        setTextContent={setTextContent}
+        onSubmitText={handleSubmitText}
+        onCloseTextModal={() => {
+          setAddTextModalOpen(false);
+          setTextContent('');
+          setTextTitle('');
+        }}
+        addNotesModalOpen={addNotesModalOpen}
+        notesTitle={notesTitle}
+        notesContent={notesContent}
+        setNotesTitle={setNotesTitle}
+        setNotesContent={setNotesContent}
+        onSubmitNotes={handleSubmitNotes}
+        onCloseNotesModal={() => {
+          setAddNotesModalOpen(false);
+          setNotesContent('');
+          setNotesTitle('New Note');
+        }}
+        addWebsiteModalOpen={addWebsiteModalOpen}
+        websiteUrl={websiteUrl}
+        setWebsiteUrl={setWebsiteUrl}
+        onSubmitWebsite={handleSubmitWebsite}
+        onCloseWebsiteModal={() => {
+          setAddWebsiteModalOpen(false);
+          setWebsiteUrl('');
+        }}
+      />
 
-    <QuizEditModal
-      isOpen={editModalOpen}
-      editingArtifactId={editingArtifactId}
-      editPrompt={editPrompt}
-      editNumber={editNumber}
-      editDifficulty={editDifficulty}
-      setEditPrompt={setEditPrompt}
-      setEditNumber={setEditNumber}
-      setEditDifficulty={setEditDifficulty}
-      onSave={saveEditModal}
-      onClose={() => setEditModalOpen(false)}
-    />
+      <QuizEditModal
+        isOpen={editModalOpen}
+        editingArtifactId={editingArtifactId}
+        editPrompt={editPrompt}
+        editNumber={editNumber}
+        editDifficulty={editDifficulty}
+        setEditPrompt={setEditPrompt}
+        setEditNumber={setEditNumber}
+        setEditDifficulty={setEditDifficulty}
+        onSave={saveEditModal}
+        onClose={() => setEditModalOpen(false)}
+      />
     </>
   );
 }

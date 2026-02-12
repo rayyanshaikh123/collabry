@@ -36,7 +36,6 @@ class UsageLimitMiddleware(BaseHTTPMiddleware):
     # POST endpoints that should never count towards token limits
     # (they don't call the LLM; e.g. rendering/conversion endpoints)
     NON_CONSUMING_POST_PATHS = {
-        "/ai/mindmap/render",
     }
     
     async def dispatch(self, request: Request, call_next):

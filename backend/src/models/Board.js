@@ -110,6 +110,10 @@ const boardSchema = new mongoose.Schema({
   isArchived: {
     type: Boolean,
     default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -125,49 +129,49 @@ boardSchema.index({ lastActivity: -1 });
 boardSchema.index({ tags: 1 });
 
 // Virtual for element count
-boardSchema.virtual('elementCount').get(function() {
+boardSchema.virtual('elementCount').get(function () {
   return this.elements?.length || 0;
 });
 
 // Virtual for member count
-boardSchema.virtual('memberCount').get(function() {
+boardSchema.virtual('memberCount').get(function () {
   return (this.members?.length || 0) + 1; // +1 for owner
 });
 
 // Update lastActivity on any change
-boardSchema.pre('save', function() {
+boardSchema.pre('save', function () {
   this.lastActivity = new Date();
 });
 
 // Method to check if user has access
-boardSchema.methods.hasAccess = function(userId) {
+boardSchema.methods.hasAccess = function (userId) {
   const userIdStr = userId.toString();
-  
+
   if (this.owner.toString() === userIdStr) {
     return true;
   }
-  
+
   if (this.isPublic) {
     return true;
   }
-  
+
   return this.members.some(m => m.userId.toString() === userIdStr);
 };
 
 // Method to get user role
-boardSchema.methods.getUserRole = function(userId) {
+boardSchema.methods.getUserRole = function (userId) {
   const userIdStr = userId.toString();
-  
+
   if (this.owner.toString() === userIdStr) {
     return 'owner';
   }
-  
+
   const member = this.members.find(m => m.userId.toString() === userIdStr);
   return member ? member.role : null;
 };
 
 // Method to check if user can edit
-boardSchema.methods.canEdit = function(userId) {
+boardSchema.methods.canEdit = function (userId) {
   const role = this.getUserRole(userId);
   return role === 'owner' || role === 'editor';
 };

@@ -49,10 +49,10 @@ export const useAuthStore = create<AuthState>()(
       // Login action
       login: async (credentials: LoginCredentials) => {
         set({ isLoading: true, error: null });
-        
+
         try {
           const response = await authService.login(credentials);
-          
+
           set({
             user: response.user,
             accessToken: response.tokens.accessToken,
@@ -74,10 +74,10 @@ export const useAuthStore = create<AuthState>()(
       // Register action — returns message (email verification required, no auto-login)
       register: async (data: RegisterData) => {
         set({ isLoading: true, error: null });
-        
+
         try {
           const response = await authService.register(data);
-          
+
           set({ isLoading: false });
 
           // Return the message so UI can display "check your email"
@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           // Disconnect socket first
           socketClient.disconnect();
-          
+
           // Call backend logout (revokes token + clears cookie)
           await authService.logout();
         } catch (error) {
@@ -127,7 +127,7 @@ export const useAuthStore = create<AuthState>()(
       refreshSession: async () => {
         try {
           const newAccessToken = await authService.refreshToken();
-          
+
           set({ accessToken: newAccessToken });
         } catch (error) {
           // Refresh failed — clear state directly (don't call logout() which
@@ -147,28 +147,35 @@ export const useAuthStore = create<AuthState>()(
       // Check authentication status
       checkAuth: async () => {
         const { accessToken, isAuthenticated } = get();
+        console.log('[AuthStore] checkAuth started. isAuthenticated:', isAuthenticated, 'hasToken:', !!accessToken);
 
         set({ isLoading: true });
 
         // If persisted state says authenticated but no in-memory token,
         // proactively refresh before calling /auth/me
         if (isAuthenticated && !accessToken) {
+          console.log('[AuthStore] Authenticated but no token. Attempting refresh...');
           try {
             await get().refreshSession();
-          } catch {
+            console.log('[AuthStore] Refresh successful.');
+          } catch (err) {
+            console.error('[AuthStore] Refresh failed during checkAuth:', err);
             set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false });
             return;
           }
         }
-        
+
         const currentToken = get().accessToken;
         if (!currentToken) {
+          console.log('[AuthStore] No token after refresh check. Auth failed.');
           set({ isAuthenticated: false, isLoading: false });
           return;
         }
 
         try {
+          console.log('[AuthStore] Fetching current user...');
           const user = await authService.getCurrentUser();
+          console.log('[AuthStore] Fetch success. User:', user.name);
           set({
             user,
             isAuthenticated: true,

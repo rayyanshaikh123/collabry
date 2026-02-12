@@ -54,7 +54,8 @@ async def chat(
             user_id=user_id,
             session_id=session_id,
             message=request.message,
-            notebook_id=None  # Can be extended to support notebook context
+            notebook_id=request.notebook_id,
+            source_ids=request.source_ids
         )
         
         logger.info(f"Chat response generated: {len(response)} chars")
@@ -109,7 +110,7 @@ async def chat_stream(
                     user_id=user_id,
                     session_id=session_id,
                     message=request.message,
-                    notebook_id=None,
+                    notebook_id=request.notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
                     stream=True

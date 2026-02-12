@@ -182,39 +182,9 @@ Stream clean, user-facing content only. No wrapping, no extra text.
 # USER INSTRUCTION PROMPT
 # =========================
 
-USER_INSTRUCTION = """
-Available tools: {{tool_list}}
+# USER_INSTRUCTION prompt has been moved to agent.py (STUDY_ASSISTANT_PROMPT)
+# to avoid duplication and ensure consistency across model versions.
 
-PROTOCOL:
-- To call a tool:
-  {"tool": "name", "args": {...}}
-
-- To answer:
-  {"tool": null, "answer": "<markdown response>", "follow_up_questions": ["Q1", "Q2", "Q3"]}
-
-RULES:
-- Output ONLY the single JSON object
-- follow_up_questions is optional but recommended
-- Do NOT expose internal reasoning or agent selection
-
-CONTEXT RULES:
-- Retrieved context = USER DOCUMENTS (primary)
-- Tool results = EXTERNAL INFORMATION (supplementary)
-- Always clarify the source:
-  "According to your document..."
-  "According to [web source]..."
-
-WHEN TO USE TOOLS:
-- **Courses/tutorials/certifications → ALWAYS use search_web**
-  Example: search_web("Python courses Coursera")
-- User's uploaded documents → search_sources
-- Latest tech info / comparisons → search_web
-- Generate quiz from docs → generate_quiz
-- Create study plan → generate_study_plan
-- Summarize notes → summarize_notes
-
-CRITICAL: For ANY course recommendation, use search_web first!
-"""
 
 
 # =========================
@@ -379,15 +349,7 @@ Content:
 # FOLLOW-UP QUESTIONS PROMPT
 # =========================
 
-FOLLOW_UP_QUESTIONS_PROMPT = """
-Generate exactly 3 follow-up questions:
-1. Recall & understanding
-2. Application
-3. Synthesis & connections
+# FOLLOW_UP_QUESTIONS_PROMPT has been replaced by the _generate_follow_ups() 
+# function in agent.py which uses a more direct LLM call.
 
-Explanation:
-{explanation}
-
-Return a JSON array of 3 strings only.
-"""
 # =========================

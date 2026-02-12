@@ -26,6 +26,7 @@ const usageRoutes = require('./routes/usage.routes');
 const couponRoutes = require('./routes/coupon.routes');
 const gamificationRoutes = require('./routes/gamification.routes');
 const focusRoutes = require('./routes/focus.routes');
+const recycleBinRoutes = require('./routes/recycleBin.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 const { ensureCsrfToken, verifyCsrfToken } = require('./middlewares/csrf.middleware');
@@ -125,6 +126,7 @@ app.use('/api/usage', usageRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/focus', focusRoutes);
+app.use('/api/recycle-bin', recycleBinRoutes);
 
 
 // Root route

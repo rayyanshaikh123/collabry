@@ -262,29 +262,51 @@ def similarity_search(
     
     if config.provider == "faiss":
         # FAISS: search more results and filter in memory.
-        # When filtering by source_ids, over-retrieve more to avoid missing matches.
-        search_k = k * (50 if source_ids else 5)
+        # When filtering by source_ids, over-retrieve significantly.
+        search_k = k * (100 if source_ids else 5)
         results = vectorstore.similarity_search(query, k=search_k)
         
         # Post-filter by metadata
-        filtered = [
-            doc for doc in results
-            if doc.metadata.get("user_id") == user_id
-            and (not notebook_id or doc.metadata.get("notebook_id") == notebook_id)
-            and (not source_ids or doc.metadata.get("source_id") in source_ids)
-        ]
+        filtered = []
+        for doc in results:
+            if doc.metadata.get("user_id") != user_id:
+                continue
+            if notebook_id and doc.metadata.get("notebook_id") != notebook_id:
+                continue
+            
+            # Source filtering: Match either source_id or filename (source)
+            if source_ids:
+                # Harden: Coerce both filter and metadata to strings to avoid type mismatch (int vs str)
+                str_source_ids = [str(sid) for sid in source_ids]
+                doc_source_id = str(doc.metadata.get("source_id")) if doc.metadata.get("source_id") is not None else None
+                doc_filename = str(doc.metadata.get("source")) if doc.metadata.get("source") is not None else None
+                
+                if doc_source_id not in str_source_ids and doc_filename not in str_source_ids:
+                    continue
+            
+            filtered.append(doc)
+            if len(filtered) >= k:
+                break
         
-        return filtered[:k]
+        return filtered
     
     else:
-        # Other stores support native filtering for simple equality constraints.
-        # Many providers don't support "$in" on metadata filters, so we post-filter source_ids.
-        search_k = k * 25 if source_ids else k
+        # Other stores support native filtering for user/notebook isolation.
+        search_k = k * 50 if source_ids else k
         results = vectorstore.similarity_search(query, k=search_k, filter=filter_dict)
         if not source_ids:
             return results[:k]
-        filtered = [doc for doc in results if doc.metadata.get("source_id") in source_ids]
-        return filtered[:k]
+        
+        # Standardize source filtering across providers by post-filtering the search results
+        filtered = []
+        for doc in results:
+            doc_source_id = doc.metadata.get("source_id")
+            doc_filename = doc.metadata.get("source")
+            if doc_source_id in source_ids or doc_filename in source_ids:
+                filtered.append(doc)
+            if len(filtered) >= k:
+                break
+        return filtered
 
 
 def reset_vectorstore():

@@ -22,7 +22,6 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
     # Endpoints to track
     TRACKED_ENDPOINTS = {
         # Render/conversion endpoints should not count as token usage
-        "/ai/mindmap/render": "mindmap_render",
         "/ai/chat": "chat",
         "/ai/chat/stream": "chat_stream",
         "/ai/summarize": "summarize",
@@ -140,7 +139,6 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             "qa_file": 100,
             "qa_file_stream": 100,
             "mindmap": 100,
-            "mindmap_render": 0,
             "upload": 100
         }
         

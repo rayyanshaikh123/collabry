@@ -268,6 +268,24 @@ def _extract_count(message: str, kind: str, default: int) -> int:
         except Exception:
             pass
 
+    # Quaternary: "increase to N", "make it N", "change to N", "N questions" (short follow-ups)
+    m4 = re.search(r"(?:to|it to|make it|change to|expand to)\s+(\d+)\b", message, re.IGNORECASE)
+    if m4:
+        try:
+            return int(m4.group(1))
+        except Exception:
+            pass
+
+    # Last: any standalone number in short follow-up messages
+    m5 = re.search(r"\b(\d+)\b", message)
+    if m5 and len(message.split()) <= 8:
+        try:
+            n = int(m5.group(1))
+            if 1 <= n <= 50:
+                return n
+        except Exception:
+            pass
+
     return default
 
 
@@ -450,11 +468,13 @@ def _route_tool(message: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         return "generate_quiz", {"topic": topic, "num_questions": num_questions, "difficulty": difficulty}
 
     # Follow-up quiz refinements (no explicit "quiz" keyword)
-    # Examples: "a more shorter one with like 5 questions", "make it 5 questions", "only 5 questions"
-    if (
+    # Examples: "make it 5 questions", "increase it to 10", "only 5 questions", "change to 10"
+    if re.search(r"\b\d+\b", m) and (
         "questions" in m
-        and any(k in m for k in ("short", "shorter", "only", "just", "make it", "another", "more"))
-        and re.search(r"\b\d+\b", m)
+        or any(k in m for k in (
+            "short", "shorter", "only", "just", "make it", "another", "more",
+            "increase", "change", "update", "expand", "double"
+        ))
     ):
         num_questions = _extract_count(message, kind="questions", default=5)
         difficulty = _extract_difficulty(message, default="medium")
@@ -494,10 +514,178 @@ def _route_tool(message: str) -> Optional[Tuple[str, Dict[str, Any]]]:
     return None
 
 
-async def _format_with_llm(user_message: str, tool_name: str, tool_output: str) -> str:
+# ── LLM-based intent router (replaces keyword heuristics) ────────────
+ROUTER_SYSTEM_PROMPT = """You are an Expert Study Copilot Router. Pick the best tool for the user's message, or "none" for conversational replies.
+
+MANDATORY INTERNET SEARCH:
+If the user mentions "internet", "online", "courses", "web", "youtube", "tutorials", "current news", or "latest", you MUST use search_web. NEVER use search_sources for these.
+
+CRITICAL: REWRITE VAGUE QUERIES
+If the user's message is vague (e.g., "about it", "more like this", "on that topic", "give me 5 better ones") because it refers to the conversation history or a previously discussed source/topic, you MUST REWRITE the tool parameters into a STANDALONE specific query using context from the history.
+
+SOURCE FILTERING:
+If specific 'Active Sources' are provided in the context, you MUST ensure that 'search_sources' or any local analysis tool ONLY considers those sources. Mention this in your "thought".
+
+Tools:
+- search_web(query): Search the global internet for courses, web results, and current info.
+- search_sources(query): Search ONLY the user's specific uploaded documents and notes. 
+- generate_quiz(topic, num_questions, difficulty): Practice quizzes
+- generate_flashcards(topic, num_cards): Study flashcards
+- generate_mindmap(topic): Concept visualization
+- generate_study_plan(subject, topics, duration_days): Study schedules
+- generate_report(topics): Comprehensive study reports
+- generate_infographic(topics): Visual summaries
+- summarize_notes(topic): Summarize local content
+- none: Conversational answer, no tool needed
+
+Return ONLY a JSON object: {"thought": "reasoning about the topic and tool selection", "tool": "<name>", "params": {<extracted params>}}
+
+FEW-SHOT EXAMPLES:
+1. History: assistant: I have summarized your notes on 'Arrays'.
+   User: 'alright recommend course to learn for it'
+   Result: {"thought": "User wants internet courses about 'Arrays' from history", "tool": "search_web", "params": {"query": "best online courses to learn programming arrays"}}
+
+2. History: user: Tell me about 'Quantum Mechanics'.
+   User: 'search for more'
+   Result: {"thought": "Topic is Quantum Mechanics. User wants more info.", "tool": "search_web", "params": {"query": "deep dive into quantum mechanics tutorials"}}
+
+If no tool is needed, return: {"thought": "No tool needed", "tool": "none", "params": {}}"""
+
+
+def _sanitize_tool_query(query: str, history: List[Dict[str, str]]) -> str:
+    """Ensure tool queries don't contain vague pronouns like 'it' or 'them'."""
+    vague_terms = ["it", "them", "that topic", "this topic", "search for more", "the topic"]
+    q_lower = query.lower().strip()
+    
+    if q_lower in vague_terms or any(f" {v} " in f" {q_lower} " for v in vague_terms):
+        # Extract last known topic from history
+        for h in reversed(history):
+            content = h.get("content", "")
+            if h.get("role") == "user" and len(content) > 3:
+                # Simple heuristic: last user message that isn't a short command
+                # In a real system, we might use NLP to extract the true entity
+                return f"{query.replace('it', '').replace('them', '').strip()} {content}".strip()
+    return query
+
+
+async def _route_tool_dynamic(
+    message: str,
+    history: List[Dict[str, str]],
+    source_ids: Optional[List[str]] = None,
+) -> Optional[Tuple[str, Dict[str, Any]]]:
+    """Use a lightweight LLM call to classify intent and extract tool params.
+    
+    Falls back to _route_tool() keyword heuristics if the LLM call fails.
+    """
+    # Condense history to last 4 turns, truncated for cost
+    history_lines = []
+    for h in history[-4:]:
+        role = h.get("role", "user")
+        content = (h.get("content", "") or "")[:200]
+        history_lines.append(f"{role}: {content}")
+    history_text = "\n".join(history_lines) if history_lines else "(no history)"
+
+    try:
+        source_context = f"\nActive Sources (strictly filter by these): {', '.join(source_ids)}" if source_ids else "\nActive Sources: All sources in notebook"
+        resp = await chat_completion(
+            messages=[
+                {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Conversation so far:\n{history_text}\n\n"
+                        f"{source_context}\n\n"
+                        f"Latest message: {message}"
+                    ),
+                },
+            ],
+            temperature=0,
+            max_tokens=150,
+            stream=False,
+        )
+
+        raw = (resp.choices[0].message.content or "").strip()
+        # Strip markdown fences if model wraps in ```json
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        result = json.loads(raw)
+        tool_name = result.get("tool", "none")
+        params = result.get("params", {})
+
+        if tool_name and tool_name != "none":
+            # Validate tool name against registered tools
+            valid_names = {t.name for t in ALL_TOOLS}
+            if tool_name in valid_names:
+                return tool_name, params
+            else:
+                print(f"⚠️ Dynamic router returned unknown tool '{tool_name}', falling back")
+                return _route_tool(message)
+    except Exception as e:
+        print(f"⚠️ Dynamic router failed ({e}), falling back to heuristic")
+        return _route_tool(message)
+
+    return None
+
+
+async def _generate_follow_ups(user_message: str, assistant_response: str, history: List[Dict[str, str]]) -> List[str]:
+    """Generate 3 contextual follow-up questions a student might ask next."""
+    # Skip follow-ups for structured artifacts (JSON outputs)
+    trimmed = assistant_response.strip()
+    if trimmed.startswith("[") or trimmed.startswith("{"):
+        return []
+
+    try:
+        msg_list = [
+            {
+                "role": "system",
+                "content": (
+                    "Generate exactly 3 short follow-up questions a student might ask next. "
+                    "Return ONLY a JSON array of 3 strings. No extra text."
+                ),
+            }
+        ]
+        # Include limited history for context
+        for h in history[-3:]:
+             msg_list.append({"role": h.get("role", "user"), "content": (h.get("content", "") or "")[:200]})
+        
+        msg_list.append({
+            "role": "user",
+            "content": (
+                f"Student asked: {user_message}\n"
+                f"Assistant replied: {assistant_response[:500]}"
+            ),
+        })
+
+        resp = await chat_completion(
+            messages=msg_list,
+            temperature=0.7,
+            max_tokens=200,
+            stream=False,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        questions = json.loads(raw)
+        if isinstance(questions, list) and all(isinstance(q, str) for q in questions):
+            return questions[:3]
+    except Exception:
+        pass
+    return []
+
+
+async def _format_with_llm(user_message: str, tool_name: str, tool_output: str, history: List[Dict[str, str]]) -> str:
     """Ask the LLM to present tool output nicely, without tool-calling."""
     system = (
-        "You are a study assistant. You MUST only use the provided tool output. "
+        "You are an Expert Study Assistant. Present the tool output clearly. "
+        "Use conversation history to resolve pronouns like 'it', 'them', or 'my notes'. "
         "Do not invent links, ratings, or prices. If missing, say 'Not provided'."
     )
 
@@ -514,19 +702,23 @@ async def _format_with_llm(user_message: str, tool_name: str, tool_output: str) 
             "If the sources are insufficient, say what's missing and ask one clarifying question."
         )
 
+    msg_list = [{"role": "system", "content": system}]
+    # Include history for entity resolution
+    for h in history[-4:]:
+        msg_list.append({"role": h.get("role", "user"), "content": (h.get("content", "") or "")[:300]})
+
+    msg_list.append({
+        "role": "user",
+        "content": (
+            f"User request:\n{user_message}\n\n"
+            f"Tool used: {tool_name}\n\n"
+            f"Tool output:\n{tool_output}\n\n"
+            "Now produce the final expert answer."
+        ),
+    })
+
     resp = await chat_completion(
-        messages=[
-            {"role": "system", "content": system},
-            {
-                "role": "user",
-                "content": (
-                    f"User request:\n{user_message}\n\n"
-                    f"Tool used: {tool_name}\n\n"
-                    f"Tool output:\n{tool_output}\n\n"
-                    "Now produce the final answer."
-                ),
-            },
-        ],
+        messages=msg_list,
         stream=False,
     )
 
@@ -677,14 +869,32 @@ async def run_agent(
             tool_inputs["source_ids"] = source_ids
         return tool_inputs
 
-    # If the frontend explicitly requests RAG and no specific tool intent is detected,
-    # treat this as a request to answer from the selected sources.
-    routed = _route_tool(message)
-    if routed is None and effective_use_rag:
-        routed = ("search_sources", {"query": message})
+    # Load conversation history for context (needed for dynamic routing and follow-ups)
+    conv_manager = get_conversation_manager()
+    history = conv_manager.get_history(user_id, session_id, limit=10)
+    langchain_history = _format_history_for_langchain(history)
 
-    # For non-OpenAI providers (or OpenAI-compatible endpoints), native tool calling can be unreliable.
-    # Use a deterministic router + direct tool invocation instead.
+    # Use LLM-based dynamic router (with history and source context).
+    routed = await _route_tool_dynamic(message, history, source_ids)
+
+    # Sanitize tool inputs to ensure vague queries like "it" are resolved.
+    if routed:
+        tool_name, tool_inputs = routed
+        if isinstance(tool_inputs, dict):
+            # Resolve vague entities
+            if "query" in tool_inputs:
+                tool_inputs["query"] = _sanitize_tool_query(tool_inputs["query"], history)
+            if "topic" in tool_inputs:
+                tool_inputs["topic"] = _sanitize_tool_query(tool_inputs["topic"], history)
+            
+            # Inject source filtering if applicable
+            if source_ids:
+                tool_inputs["source_ids"] = source_ids
+        
+        routed = (tool_name, tool_inputs)
+
+    # For non-OpenAI providers, native tool calling can be unreliable.
+    # Use heuristic router + tool invocation, but include history in a plain-chat fallback.
     if not supports_native_tool_calling:
         if routed is not None:
             tool_name, tool_inputs = routed
@@ -735,22 +945,30 @@ async def run_agent(
                 fallback_title = tool_inputs.get("topic") if isinstance(tool_inputs, dict) else "Flashcards"
                 final_text = _coerce_flashcards_to_frontend_schema(str(tool_output), fallback_title=str(fallback_title))
             else:
-                final_text = await _format_with_llm(message, tool_name, str(tool_output))
+                final_text = await _format_with_llm(message, tool_name, str(tool_output), history)
 
             yield {"type": "token", "content": final_text}
+
+            # Generate follow-up questions for conversational responses
+            follow_ups = await _generate_follow_ups(message, final_text, history)
+            if follow_ups:
+                yield {"type": "follow_up_questions", "questions": follow_ups}
+
             yield {"type": "complete", "message": final_text}
             return
 
-        # No routed tool: do a plain chat completion WITHOUT tool calling.
-        # This avoids OpenAI-compatible providers (e.g., Groq) attempting native function calls.
+        # No routed tool: do a plain chat completion with conversation history.
+        # Include history so the LLM understands follow-ups (e.g. "increase it to 10").
+        msg_list = [{"role": "system", "content": "You are a study assistant. Answer clearly and concisely. If the user gives a short follow-up (e.g. 'increase it to 10', 'make it 5 questions'), interpret it in context of the previous messages."}]
+        for h in history:
+            if h.get("role") == "user":
+                msg_list.append({"role": "user", "content": h.get("content", "")})
+            elif h.get("role") == "assistant":
+                msg_list.append({"role": "assistant", "content": h.get("content", "")})
+        msg_list.append({"role": "user", "content": message})
+
         resp = await chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a study assistant. Answer clearly and concisely.",
-                },
-                {"role": "user", "content": message},
-            ],
+            messages=msg_list,
             stream=True,
         )
 
@@ -768,13 +986,7 @@ async def run_agent(
         except Exception:
             # If streaming fails for some provider, fall back to non-streaming.
             resp2 = await chat_completion(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a study assistant. Answer clearly and concisely.",
-                    },
-                    {"role": "user", "content": message},
-                ],
+                messages=msg_list,
                 stream=False,
             )
             try:
@@ -783,6 +995,11 @@ async def run_agent(
                 full_text = ""
             if full_text:
                 yield {"type": "token", "content": full_text}
+
+        # Generate follow-up questions for conversational responses
+        follow_ups = await _generate_follow_ups(message, full_text, history)
+        if follow_ups:
+            yield {"type": "follow_up_questions", "questions": follow_ups}
 
         yield {"type": "complete", "message": full_text}
         return
@@ -815,18 +1032,13 @@ async def run_agent(
                 course_list = _courses_markdown_from_search_web_output(str(tool_output), max_items=8)
                 final_text = json.dumps({"tool": None, "answer": course_list}, ensure_ascii=False)
             else:
-                final_text = await _format_with_llm(message, tool_name, str(tool_output))
+                final_text = await _format_with_llm(message, tool_name, str(tool_output), history)
 
             yield {"type": "token", "content": final_text}
             yield {"type": "complete", "message": final_text}
             return
 
-    # Load conversation history
-    conv_manager = get_conversation_manager()
-    history = conv_manager.get_history(user_id, session_id, limit=10)
-    langchain_history = _format_history_for_langchain(history)
-    
-    # Create agent
+    # Create agent (history already loaded above)
     agent = _create_agent(user_id, notebook_id)
     
     # Prepare configuration with user context for tool injection
@@ -850,6 +1062,8 @@ async def run_agent(
         "generate_report",       # markdown
         "generate_infographic",  # JSON
         "generate_mindmap",      # JSON
+        "generate_quiz",         # JSON array
+        "generate_flashcards",   # JSON object
     }
     force_verbatim_output = False
     verbatim_output: Optional[str] = None
@@ -895,9 +1109,12 @@ async def run_agent(
                         continue
 
                     # This is the final response text
-                    if last_msg.content not in full_response:
-                        # Stream tokens
-                        new_content = last_msg.content[len(full_response):]
+                    if last_msg.content != full_response:
+                        # Stream tokens — use prefix-based delta extraction
+                        if last_msg.content.startswith(full_response):
+                            new_content = last_msg.content[len(full_response):]
+                        else:
+                            new_content = last_msg.content
                         full_response = last_msg.content
                         
                         if new_content:
@@ -910,7 +1127,18 @@ async def run_agent(
                 # Tool execution completed
                 tool_name = last_msg.name if hasattr(last_msg, 'name') else "unknown"
                 tool_output = last_msg.content
-                
+
+                # Coerce tool output to frontend-expected schemas
+                if tool_name == "generate_quiz":
+                    tool_output = _coerce_quiz_to_frontend_schema(str(tool_output))
+                elif tool_name == "generate_flashcards":
+                    fallback_title = "Flashcards"
+                    for tc in reversed(tool_calls):
+                        if tc.get("tool") == "generate_flashcards":
+                            fallback_title = tc.get("inputs", {}).get("topic", "Flashcards")
+                            break
+                    tool_output = _coerce_flashcards_to_frontend_schema(str(tool_output), fallback_title)
+
                 yield {
                     "type": "tool_end",
                     "tool": tool_name,
@@ -926,6 +1154,11 @@ async def run_agent(
         
         # Emit completion event
         final_message = verbatim_output if verbatim_output is not None else full_response
+        # Generate follow-up questions for conversational responses
+        follow_ups = await _generate_follow_ups(message, final_message, history)
+        if follow_ups:
+            yield {"type": "follow_up_questions", "questions": follow_ups}
+
         yield {
             "type": "complete",
             "message": final_message
@@ -989,7 +1222,8 @@ async def chat(
     user_id: str,
     session_id: str,
     message: str,
-    notebook_id: Optional[str] = None
+    notebook_id: Optional[str] = None,
+    source_ids: Optional[List[str]] = None,
 ) -> str:
     """
     Non-streaming chat interface (collects all events and returns final message).
@@ -999,12 +1233,20 @@ async def chat(
         session_id: Session identifier
         message: User message
         notebook_id: Optional notebook context
+        source_ids: Optional source filters
     
     Returns:
         Complete assistant response
     """
     response = ""
-    async for event in run_agent(user_id, session_id, message, notebook_id, stream=True):
+    async for event in run_agent(
+        user_id=user_id,
+        session_id=session_id,
+        message=message,
+        notebook_id=notebook_id,
+        source_ids=source_ids,
+        stream=True
+    ):
         if event["type"] == "token":
             response += event["content"]
         elif event["type"] == "complete":

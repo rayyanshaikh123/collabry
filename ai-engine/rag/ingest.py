@@ -124,11 +124,14 @@ async def ingest_document(
         chunks = chunk_text(text, chunk_size, chunk_overlap)
         
         # 3. Create LangChain Documents
+        # Explicitly include source_id in metadata for precise filtering
+        source_id = (metadata or {}).get("source_id") or filename
         documents = [
             Document(
                 page_content=chunk,
                 metadata={
                     "source": filename,
+                    "source_id": source_id,
                     "chunk_index": i,
                     "total_chunks": len(chunks)
                 }
@@ -183,11 +186,13 @@ async def ingest_text(
         chunks = chunk_text(text, chunk_size, chunk_overlap)
         
         # 2. Create LangChain Documents
+        # Use source_name as source_id for direct text input
         documents = [
             Document(
                 page_content=chunk,
                 metadata={
                     "source": source_name,
+                    "source_id": source_name,
                     "chunk_index": i,
                     "total_chunks": len(chunks)
                 }
