@@ -1,8 +1,6 @@
 import { useEffect, MutableRefObject } from 'react';
 import type { Editor } from 'tldraw';
 import { sanitizeShape, buildShapesFromImport } from './useBoardShapes';
-import { googleDriveService } from '@/lib/googleDrive';
-import { socketClient } from '@/lib/socket';
 
 interface UsePendingElementsProps {
   editor: Editor | null;
@@ -13,13 +11,11 @@ interface UsePendingElementsProps {
   isApplyingRemoteChange: MutableRefObject<boolean>;
   importPayloadRef: MutableRefObject<any>;
   importAppliedRef: MutableRefObject<boolean>;
-  handleElementCreated: (data: any) => void;
-  handleElementUpdated: (data: any) => void;
-  handleElementDeleted: (data: any) => void;
 }
 
 /**
- * Hook for applying pending elements and imported artifacts to the board
+ * Hook to apply pending elements (from initial load or templates) to the store.
+ * Real-time synchronization is handled separately by useBoardSync.
  */
 export const usePendingElements = ({
   editor,
@@ -29,72 +25,18 @@ export const usePendingElements = ({
   setPendingElements,
   isApplyingRemoteChange,
   importPayloadRef,
-  importAppliedRef,
-  handleElementCreated,
-  handleElementUpdated,
-  handleElementDeleted
+  importAppliedRef
 }: UsePendingElementsProps) => {
-  // Apply imported artifacts after the board loads its existing elements
   useEffect(() => {
-    if (!editor || !boardId || !isConnected) return;
-    if (!importPayloadRef.current || importAppliedRef.current) return;
+    if (!editor || !isConnected || !boardId) return;
 
-    let cancelled = false;
-
-    const tryApply = async () => {
-      if (cancelled) return;
-      if (!editor || !isConnected) return;
-
-      // Wait for initial load to finish
-      if (pendingElements.length > 0 || isApplyingRemoteChange.current) {
-        setTimeout(tryApply, 120);
-        return;
-      }
-
-      console.log('=== tryApply: Applying imported shapes ===');
-      console.log('Import payload:', importPayloadRef.current);
-
-      try {
-        const { shapes, assets } = await buildShapesFromImport(importPayloadRef.current);
-        console.log('Built shapes:', shapes.length, 'assets:', assets.length);
-        console.log('Shapes:', shapes);
-        console.log('Assets:', assets);
-        
-        const records = [...assets, ...shapes];
-        if (records.length > 0) {
-          console.log('Putting', records.length, 'records into editor store');
-          editor.store.put(records);
-          console.log('Successfully added shapes to board');
-        } else {
-          console.warn('No records to add to board');
-        }
-      } catch (e) {
-        console.error('Failed to apply imported shapes:', e);
-        console.error('Error details:', e instanceof Error ? e.stack : String(e));
-      } finally {
-        importAppliedRef.current = true;
-        importPayloadRef.current = null;
-      }
-    };
-
-    setTimeout(tryApply, 160);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [editor, boardId, isConnected, pendingElements.length, importPayloadRef, importAppliedRef, isApplyingRemoteChange]);
-
-  // Load pending elements and setup element event listeners
-  useEffect(() => {
-    if (!editor || !boardId) return;
-
-    // Load pending elements
+    // 1. Process pending elements from initial load
     if (pendingElements.length > 0) {
+      console.log('--- Applying Pending Elements ---', pendingElements.length);
       isApplyingRemoteChange.current = true;
-      
-      try {
-        const validElements = pendingElements.filter((el: any) => el && el.id && el.type);
 
+      try {
+        const validElements = pendingElements.filter(el => el && el.id && el.type);
         const shapes = validElements.map((el: any) => sanitizeShape({
           id: el.id,
           typeName: el.typeName || 'shape',
@@ -109,83 +51,41 @@ export const usePendingElements = ({
           opacity: el.opacity || 1,
           meta: el.meta || {},
         }));
-        
-        // Reconstruct assets for image shapes
-        const assets: any[] = [];
-        for (const shape of shapes) {
-          if (shape.type === 'image' && shape.props?.assetId) {
+
+        // Handle image assets for pending elements
+        validElements.forEach((el: any) => {
+          if (el.type === 'image' && el.props?.assetId) {
             let assetSrc = null;
-            
-            // Check for Drive file ID
-            if (shape.meta?.driveFileId) {
-              console.log('Loading image from Google Drive:', shape.meta.driveFileId);
-              try {
-                assetSrc = googleDriveService.getPublicUrl(shape.meta.driveFileId);
-                console.log('Using Drive public URL');
-              } catch (error) {
-                console.error('Failed to get Drive image, trying fallback:', error);
-              }
-            }
-            
-            // Check for SVG data (mindmaps) if no Drive file
-            if (!assetSrc && shape.meta?.svgDataUri) {
-              console.log('Reconstructing SVG asset for image shape:', shape.id);
-              assetSrc = shape.meta.svgDataUri;
-              assets.push({
-                id: shape.props.assetId,
-                type: 'image',
-                typeName: 'asset',
-                props: {
-                  name: `${shape.meta.title || 'mindmap'}.svg`,
-                  src: assetSrc,
-                  w: shape.props.w || 800,
-                  h: shape.props.h || 600,
-                  mimeType: 'image/svg+xml',
-                  isAnimated: false,
-                },
-                meta: {},
-              });
-              continue;
-            }
-            
-            // Check for local image data fallback
-            if (!assetSrc && shape.meta?.imageData?.src) {
-              console.log('Reconstructing general image asset from local storage:', shape.id);
-              assetSrc = shape.meta.imageData.src;
-            }
-            
-            // Create asset if we have a source
+            if (el.meta?.svgDataUri) assetSrc = el.meta.svgDataUri;
+            else if (el.meta?.imageData?.src) assetSrc = el.meta.imageData.src;
+
             if (assetSrc) {
-              assets.push({
-                id: shape.props.assetId,
+              editor.store.put([{
+                id: el.props.assetId,
                 type: 'image',
                 typeName: 'asset',
                 props: {
-                  name: shape.meta?.driveName || shape.meta?.imageData?.name || 'image.png',
+                  name: el.meta?.imageData?.name || 'image.png',
                   src: assetSrc,
-                  w: shape.meta?.w || shape.meta?.imageData?.w || shape.props.w || 800,
-                  h: shape.meta?.h || shape.meta?.imageData?.h || shape.props.h || 600,
-                  mimeType: shape.meta?.driveMimeType || shape.meta?.imageData?.mimeType || 'image/png',
+                  w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
+                  h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
+                  mimeType: el.meta?.imageData?.mimeType || (el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png'),
                   isAnimated: false,
                 },
                 meta: {},
-              });
+              }]);
             }
           }
-        }
-        
-        // Add assets first, then shapes
-        if (assets.length > 0) {
-          console.log('Recreating', assets.length, 'assets for image shapes');
-          editor.store.put(assets);
-        }
-        
+        });
+
         if (shapes.length > 0) {
           editor.store.put(shapes);
         }
+
+        // Clear pending elements after applying
         setTimeout(() => setPendingElements([]), 0);
       } catch (error) {
-        console.error('Error loading pending elements:', error);
+        console.error('Error applying pending elements:', error);
       } finally {
         setTimeout(() => {
           isApplyingRemoteChange.current = false;
@@ -193,15 +93,34 @@ export const usePendingElements = ({
       }
     }
 
-    // Setup element event listeners
-    socketClient.onElementCreated(handleElementCreated);
-    socketClient.onElementUpdated(handleElementUpdated);
-    socketClient.onElementDeleted(handleElementDeleted);
+    // 2. Process imported artifacts (mindmaps, etc.)
+    if (importPayloadRef.current && !importAppliedRef.current) {
+      const applyImport = async () => {
+        isApplyingRemoteChange.current = true;
+        importAppliedRef.current = true;
 
-    return () => {
-      socketClient.off('element:created', handleElementCreated);
-      socketClient.off('element:updated', handleElementUpdated);
-      socketClient.off('element:deleted', handleElementDeleted);
-    };
-  }, [editor, boardId, handleElementCreated, handleElementUpdated, handleElementDeleted, pendingElements, setPendingElements, isApplyingRemoteChange]);
+        try {
+          console.log('Applying imported shapes to board...');
+          const { shapes, assets } = await buildShapesFromImport(importPayloadRef.current);
+
+          if (assets && assets.length > 0) {
+            editor.store.put(assets);
+          }
+
+          if (shapes && shapes.length > 0) {
+            editor.store.put(shapes);
+            editor.zoomToSelection();
+          }
+        } catch (error) {
+          console.error('Error applying imported shapes:', error);
+        } finally {
+          setTimeout(() => {
+            isApplyingRemoteChange.current = false;
+          }, 500);
+        }
+      };
+
+      applyImport();
+    }
+  }, [editor, isConnected, boardId, pendingElements, setPendingElements, importPayloadRef, importAppliedRef, isApplyingRemoteChange]);
 };

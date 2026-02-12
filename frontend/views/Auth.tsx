@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import {  Button, Input } from '../components/UIElements';
+import { Button, Input, LoadingOverlay } from '../components/UIElements';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { authService } from '@/lib/services/auth.service';
 
@@ -21,7 +21,7 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
   const [needsVerification, setNeedsVerification] = useState(false);
-  
+
   const { login, register } = useAuthStore();
 
   // Get selected role from sessionStorage (from role selection page)
@@ -152,21 +152,22 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
   }
 
   return (
-    <div className="min-h-screen w-full flex bg-white dark:bg-slate-950 font-sans">
+    <div className="min-h-screen w-full flex bg-white dark:bg-slate-950 font-sans relative">
+      {loading && <LoadingOverlay message={isRegister ? "Creating your account..." : "Signing you in..."} />}
       <div className="flex-1 hidden lg:flex flex-col justify-center items-center bg-indigo-600 dark:bg-indigo-700 p-20 text-white relative overflow-hidden">
         {/* Abstract background shapes */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-500/30 rounded-full -ml-48 -mb-48 blur-3xl" />
-        
+
         <div className="max-w-lg z-10">
           <Link href="/" className="w-16 h-16 bg-white/20 backdrop-blur-lg rounded-2xl flex items-center justify-center mb-8 border border-white/30 shadow-2xl hover:bg-white/30 transition-all cursor-pointer">
             <span className="text-white font-black text-3xl">C</span>
           </Link>
-          <h1 className="text-5xl font-black mb-6 leading-tight">Better learning, <br/>built together.</h1>
+          <h1 className="text-5xl font-black mb-6 leading-tight">Better learning, <br />built together.</h1>
           <p className="text-xl text-indigo-100 font-medium leading-relaxed mb-10 opacity-80">
             Leverage AI and collaborative boards to master complex subjects faster.
           </p>
-          
+
           <div className="space-y-6">
             <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md">
               <div className="w-10 h-10 bg-emerald-400/20 rounded-xl flex items-center justify-center text-emerald-300">
@@ -234,12 +235,12 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
                 </div>
               </div>
             )}
-            
+
             {isRegister && (
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Full Name</label>
-                <Input 
-                  placeholder="Your full name" 
+                <Input
+                  placeholder="Your full name"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   disabled={loading}
@@ -248,8 +249,8 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
             )}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">Email Address</label>
-              <Input 
-                type="email" 
+              <Input
+                type="email"
                 placeholder="your.email@example.com"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
@@ -265,8 +266,8 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
                   </Link>
                 )}
               </div>
-              <Input 
-                type="password" 
+              <Input
+                type="password"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => handleInputChange('password', e.target.value)}
@@ -299,8 +300,8 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
               </div>
             )}
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full py-4 rounded-2xl text-lg font-bold mt-4"
               disabled={loading}
             >
@@ -311,8 +312,8 @@ const Auth: React.FC<{ type: 'login' | 'register', onAuthSuccess: () => void }> 
           {/* Provider logins removed — local email/password only */}
 
           <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-10">
-            {isRegister ? 'Already have an account?' : 'Don\'t have an account?'} 
-            <button 
+            {isRegister ? 'Already have an account?' : 'Don\'t have an account?'}
+            <button
               type="button"
               onClick={() => setIsRegister(!isRegister)}
               className="ml-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"

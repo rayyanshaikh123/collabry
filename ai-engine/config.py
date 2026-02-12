@@ -124,6 +124,13 @@ class Config:
     MAX_AGENT_ITERATIONS = int(os.getenv("MAX_AGENT_ITERATIONS", "5"))
     CONVERSATION_HISTORY_LIMIT = int(os.getenv("CONVERSATION_HISTORY_LIMIT", "10"))
     
+    # ========== Enhanced Planner Configuration ==========
+    PLANNER_SHOW_THINKING = os.getenv("PLANNER_SHOW_THINKING", "true").lower() == "true"
+    PLANNER_MIN_CONFIDENCE = float(os.getenv("PLANNER_MIN_CONFIDENCE", "0.7"))
+    PLANNER_USE_LLM_SANITIZATION = os.getenv("PLANNER_USE_LLM_SANITIZATION", "true").lower() == "true"
+    PLANNER_VALIDATE_SCHEMAS = os.getenv("PLANNER_VALIDATE_SCHEMAS", "true").lower() == "true"
+    
+    
     # ========== RAG Configuration ==========
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))

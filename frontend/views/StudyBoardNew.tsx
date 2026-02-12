@@ -10,6 +10,7 @@ import { socketClient } from '@/lib/socket';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
 import { ICONS } from '@/constants';
+import { LoadingPage } from '@/components/UIElements';
 import type { BoardParticipant } from '@/types/studyBoard.types';
 import type { StudyBoard } from '@/types';
 
@@ -56,8 +57,11 @@ interface CursorData {
 const CollaborativeBoard = () => {
   const params = useParams();
   const router = useRouter();
-  const boardId = Array.isArray(params.boardId) ? params.boardId[0] : params.boardId || null;
-  
+  const boardId = useMemo(() => {
+    const rawId = params.boardId || params.id;
+    return Array.isArray(rawId) ? rawId[0] : rawId || null;
+  }, [params.boardId, params.id]);
+
   const { user, accessToken } = useAuthStore();
 
   // State
@@ -69,7 +73,7 @@ const CollaborativeBoard = () => {
   const [participants, setParticipants] = useState<ParticipantData[]>([]);
   const [cursors, setCursors] = useState<Record<string, CursorData>>({});
   const [pendingElements, setPendingElements] = useState<any[]>([]);
-  
+
   // Modals
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -84,7 +88,33 @@ const CollaborativeBoard = () => {
   // Editor mount handler
   const handleMount = useCallback((mountedEditor: Editor) => {
     setEditor(mountedEditor);
+    mountedEditor.updateInstanceState({ isGridMode: true });
   }, []);
+
+  // Sync theme changes with tldraw
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      // tldraw's internal preference for theme
+      editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+    };
+
+    // Initial sync
+    syncTheme();
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          syncTheme();
+        }
+      });
+    });
+
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, [editor]);
 
   // Socket event handlers
   const handleUserJoined = useCallback((data: { participants: ParticipantData[] }) => {
@@ -105,132 +135,6 @@ const CollaborativeBoard = () => {
       }));
     }
   }, [user]);
-
-  const handleElementCreated = useCallback((data: any) => {
-    if (!editor || !data?.element) return;
-    if (user?.id === data.userId) return;
-
-    console.log('element:created received:', data);
-    isApplyingRemoteChange.current = true;
-
-    try {
-      const el = data.element;
-      
-      // Reconstruct assets for image shapes
-      if (el.type === 'image' && el.props?.assetId) {
-        let assetSrc = null;
-        
-        // Drive image
-        if (el.meta?.driveFileId) {
-          const { googleDriveService } = require('@/lib/googleDrive');
-          assetSrc = googleDriveService.getPublicUrl(el.meta.driveFileId);
-        }
-        // SVG data
-        else if (el.meta?.svgDataUri) {
-          assetSrc = el.meta.svgDataUri;
-        }
-        // Local image data
-        else if (el.meta?.imageData?.src) {
-          assetSrc = el.meta.imageData.src;
-        }
-
-        if (assetSrc) {
-          const asset: any = {
-            id: el.props.assetId,
-            type: 'image',
-            typeName: 'asset',
-            props: {
-              name: el.meta?.driveName || el.meta?.imageData?.name || 'image.png',
-              src: assetSrc,
-              w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
-              h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
-              mimeType: el.meta?.driveMimeType || el.meta?.imageData?.mimeType || el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png',
-              isAnimated: false,
-            },
-            meta: {},
-          };
-          editor.store.put([asset]);
-        }
-      }
-
-      const shape: any = {
-        id: el.id,
-        typeName: el.typeName || 'shape',
-        type: el.type,
-        x: el.x || 0,
-        y: el.y || 0,
-        props: el.props || {},
-        parentId: el.parentId || 'page:page',
-        index: el.index || 'a1',
-        rotation: el.rotation || 0,
-        isLocked: el.isLocked || false,
-        opacity: el.opacity || 1,
-        meta: el.meta || {},
-      };
-
-      editor.store.put([shape]);
-      console.log('Successfully added remote shape:', shape.id);
-    } catch (error) {
-      console.error('Error in handleElementCreated:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
-    }
-  }, [editor, user]);
-
-  const handleElementUpdated = useCallback((data: any) => {
-    if (!editor || !data?.element) return;
-    if (user?.id === data.userId) return;
-
-    console.log('element:updated received:', data);
-    isApplyingRemoteChange.current = true;
-
-    try {
-      const el = data.element;
-      const existingShape = editor.store.get(el.id) as any;
-      if (!existingShape) {
-        console.warn('Shape not found for update:', el.id);
-        return;
-      }
-
-      const updatedShape = {
-        ...existingShape,
-        x: el.x ?? existingShape.x,
-        y: el.y ?? existingShape.y,
-        props: { ...existingShape.props, ...el.props },
-        rotation: el.rotation ?? existingShape.rotation,
-        opacity: el.opacity ?? existingShape.opacity,
-        meta: { ...existingShape.meta, ...el.meta },
-      };
-
-      editor.store.put([updatedShape]);
-    } catch (error) {
-      console.error('Error in handleElementUpdated:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
-    }
-  }, [editor, user]);
-
-  const handleElementDeleted = useCallback((data: any) => {
-    if (!editor || !data?.elementId) return;
-    if (user?.id === data.userId) return;
-
-    console.log('element:deleted received:', data);
-    isApplyingRemoteChange.current = true;
-
-    try {
-      editor.store.remove([data.elementId]);
-    } catch (error) {
-      console.error('Error in handleElementDeleted:', error);
-    } finally {
-      setTimeout(() => {
-        isApplyingRemoteChange.current = false;
-      }, 20);
-    }
-  }, [editor, user]);
 
   // Initialize board connection
   useBoardConnection({
@@ -275,17 +179,14 @@ const CollaborativeBoard = () => {
     setPendingElements,
     isApplyingRemoteChange,
     importPayloadRef,
-    importAppliedRef,
-    handleElementCreated,
-    handleElementUpdated,
-    handleElementDeleted
+    importAppliedRef
   });
 
   // Memoized participant list
   const visibleParticipants = useMemo(() => participants.slice(0, 3), [participants]);
-  
+
   // Convert ParticipantData to BoardParticipant format
-  const boardParticipants: BoardParticipant[] = useMemo(() => 
+  const boardParticipants: BoardParticipant[] = useMemo(() =>
     participants.map(p => ({
       userId: p.userId,
       userName: p.userName || p.name,
@@ -298,25 +199,18 @@ const CollaborativeBoard = () => {
     })),
     [participants]
   );
-  
+
   const visibleBoardParticipants = useMemo(() => boardParticipants.slice(0, 3), [boardParticipants]);
 
   if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading board...</p>
-        </div>
-      </div>
-    );
+    return <LoadingPage />;
   }
 
   if (!boardId) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
+      <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">No board selected</p>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">No board selected</p>
           <Button onClick={() => router.push('/study-board')}>
             Back to Boards
           </Button>
@@ -326,7 +220,7 @@ const CollaborativeBoard = () => {
   }
 
   return (
-    <div className="h-full flex flex-col relative bg-slate-50 overflow-hidden -m-4 md:-m-8">
+    <div className="h-full flex flex-col relative bg-slate-50 dark:bg-slate-950 overflow-hidden -m-4 md:-m-8">
       {/* Board Header */}
       <BoardHeader
         boardTitle={currentBoard?.title}
@@ -340,13 +234,13 @@ const CollaborativeBoard = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
         {/* tldraw Canvas */}
-        <div className="flex-1 relative p-0 whiteboard-grid">
-          <Tldraw 
+        <div className="flex-1 relative p-0 overflow-hidden">
+          <Tldraw
             store={store}
             autoFocus
             onMount={handleMount}
           />
-          
+
           {/* Live Cursors Overlay */}
           <LiveCursors cursors={cursors} participants={boardParticipants} />
         </div>

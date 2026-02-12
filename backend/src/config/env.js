@@ -55,7 +55,7 @@ const validateEnvironment = () => {
     const dangerousValues = ['your-super-secret', 'change-this', 'example', 'test'];
     const accessSecretLower = process.env.JWT_ACCESS_SECRET.toLowerCase();
     const refreshSecretLower = process.env.JWT_REFRESH_SECRET.toLowerCase();
-    
+
     if (dangerousValues.some(val => accessSecretLower.includes(val) || refreshSecretLower.includes(val))) {
       console.error('❌ CRITICAL: JWT secrets appear to be using example/default values in production!');
       console.error('   Generate secure secrets using: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
@@ -84,20 +84,26 @@ const config = {
   },
   cors: {
     origin: function (origin, callback) {
+      // PERFORMANCE: In development, be more permissive with origins
+      if (process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
-      
+
       const allowedOrigins = [
         'http://localhost:3000',
         'http://localhost:3001',
         'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001'
+        'http://127.0.0.1:3001',
+        config.frontendUrl
       ];
-      
-      if (allowedOrigins.includes(origin)) {
+
+      if (allowedOrigins.includes(origin) || allowedOrigins.some(o => origin.startsWith(o))) {
         return callback(null, true);
       }
-      
+
       return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,

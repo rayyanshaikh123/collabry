@@ -11,9 +11,7 @@ let io = null;
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: config.cors.origin === '*' 
-        ? '*' 
-        : ['http://localhost:3000', 'https://colab-back.onrender.com'],
+      origin: config.cors.origin,
       credentials: true,
       methods: ['GET', 'POST']
     },
@@ -21,42 +19,21 @@ const initializeSocket = (httpServer) => {
     pingInterval: 25000
   });
 
-  // Authentication middleware
-  io.use((socket, next) => {
-    const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-      return next(new Error('Authentication required'));
-    }
+  // REMOVED redundant global middleware to prevent double-auth hangs
+  // Authentication is handled at the namespace level (e.g., boardNamespace.js)
 
-    try {
-      const decoded = jwt.verify(token, config.jwt.accessSecret);
-      socket.userId = decoded.id;
-      socket.userEmail = decoded.email;
-      socket.userRole = decoded.role;
-      socket.user = { id: decoded.id, email: decoded.email, role: decoded.role };
-      next();
-    } catch (error) {
-      next(new Error('Invalid token'));
-    }
-  });
-
-  // Connection handler
+  // Connection handler (simplified)
   io.on('connection', (socket) => {
-    console.log(`✅ User connected: ${socket.userEmail} (${socket.id})`);
+    console.log(`🔌 New base socket connection: ${socket.id}`);
 
     socket.on('disconnect', (reason) => {
-      console.log(`❌ User disconnected: ${socket.userEmail} (${reason})`);
-    });
-
-    socket.on('error', (error) => {
-      console.error(`Socket error for ${socket.userEmail}:`, error);
+      console.log(`❌ Base socket disconnected: ${reason}`);
     });
   });
 
   // Initialize board namespace
   require('./boardNamespace')(io);
-  
+
   // Initialize chat namespace
   const { initializeChatNamespace } = require('./chatNamespace');
   initializeChatNamespace(io);

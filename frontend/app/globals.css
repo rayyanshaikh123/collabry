@@ -103,7 +103,11 @@ body {
   color: #e2e8f0;
 }
 
-h1, h2, h3, h4, .font-display {
+h1,
+h2,
+h3,
+h4,
+.font-display {
   font-family: 'Fredoka', sans-serif;
 }
 
@@ -142,30 +146,6 @@ h1, h2, h3, h4, .font-display {
   border: 2px solid #1e293b;
 }
 
-.whiteboard-grid {
-  background-color: #fcfcfc;
-  background-image: 
-    radial-gradient(circle, #d0d5dd 1.5px, transparent 1.5px);
-  background-size: 24px 24px;
-  background-position: 0 0, 12px 12px;
-}
-
-.dark .whiteboard-grid {
-  background-color: #1a1a1a;
-  background-image: 
-    radial-gradient(circle, #374151 1.5px, transparent 1.5px);
-  background-size: 24px 24px;
-  background-position: 0 0, 12px 12px;
-}
-
-/* Tldraw canvas customization for grid visibility */
-.tl-background {
-  background: transparent !important;
-}
-
-.tl-canvas {
-  background: transparent !important;
-}
 
 /* Ensure Tldraw UI components stay below modals (z-9999) */
 .tl-toolbar,
@@ -176,6 +156,10 @@ h1, h2, h3, h4, .font-display {
 .tl-ui-context-menu,
 .tl-shape-indicator {
   z-index: 40 !important;
+}
+
+.dark .tl-container {
+  background-color: #0a0a0a !important;
 }
 
 .bouncy-hover {
@@ -213,9 +197,17 @@ h1, h2, h3, h4, .font-display {
 
 /* Logo Animation */
 @keyframes logo-pop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.2) rotate(10deg); }
-  100% { transform: scale(1) rotate(0); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2) rotate(10deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0);
+  }
 }
 
 .animate-logo-pop {
@@ -301,9 +293,11 @@ h1, h2, h3, h4, .font-display {
   0% {
     height: 0%;
   }
+
   50% {
     height: 70%;
   }
+
   100% {
     height: 0%;
   }
@@ -313,6 +307,7 @@ h1, h2, h3, h4, .font-display {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

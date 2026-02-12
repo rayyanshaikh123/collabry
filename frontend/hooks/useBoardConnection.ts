@@ -63,14 +63,6 @@ export function useBoardConnection({
           return;
         }
 
-        // Initialize Google Drive
-        try {
-          await googleDriveService.initialize();
-          console.log('[Board] Google Drive initialized');
-        } catch (error) {
-          console.warn('[Board] Google Drive initialization failed:', error);
-        }
-
         // Set join timeout
         joinTimeoutId = setTimeout(() => {
           if (!isMounted) return;
@@ -127,7 +119,7 @@ export function useBoardConnection({
           setParticipants(
             (response.participants || []).filter((p: any) => p.userId !== user.id)
           );
-          
+
           setIsConnected(true);
           setIsLoading(false);
         });
@@ -149,7 +141,7 @@ export function useBoardConnection({
 
     return () => {
       isMounted = false;
-      
+
       if (joinTimeoutId) {
         clearTimeout(joinTimeoutId);
       }
@@ -161,7 +153,7 @@ export function useBoardConnection({
           console.error('Error leaving board:', error);
         }
       }
-      
+
       socketClient.off('user:joined', handleUserJoined);
       socketClient.off('user:left', handleUserLeft);
       socketClient.off('cursor:moved', handleCursorMove);

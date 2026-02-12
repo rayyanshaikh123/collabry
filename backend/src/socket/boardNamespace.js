@@ -18,7 +18,7 @@ module.exports = (io) => {
   boardNamespace.use((socket, next) => {
     console.log('[Board NS] Auth attempt from:', socket.handshake.address);
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
-    
+
     if (!token) {
       console.error('[Board NS] No token provided');
       return next(new Error('Authentication required'));
@@ -44,10 +44,18 @@ module.exports = (io) => {
      * Join a board room
      */
     socket.on('board:join', async ({ boardId }, callback) => {
+      console.log(`📡 Join request received from ${socket.userEmail} for board: ${boardId}`);
       try {
+        if (!boardId) {
+          console.warn(`⚠️ Join failed: Missing boardId from ${socket.userEmail}`);
+          if (typeof callback === 'function') return callback({ error: 'Board ID is required' });
+          return;
+        }
+
         // Verify user has access to this board
-        const board = await Board.findById(boardId);
-        
+        // PERFORMANCE: Use .lean() for faster retrieval and plain JS object
+        const board = await Board.findById(boardId).lean();
+
         if (!board) {
           if (typeof callback === 'function') {
             return callback({ error: 'Board not found' });
@@ -56,8 +64,8 @@ module.exports = (io) => {
         }
 
         // Check if user is a member or owner
-        const isMember = board.owner.toString() === socket.userId || 
-                        board.members.some(m => m.userId.toString() === socket.userId);
+        const isMember = board.owner.toString() === socket.userId ||
+          board.members.some(m => m.userId.toString() === socket.userId);
 
         if (!isMember && !board.isPublic) {
           if (typeof callback === 'function') {
@@ -101,9 +109,11 @@ module.exports = (io) => {
         });
 
         // Send current board state and participants to the joining user
-        console.log(`[Board ${boardId}] Sending board data with ${board.elements?.length || 0} elements to ${socket.userEmail}`);
+        const originalElementCount = board.elements?.length || 0;
+        console.log(`[Board ${boardId}] Sending board data with ${originalElementCount} elements to ${socket.userEmail}`);
+
         // Clean board elements before sending (remove Mongoose fields, ensure required tldraw fields)
-        const cleanElements = board.elements.map(el => ({
+        const cleanElements = (board.elements || []).map(el => ({
           id: el.id,
           type: el.type,
           typeName: el.typeName || 'shape',
@@ -116,17 +126,18 @@ module.exports = (io) => {
           meta: el.meta || {},
           parentId: el.parentId || 'page:page',
           index: el.index || 'a1'
-        })).filter(el => el.type); // Filter out elements without type
+        })).filter(el => el.type);
 
-        console.log(`[Board ${boardId}] Sending ${cleanElements.length} cleaned elements (original: ${board.elements.length})`);
-        
+        console.log(`[Board ${boardId}] Sending ${cleanElements.length} cleaned elements (Payload optimized)`);
+
+        // PERFORMANCE: Create a lean board object WITHOUT the duplicate elements array
+        const { elements: _, ...leanBoard } = board;
+
         if (typeof callback === 'function') {
-          callback({ 
+          callback({
             success: true,
-            board: {
-              ...board.toObject(),
-              elements: cleanElements
-            },
+            board: leanBoard,
+            elements: cleanElements,
             participants: participants.map(p => ({
               userId: p.userId,
               email: p.email,
@@ -136,7 +147,7 @@ module.exports = (io) => {
           });
         }
 
-        console.log(`✅ ${socket.userEmail} joined board: ${boardId}`);
+        console.log(`✅ ${socket.userEmail} joined board: ${boardId} (Final payload sent)`);
       } catch (error) {
         console.error('Error joining board:', error);
         if (typeof callback === 'function') {
@@ -157,46 +168,73 @@ module.exports = (io) => {
      */
     socket.on('element:create', async ({ boardId, element }, callback) => {
       try {
-        console.log(`[Board ${boardId}] Creating element:`, element.type, element.id);
-        
-        const board = await Board.findById(boardId);
-        if (!board) {
-          console.error(`[Board ${boardId}] Board not found`);
+        // Use atomic update to push new element
+        const updatedBoard = await Board.findOneAndUpdate(
+          {
+            _id: boardId,
+            'elements.id': { $ne: element.id } // Prevent duplicate IDs
+          },
+          {
+            $push: {
+              elements: {
+                ...element,
+                id: element.id || generateId(),
+                createdBy: socket.userId,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+            },
+            $set: { updatedAt: new Date() }
+          },
+          { new: true, runValidators: false }
+        );
+
+        if (!updatedBoard) {
+          // Check if it failed because board doesn't exist or element already exists
+          const existingBoard = await Board.findById(boardId).lean();
+          if (!existingBoard) {
+            console.error(`[Board ${boardId}] Board not found`);
+            if (callback && typeof callback === 'function') {
+              return callback({ error: 'Board not found' });
+            }
+            return;
+          }
+
+          const alreadyExists = existingBoard.elements.some(el => el.id === element.id);
+          if (alreadyExists) {
+            console.warn(`[Board ${boardId}] Element ${element.id} already exists, skipping create`);
+            if (callback && typeof callback === 'function') {
+              return callback({ success: true, message: 'Element already exists' });
+            }
+            return;
+          }
+        }
+
+        console.log(`[Board ${boardId}] Element saved to DB atomically. Total elements: ${updatedBoard ? updatedBoard.elements.length : 'unknown'}`);
+
+        // Clean element for tldraw - remove Mongoose fields
+        const savedElement = updatedBoard.elements.find(el => el.id === element.id);
+        if (!savedElement) {
+          console.error(`[Board ${boardId}] Failed to find saved element in board elements`);
           if (callback && typeof callback === 'function') {
-            return callback({ error: 'Board not found' });
+            return callback({ error: 'Failed to confirm element save' });
           }
           return;
         }
 
-        // Add element with metadata
-        const newElement = {
-          ...element,
-          id: element.id || generateId(),
-          createdBy: socket.userId,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-
-        board.elements.push(newElement);
-        board.updatedAt = new Date();
-        await board.save();
-
-        console.log(`[Board ${boardId}] Element saved to DB. Total elements: ${board.elements.length}`);
-
-        // Clean element for tldraw - remove Mongoose fields
         const cleanElement = {
-          id: newElement.id,
-          type: newElement.type,
-          x: newElement.x,
-          y: newElement.y,
-          rotation: newElement.rotation,
-          isLocked: newElement.isLocked,
-          opacity: newElement.opacity,
-          props: newElement.props,
-          meta: newElement.meta,
-          parentId: newElement.parentId,
-          index: newElement.index,
-          typeName: newElement.typeName || 'shape'
+          id: savedElement.id,
+          type: savedElement.type,
+          x: savedElement.x,
+          y: savedElement.y,
+          rotation: savedElement.rotation,
+          isLocked: savedElement.isLocked,
+          opacity: savedElement.opacity,
+          props: savedElement.props,
+          meta: savedElement.meta,
+          parentId: savedElement.parentId,
+          index: savedElement.index,
+          typeName: savedElement.typeName || 'shape'
         };
 
         // Broadcast to all users in the room except sender
@@ -224,23 +262,26 @@ module.exports = (io) => {
      */
     socket.on('element:update', async ({ boardId, elementId, changes }, callback) => {
       try {
-        // Use findOneAndUpdate with upsert for atomic operation
+        console.log(`[Board ${boardId}] Receiving update for ${elementId}`, Object.keys(changes));
+
+        // Build the update object using positional operator
+        const updateObj = {
+          'elements.$.updatedAt': new Date(),
+          updatedAt: new Date()
+        };
+
+        // Add each change to the update object with the positional prefix
+        Object.keys(changes).forEach(key => {
+          updateObj[`elements.$.${key}`] = changes[key];
+        });
+
+        // Use findOneAndUpdate for atomic operation
         const board = await Board.findOneAndUpdate(
-          { 
-            _id: boardId,
-            'elements.id': elementId 
-          },
           {
-            $set: {
-              'elements.$.id': elementId,
-              ...Object.keys(changes).reduce((acc, key) => {
-                acc[`elements.$.${key}`] = changes[key];
-                return acc;
-              }, {}),
-              'elements.$.updatedAt': new Date(),
-              updatedAt: new Date()
-            }
+            _id: boardId,
+            'elements.id': elementId
           },
+          { $set: updateObj },
           { new: true }
         );
 
@@ -249,9 +290,10 @@ module.exports = (io) => {
 
         // If element wasn't found (no update happened), create it
         if (!board) {
+          console.log(`[Board ${boardId}] Element ${elementId} not found for update, attempting push as new`);
           // Element doesn't exist, so add it - use $addToSet pattern to prevent duplicates
           const updatedBoard = await Board.findOneAndUpdate(
-            { 
+            {
               _id: boardId,
               'elements.id': { $ne: elementId }  // Only push if element doesn't exist
             },
@@ -272,27 +314,18 @@ module.exports = (io) => {
 
           if (!updatedBoard) {
             // Either board doesn't exist OR element was already added by another request
-            // Try to update it instead
+            // If it was already added, it might have been an update that just missed the first check
             const retryBoard = await Board.findOneAndUpdate(
-              { 
-                _id: boardId,
-                'elements.id': elementId 
-              },
               {
-                $set: {
-                  ...Object.keys(changes).reduce((acc, key) => {
-                    acc[`elements.$.${key}`] = changes[key];
-                    return acc;
-                  }, {}),
-                  'elements.$.updatedAt': new Date(),
-                  updatedAt: new Date()
-                }
+                _id: boardId,
+                'elements.id': elementId
               },
+              { $set: updateObj },
               { new: true }
             );
 
             if (!retryBoard) {
-              console.error(`[Board ${boardId}] Board not found even on retry`);
+              console.error(`[Board ${boardId}] Board not found even on retry for ${elementId}`);
               if (callback && typeof callback === 'function') {
                 return callback({ error: 'Board not found' });
               }
@@ -301,22 +334,17 @@ module.exports = (io) => {
 
             element = retryBoard.elements.find(el => el.id === elementId);
             console.log(`[Board ${boardId}] Element already existed, updated on retry: ${elementId}`);
-            // Don't broadcast since it was likely already created
-            if (typeof callback === 'function') {
-              return callback({ success: true });
-            }
-            return;
+          } else {
+            element = updatedBoard.elements.find(el => el.id === elementId);
+            wasCreated = true;
+            console.log(`[Board ${boardId}] Created new element via update fallback: ${elementId}`);
           }
-
-          element = updatedBoard.elements.find(el => el.id === elementId);
-          wasCreated = true;
-          console.log(`[Board ${boardId}] Created new element: ${elementId}`);
         } else {
           element = board.elements.find(el => el.id === elementId);
           console.log(`[Board ${boardId}] Updated existing element: ${elementId}`);
         }
 
-        console.log(`[Board ${boardId}] Element saved to DB. Total elements: ${board ? board.elements.length : 'unknown'}`);
+        console.log(`[Board ${boardId}] Element update saved to DB. Total elements: ${element ? 'present' : 'error'}`);
 
         // Broadcast - if it was created, send full element; otherwise send changes
         if (wasCreated) {
@@ -337,7 +365,7 @@ module.exports = (io) => {
             index: elementObj.index,
             typeName: elementObj.typeName || 'shape'
           };
-          
+
           socket.to(boardId).emit('element:created', {
             element: cleanElement,
             userId: socket.userId,
@@ -347,7 +375,7 @@ module.exports = (io) => {
         } else {
           // Get the full element for broadcasting
           const elementObj = element.toObject ? element.toObject() : element;
-          
+
           // For draw shapes, send complete shape data instead of just changes
           const broadcastData = elementObj.type === 'draw' ? {
             elementId,
@@ -372,7 +400,7 @@ module.exports = (io) => {
             userId: socket.userId,
             timestamp: new Date()
           };
-          
+
           socket.to(boardId).emit('element:updated', broadcastData);
           console.log(`[Board ${boardId}] Broadcasted element:updated to room`);
         }
@@ -394,11 +422,11 @@ module.exports = (io) => {
     socket.on('element:delete', async ({ boardId, elementId }, callback) => {
       try {
         console.log(`[Board ${boardId}] Deleting element:`, elementId);
-        
+
         // Use atomic operation to avoid version conflicts
         const board = await Board.findOneAndUpdate(
           { _id: boardId },
-          { 
+          {
             $pull: { elements: { id: elementId } },
             $set: { updatedAt: new Date() }
           },
@@ -462,7 +490,7 @@ module.exports = (io) => {
     socket.on('elements:batch-update', async ({ boardId, updates }, callback) => {
       try {
         console.log(`[Board ${boardId}] Batch updating ${updates.length} elements`);
-        
+
         // Use atomic operations for each update to avoid version conflicts
         const updatePromises = updates.map(({ elementId, changes }) => {
           return Board.findOneAndUpdate(
@@ -544,17 +572,17 @@ module.exports = (io) => {
    */
   function generateUserColor(userId) {
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', 
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
       '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2',
       '#F8B739', '#52B788', '#E76F51', '#2A9D8F'
     ];
-    
+
     // Generate consistent index from userId
     let hash = 0;
     for (let i = 0; i < userId.length; i++) {
       hash = userId.charCodeAt(i) + ((hash << 5) - hash);
     }
-    
+
     return colors[Math.abs(hash) % colors.length];
   }
 

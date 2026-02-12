@@ -12,18 +12,23 @@ from langchain_core.documents import Document
 
 
 def format_sources(docs: list[Document]) -> str:
-    """Format retrieved documents with source citations."""
+    """Format retrieved documents by grouping chunks by their original source."""
     if not docs:
-        return "No relevant information found in your documents."
+        return "I couldn't find any relevant information in your documents."
     
-    formatted = "Here's what I found in your documents:\n\n"
+    # Group by source filename
+    by_source = {}
+    for doc in docs:
+        source = doc.metadata.get("source") or doc.metadata.get("filename") or "Unknown Document"
+        if source not in by_source:
+            by_source[source] = []
+        by_source[source].append(doc.page_content.strip())
     
-    for i, doc in enumerate(docs, 1):
-        source = doc.metadata.get("source", "Unknown source")
-        chunk_idx = doc.metadata.get("chunk_index", "")
-        
-        formatted += f"**Source {i}** ({source}):\n"
-        formatted += f"{doc.page_content}\n\n"
+    formatted = "I found some relevant information in your documents:\n\n"
+    for i, (source, chunks) in enumerate(by_source.items(), 1):
+        formatted += f"### Document {i}: {source}\n"
+        for chunk in chunks:
+            formatted += f"- {chunk}\n\n"
     
     return formatted.strip()
 

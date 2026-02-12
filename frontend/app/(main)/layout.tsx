@@ -193,14 +193,7 @@ export default function MainLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 6h16M4 12h16m-7 6h7" />
               </svg>
             </button>
-            <div className="hidden md:flex items-center bg-slate-50 dark:bg-slate-800 rounded-2xl px-4 py-2 w-72 border-2 border-transparent focus-within:border-indigo-200 dark:focus-within:border-indigo-700 focus-within:bg-white dark:focus-within:bg-slate-700 transition-all shadow-inner">
-              <span className="text-slate-300 dark:text-slate-500"><ICONS.Search size={18} strokeWidth={3} /></span>
-              <input
-                type="text"
-                placeholder="Search your knowledge..."
-                className="bg-transparent border-none outline-none text-sm ml-2 w-full text-slate-600 dark:text-slate-300 placeholder:text-slate-300 dark:placeholder:text-slate-500 font-bold"
-              />
-            </div>
+            {/* Search bar removed per user request */}
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">

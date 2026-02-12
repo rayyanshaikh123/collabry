@@ -22,6 +22,11 @@ fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
  * Helper function to extract text content from source
  */
 async function extractSourceContent(source) {
+  // Check for cached content first (Performance optimization)
+  if (source.content && source.content.trim().length > 0) {
+    return source.content;
+  }
+
   if (source.type === 'text' || source.type === 'notes') {
     return source.content || '';
   } else if (source.type === 'pdf' || source.type === 'document') {
@@ -469,6 +474,17 @@ exports.addSource = asyncHandler(async (req, res) => {
 
     source.filePath = filePath;
     source.size = file.size;
+
+    // PERFORMANCE: Extract text immediately during upload for caching
+    try {
+      console.log(`[PERF] Early extraction for ${source.name}`);
+      const text = await extractSourceContent(source);
+      if (text && !text.startsWith('[PDF Document:')) {
+        source.content = text;
+      }
+    } catch (err) {
+      console.warn(`[PERF] Early extraction failed: ${err.message}`);
+    }
   } else if (type === 'website') {
     if (!url) {
       throw new AppError('URL is required for website sources', 400);
@@ -808,13 +824,23 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
   const selectedSources = notebook.sources.filter(s => s.selected);
   const context = [];
 
-  for (const source of selectedSources) {
-    let content = '';
+  let hasMisingContent = false;
 
-    try {
-      content = await extractSourceContent(source);
-    } catch (error) {
-      content = `[Error extracting content: ${source.name}]`;
+  for (const source of selectedSources) {
+    let content = source.content || '';
+
+    // Lazy caching: if content missing, extract it now
+    if (!content || content.length < 10) {
+      try {
+        console.log(`[PERF] Lazy caching content for source: ${source.name}`);
+        content = await extractSourceContent(source);
+        if (content && !content.startsWith('[PDF Document:')) {
+          source.content = content;
+          hasMisingContent = true;
+        }
+      } catch (error) {
+        content = `[Error extracting content: ${source.name}]`;
+      }
     }
 
     context.push({
@@ -823,6 +849,12 @@ exports.getNotebookContext = asyncHandler(async (req, res) => {
       type: source.type,
       content: content.substring(0, 10000) // Limit to prevent huge payloads
     });
+  }
+
+  // Save changes if any sources were lazy-cached
+  if (hasMisingContent) {
+    console.log(`[PERF] Saving notebook ${notebook._id} with lazy-cached source content`);
+    await notebook.save();
   }
 
   res.json({
