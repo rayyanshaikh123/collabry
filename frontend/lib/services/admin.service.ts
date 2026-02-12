@@ -102,6 +102,32 @@ export const adminService = {
   },
 
   /**
+   * Bulk enable/disable users
+   */
+  async bulkUpdateUserStatus(userIds: string[], isActive: boolean): Promise<{ modifiedCount: number }> {
+    const response = await apiClient.patch('/admin/users/bulk-status', { userIds, isActive });
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error?.message || 'Failed to update users');
+  },
+
+  /**
+   * Bulk delete users
+   */
+  async bulkDeleteUsers(userIds: string[]): Promise<{ deletedCount: number }> {
+    const response = await apiClient.delete('/admin/users/bulk', { data: { userIds } });
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+
+    throw new Error(response.error?.message || 'Failed to delete users');
+  },
+
+  /**
    * Get dashboard stats
    */
   async getDashboard(): Promise<any> {

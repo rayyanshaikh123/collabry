@@ -17,6 +17,7 @@ export enum AppRoute {
   ADMIN_AI = 'admin-ai',
   ADMIN_REPORTS = 'admin-reports',
   ADMIN_BOARDS = 'admin-boards',
+  ADMIN_COUPONS = 'admin-coupons',
   ADMIN_SETTINGS = 'admin-settings',
   LOGIN = 'login',
   REGISTER = 'register',

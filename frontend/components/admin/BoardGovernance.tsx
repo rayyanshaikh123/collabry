@@ -14,6 +14,7 @@ interface BoardGovernanceProps {
   setBoardPage: (page: number | ((p: number) => number)) => void;
   handleSuspendBoard: (board: AdminBoard) => void;
   handleForceDeleteBoard: (board: AdminBoard) => void;
+  handleViewAnalytics?: (board: AdminBoard) => void;
 }
 
 const BoardGovernance: React.FC<BoardGovernanceProps> = ({
@@ -27,6 +28,7 @@ const BoardGovernance: React.FC<BoardGovernanceProps> = ({
   setBoardPage,
   handleSuspendBoard,
   handleForceDeleteBoard,
+  handleViewAnalytics,
 }) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -129,6 +131,17 @@ const BoardGovernance: React.FC<BoardGovernanceProps> = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
+                        {handleViewAnalytics && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleViewAnalytics(board)}
+                            title="View analytics"
+                            className="text-indigo-500 hover:text-indigo-600"
+                          >
+                            <ICONS.Search size={16} />
+                          </Button>
+                        )}
                         {!board.isArchived && (
                           <Button 
                             variant="ghost" 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Button, Badge, Input } from '../UIElements';
 import { ICONS } from '../../constants';
 import type { User } from '@/types/user.types';
@@ -15,6 +15,10 @@ interface UserManagementProps {
   handleEditUser: (user: User) => void;
   handleToggleStatus: (user: User) => void;
   handleDeleteUser: (user: User) => void;
+  handleViewUser?: (user: User) => void;
+  handleBulkEnable?: (userIds: string[]) => void;
+  handleBulkDisable?: (userIds: string[]) => void;
+  handleBulkDelete?: (userIds: string[]) => void;
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({
@@ -29,7 +33,33 @@ const UserManagement: React.FC<UserManagementProps> = ({
   handleEditUser,
   handleToggleStatus,
   handleDeleteUser,
+  handleViewUser,
+  handleBulkEnable,
+  handleBulkDisable,
+  handleBulkDelete,
 }) => {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const hasBulk = !!(handleBulkEnable || handleBulkDisable || handleBulkDelete);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === users.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(users.map(u => u.id)));
+    }
+  };
+
+  const selectedArr = Array.from(selectedIds);
+
   return (
     <Card noPadding className="animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="p-6 border-b-2 border-slate-50 flex items-center justify-between">
@@ -46,10 +76,49 @@ const UserManagement: React.FC<UserManagementProps> = ({
           </Button>
         </div>
       </div>
+      
+      {/* Bulk action bar */}
+      {hasBulk && selectedIds.size > 0 && (
+        <div className="px-6 py-3 bg-indigo-50 dark:bg-indigo-950/40 border-b-2 border-indigo-100 dark:border-indigo-900 flex items-center gap-3">
+          <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex gap-2 ml-auto">
+            {handleBulkEnable && (
+              <Button variant="outline" size="sm" onClick={() => { handleBulkEnable(selectedArr); setSelectedIds(new Set()); }}>
+                <ICONS.CheckCircle size={14} className="mr-1" /> Enable
+              </Button>
+            )}
+            {handleBulkDisable && (
+              <Button variant="outline" size="sm" onClick={() => { handleBulkDisable(selectedArr); setSelectedIds(new Set()); }}>
+                <ICONS.AlertCircle size={14} className="mr-1" /> Disable
+              </Button>
+            )}
+            {handleBulkDelete && (
+              <Button variant="outline" size="sm" className="text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => { handleBulkDelete(selectedArr); setSelectedIds(new Set()); }}>
+                <ICONS.Trash size={14} className="mr-1" /> Delete
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-left">
           <thead className="bg-slate-50 dark:bg-slate-800 text-[10px] font-black dark:text-slate-200 text-slate-400 uppercase tracking-widest">
             <tr>
+              {hasBulk && (
+                <th className="px-4 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={users.length > 0 && selectedIds.size === users.length}
+                    onChange={toggleAll}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </th>
+              )}
               <th className="px-6 py-4">User</th>
               <th className="px-6 py-4">Role</th>
               <th className="px-6 py-4">Status</th>
@@ -60,13 +129,13 @@ const UserManagement: React.FC<UserManagementProps> = ({
           <tbody className="divide-y-2 divide-slate-50 font-bold">
             {loading && users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                <td colSpan={hasBulk ? 6 : 5} className="px-6 py-12 text-center text-slate-400">
                   Loading users...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                <td colSpan={hasBulk ? 6 : 5} className="px-6 py-12 text-center text-slate-400">
                   No users found
                 </td>
               </tr>
@@ -76,7 +145,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                 const joinDate = new Date(user.createdAt).toLocaleDateString();
                 
                 return (
-                  <tr key={user.id} className="hover:bg-slate-50/50">
+                  <tr key={user.id} className={`hover:bg-slate-50/50 ${selectedIds.has(user.id) ? 'bg-indigo-50/50 dark:bg-indigo-950/20' : ''}`}>
+                    {hasBulk && (
+                      <td className="px-4 py-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(user.id)}
+                          onChange={() => toggleSelect(user.id)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {user.avatar ? (
@@ -110,6 +189,17 @@ const UserManagement: React.FC<UserManagementProps> = ({
                     <td className="px-6 py-4 text-sm text-slate-400">{joinDate}</td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
+                        {handleViewUser && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => handleViewUser(user)}
+                            title="View details"
+                            className="text-indigo-500 hover:text-indigo-600"
+                          >
+                            <ICONS.Search size={16} />
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="icon"

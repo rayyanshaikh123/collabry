@@ -180,6 +180,66 @@ const deleteUser = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Bulk update user status (enable/disable)
+ * @route   PATCH /api/admin/users/bulk-status
+ * @access  Private/Admin
+ */
+const bulkUpdateUserStatus = asyncHandler(async (req, res) => {
+  const { userIds, isActive } = req.body;
+
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    throw new AppError('Please provide an array of user IDs', 400);
+  }
+  if (typeof isActive !== 'boolean') {
+    throw new AppError('Please provide isActive as a boolean', 400);
+  }
+
+  // Prevent disabling self
+  const adminId = req.user._id.toString();
+  if (!isActive && userIds.includes(adminId)) {
+    throw new AppError('Cannot disable your own account', 400);
+  }
+
+  const result = await User.updateMany(
+    { _id: { $in: userIds } },
+    { $set: { isActive } }
+  );
+
+  res.status(200).json({
+    success: true,
+    message: `${result.modifiedCount} user(s) ${isActive ? 'enabled' : 'disabled'} successfully`,
+    data: { modifiedCount: result.modifiedCount },
+  });
+});
+
+/**
+ * @desc    Bulk delete users
+ * @route   DELETE /api/admin/users/bulk
+ * @access  Private/Admin
+ */
+const bulkDeleteUsers = asyncHandler(async (req, res) => {
+  const { userIds } = req.body;
+
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    throw new AppError('Please provide an array of user IDs', 400);
+  }
+
+  // Prevent deleting self
+  const adminId = req.user._id.toString();
+  if (userIds.includes(adminId)) {
+    throw new AppError('Cannot delete your own account', 400);
+  }
+
+  const result = await User.deleteMany({ _id: { $in: userIds } });
+
+  res.status(200).json({
+    success: true,
+    message: `${result.deletedCount} user(s) deleted successfully`,
+    data: { deletedCount: result.deletedCount },
+  });
+});
+
+/**
  * @desc    Get all boards (Admin)
  * @route   GET /api/admin/boards
  * @access  Private/Admin
@@ -315,6 +375,8 @@ module.exports = {
   createUser,
   updateUser,
   deleteUser,
+  bulkUpdateUserStatus,
+  bulkDeleteUsers,
   getAllBoards,
   getBoardAnalytics,
   suspendBoard,

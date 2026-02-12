@@ -1,6 +1,7 @@
 const express = require('express');
 const adminController = require('../controllers/admin.controller');
 const reportController = require('../controllers/report.controller');
+const deepReportsController = require('../controllers/deepReports.controller');
 const { protect } = require('../middlewares/auth.middleware');
 const authorizeRoles = require('../middlewares/role.middleware');
 
@@ -50,6 +51,20 @@ router.put('/users/:id', ...adminAuth, adminController.updateUser);
  * @access  Private/Admin only
  */
 router.delete('/users/:id', ...adminAuth, adminController.deleteUser);
+
+/**
+ * @route   PATCH /api/admin/users/bulk-status
+ * @desc    Bulk enable/disable users
+ * @access  Private/Admin only
+ */
+router.patch('/users/bulk-status', ...adminAuth, adminController.bulkUpdateUserStatus);
+
+/**
+ * @route   DELETE /api/admin/users/bulk
+ * @desc    Bulk delete users
+ * @access  Private/Admin only
+ */
+router.delete('/users/bulk', ...adminAuth, adminController.bulkDeleteUsers);
 
 // ============================================================================
 // BOARD MANAGEMENT ROUTES (Admin only)
@@ -160,5 +175,15 @@ router.put('/reports/:id/dismiss', ...adminAuth, reportController.dismissReport)
  * @access  Private/Admin only
  */
 router.delete('/reports/bulk', ...adminAuth, reportController.bulkDeleteReports);
+
+// ============================================================================
+// DEEP REPORTS / ANALYTICS ROUTES (Admin only)
+// ============================================================================
+
+router.get('/deep-reports/user-growth', ...adminAuth, deepReportsController.getUserGrowthReport);
+router.get('/deep-reports/engagement', ...adminAuth, deepReportsController.getEngagementReport);
+router.get('/deep-reports/ai-usage', ...adminAuth, deepReportsController.getAIUsageReport);
+router.get('/deep-reports/boards', ...adminAuth, deepReportsController.getBoardsReport);
+router.get('/deep-reports/revenue', ...adminAuth, deepReportsController.getRevenueReport);
 
 module.exports = router;

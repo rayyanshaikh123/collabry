@@ -21,6 +21,10 @@ import ReportActionModal from '../components/admin/ReportActionModal';
 import AIMonitoring from '../components/admin/AIMonitoring';
 import BoardGovernance from '../components/admin/BoardGovernance';
 import PlatformSettingsPanel from '../components/admin/PlatformSettings';
+import DeepReports from '../components/admin/DeepReports';
+import CouponManagement from '../components/admin/CouponManagement';
+import UserDetailModal from '../components/admin/UserDetailModal';
+import BoardAnalyticsModal from '../components/admin/BoardAnalyticsModal';
 
 interface AdminDashboardProps {
   currentSubRoute: AppRoute;
@@ -38,6 +42,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+  const [viewingBoardId, setViewingBoardId] = useState<string | null>(null);
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
@@ -594,6 +600,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       });
     }
   };
+
+  const handleBulkEnable = async (userIds: string[]) => {
+    try {
+      const { modifiedCount } = await adminService.bulkUpdateUserStatus(userIds, true);
+      showAlert({ type: 'success', title: 'Users Enabled', message: `${modifiedCount} user(s) enabled` });
+      loadUsers();
+    } catch (error: any) {
+      showAlert({ type: 'error', title: 'Bulk Enable Failed', message: error.message });
+    }
+  };
+
+  const handleBulkDisable = async (userIds: string[]) => {
+    try {
+      const { modifiedCount } = await adminService.bulkUpdateUserStatus(userIds, false);
+      showAlert({ type: 'success', title: 'Users Disabled', message: `${modifiedCount} user(s) disabled` });
+      loadUsers();
+    } catch (error: any) {
+      showAlert({ type: 'error', title: 'Bulk Disable Failed', message: error.message });
+    }
+  };
+
+  const handleBulkDeleteUsers = async (userIds: string[]) => {
+    if (!confirm(`Are you sure you want to delete ${userIds.length} user(s)? This cannot be undone.`)) return;
+    try {
+      const { deletedCount } = await adminService.bulkDeleteUsers(userIds);
+      showAlert({ type: 'success', title: 'Users Deleted', message: `${deletedCount} user(s) deleted` });
+      loadUsers();
+    } catch (error: any) {
+      showAlert({ type: 'error', title: 'Bulk Delete Failed', message: error.message });
+    }
+  };
   
   const stats = [
     { 
@@ -675,6 +712,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               handleEditUser={handleEditUser}
               handleToggleStatus={handleToggleStatus}
               handleDeleteUser={handleDeleteUser}
+              handleViewUser={(user) => setViewingUserId(user.id)}
+              handleBulkEnable={handleBulkEnable}
+              handleBulkDisable={handleBulkDisable}
+              handleBulkDelete={handleBulkDeleteUsers}
             />
             <UserFormModal
               showModal={showModal}
@@ -692,6 +733,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
               confirmDeleteUser={confirmDeleteUser}
               cancelDeleteUser={cancelDeleteUser}
             />
+            {viewingUserId && (
+              <UserDetailModal
+                userId={viewingUserId}
+                onClose={() => setViewingUserId(null)}
+              />
+            )}
           </>
         );
       
@@ -730,21 +777,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
           />
         );
       
+      case AppRoute.ADMIN_REPORTS:
+        return <DeepReports />;
+
       case AppRoute.ADMIN_BOARDS:
         return (
-          <BoardGovernance
-            boards={boards}
-            boardStats={boardStats}
-            boardsLoading={boardsLoading}
-            boardSearchTerm={boardSearchTerm}
-            setBoardSearchTerm={setBoardSearchTerm}
-            boardPage={boardPage}
-            boardTotalPages={boardTotalPages}
-            setBoardPage={setBoardPage}
-            handleSuspendBoard={handleSuspendBoard}
-            handleForceDeleteBoard={handleForceDeleteBoard}
-          />
+          <>
+            <BoardGovernance
+              boards={boards}
+              boardStats={boardStats}
+              boardsLoading={boardsLoading}
+              boardSearchTerm={boardSearchTerm}
+              setBoardSearchTerm={setBoardSearchTerm}
+              boardPage={boardPage}
+              boardTotalPages={boardTotalPages}
+              setBoardPage={setBoardPage}
+              handleSuspendBoard={handleSuspendBoard}
+              handleForceDeleteBoard={handleForceDeleteBoard}
+              handleViewAnalytics={(board) => setViewingBoardId(board._id)}
+            />
+            {viewingBoardId && (
+              <BoardAnalyticsModal
+                boardId={viewingBoardId}
+                onClose={() => setViewingBoardId(null)}
+              />
+            )}
+          </>
         );
+
+      case AppRoute.ADMIN_COUPONS:
+        return <CouponManagement />;
 
       case AppRoute.ADMIN_SETTINGS:
         return (
