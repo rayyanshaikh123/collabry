@@ -334,6 +334,18 @@ class UsageTracker:
             logger.error(f"Failed to get today's tokens for {user_id}: {e}")
             return 0
 
+    def get_today_operations(self, user_id: str) -> int:
+        """Return total AI questions (operations) used by user for today (UTC midnight to now)."""
+        try:
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            doc = self.daily_stats_collection.find_one({"user_id": user_id, "date": today})
+            if not doc:
+                return 0
+            return int(doc.get("total_operations", 0) or 0)
+        except Exception as e:
+            logger.error(f"Failed to get today's operations for {user_id}: {e}")
+            return 0
+
     def reset_user_daily_usage(self, user_id: str):
         """Reset a user's daily aggregated stats for today to zero.
 

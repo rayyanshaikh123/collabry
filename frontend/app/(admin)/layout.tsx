@@ -79,6 +79,9 @@ export default function AdminLayout({
       'admin-reports': AppRoute.ADMIN_REPORTS,
       'admin-boards': AppRoute.ADMIN_BOARDS,
       'admin-coupons': AppRoute.ADMIN_COUPONS,
+      'admin-audit': AppRoute.ADMIN_AUDIT,
+      'admin-notifications': AppRoute.ADMIN_NOTIFICATIONS,
+      'admin-subscriptions': AppRoute.ADMIN_SUBSCRIPTIONS,
       'admin-settings': AppRoute.ADMIN_SETTINGS,
     };
     

@@ -252,19 +252,19 @@ export default function DeepReports() {
     return (
       <>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <StatCard label="Total Tokens" value={summary.totalTokens.toLocaleString()} />
+          <StatCard label="LLM Tokens Used" value={summary.totalTokens.toLocaleString()} />
           <StatCard label="Total Questions" value={summary.totalQuestions.toLocaleString()} />
           <StatCard label="Unique AI Users" value={summary.uniqueUsers} />
         </div>
 
         <Card className="p-5 mb-6">
-          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Daily AI Token Usage</h4>
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Daily AI Questions</h4>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={dailyTrend}>
               <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="totalTokens" fill="#6366f1" radius={[4, 4, 0, 0]} name="Tokens" />
+              <Bar dataKey="totalQuestions" fill="#6366f1" radius={[4, 4, 0, 0]} name="Questions" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -309,7 +309,7 @@ export default function DeepReports() {
           columns={[
             { key: 'name', label: 'Name' },
             { key: 'totalQuestions', label: 'Questions' },
-            { key: 'totalTokens', label: 'Tokens' },
+            { key: 'totalTokens', label: 'LLM Tokens' },
           ]}
         />
       </>

@@ -27,18 +27,18 @@ const AIMonitoring: React.FC<AIMonitoringProps> = ({
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-amber-50 border-amber-100">
-          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Token Usage (7d)</p>
+          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">AI Questions (7d)</p>
           <h4 className="text-3xl font-black text-slate-800 dark:text-slate-200">
-            {usageLoading ? '...' : usageService.formatNumber(globalUsage?.total_tokens || 0)}
+            {usageLoading ? '...' : usageService.formatNumber(globalUsage?.total_operations || 0)}
           </h4>
           <div className="mt-4">
             <ProgressBar 
-              progress={Math.min(((globalUsage?.total_tokens || 0) / 1000000) * 100, 100)} 
+              progress={Math.min(((globalUsage?.total_operations || 0) / 10000) * 100, 100)} 
               color="bg-amber-400" 
             />
           </div>
           <p className="text-xs text-amber-600 mt-2 font-bold">
-            {realtimeStats?.last_hour?.total_tokens || 0} tokens in last hour
+            {realtimeStats?.last_hour?.total_operations || 0} questions in last hour
           </p>
         </Card>
         <Card className="bg-indigo-50 border-indigo-100">
@@ -149,7 +149,7 @@ const AIMonitoring: React.FC<AIMonitoringProps> = ({
                     <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
                   </linearGradient>
-                  <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorQuestions" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
                   </linearGradient>
@@ -182,8 +182,8 @@ const AIMonitoring: React.FC<AIMonitoringProps> = ({
                   stroke="#fbbf24" 
                   strokeWidth={4} 
                   fillOpacity={1} 
-                  fill="url(#colorTokens)" 
-                  name="Tokens (÷100)"
+                  fill="url(#colorQuestions)" 
+                  name="AI Questions"
                 />
               </AreaChart>
             </ResponsiveContainer>

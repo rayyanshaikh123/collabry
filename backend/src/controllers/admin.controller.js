@@ -84,9 +84,37 @@ const getUser = asyncHandler(async (req, res) => {
     throw new AppError('User not found', 404);
   }
 
+  // Include today's usage data and plan limits
+  const Usage = require('../models/Usage');
+  const { getLimitsForTier } = require('../config/plans');
+  const today = new Date().toISOString().split('T')[0];
+  const todayUsage = await Usage.findOne({ user: user._id, date: today });
+  const planLimits = getLimitsForTier(user.subscriptionTier || 'free');
+
+  // Count user's total boards and notebooks
+  const Board = require('../models/Board');
+  const Notebook = require('../models/Notebook');
+  const [boardCount, notebookCount] = await Promise.all([
+    Board.countDocuments({ owner: user._id }),
+    Notebook.countDocuments({ owner: user._id }),
+  ]);
+
   res.status(200).json({
     success: true,
-    data: { user },
+    data: {
+      user,
+      usage: {
+        today: {
+          aiQuestions: todayUsage?.aiQuestions || 0,
+          fileUploads: todayUsage?.fileUploads || 0,
+        },
+        totals: {
+          boards: boardCount,
+          notebooks: notebookCount,
+        },
+        limits: planLimits,
+      },
+    },
   });
 });
 

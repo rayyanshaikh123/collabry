@@ -85,6 +85,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
     { id: AppRoute.ADMIN_REPORTS, label: 'Deep Reports', icon: ICONS.Download },
     { id: AppRoute.ADMIN_BOARDS, label: 'Govern Boards', icon: ICONS.StudyBoard },
     { id: AppRoute.ADMIN_COUPONS, label: 'Manage Coupons', icon: ICONS.Flashcards },
+    { id: AppRoute.ADMIN_AUDIT, label: 'Audit Logs', icon: ICONS.Eye },
+    { id: AppRoute.ADMIN_NOTIFICATIONS, label: 'Notifications', icon: ICONS.Notification },
+    { id: AppRoute.ADMIN_SUBSCRIPTIONS, label: 'Subscriptions', icon: ICONS.TrendingUp },
     { id: AppRoute.ADMIN_SETTINGS, label: 'Platform Settings', icon: ICONS.Settings },
   ];
 

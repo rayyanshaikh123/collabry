@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Card, Button, Badge } from '../UIElements';
+import { Card, Button, Badge, ProgressBar } from '../UIElements';
 import { adminService } from '@/lib/services/admin.service';
+import type { UserUsageData } from '@/lib/services/admin.service';
 
 interface UserDetail {
   id: string;
@@ -50,6 +51,7 @@ function formatBytes(bytes: number) {
 
 export default function UserDetailModal({ userId, onClose }: UserDetailModalProps) {
   const [user, setUser] = useState<UserDetail | null>(null);
+  const [usage, setUsage] = useState<UserUsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,7 +59,8 @@ export default function UserDetailModal({ userId, onClose }: UserDetailModalProp
       setLoading(true);
       try {
         const res = await adminService.getUser(userId);
-        setUser(res as unknown as UserDetail);
+        setUser(res.user as unknown as UserDetail);
+        if (res.usage) setUsage(res.usage);
       } catch {
         // silent
       }
@@ -222,6 +225,82 @@ export default function UserDetailModal({ userId, onClose }: UserDetailModalProp
                       <p className="font-bold text-slate-700 dark:text-slate-300">{formatDate(g.streak.lastStudyDate)}</p>
                     </div>
                   )}
+                </div>
+              </Card>
+            )}
+
+            {/* Usage & Plan Limits */}
+            {usage && (
+              <Card className="p-4">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Usage & Limits</h4>
+                <div className="space-y-3">
+                  {/* AI Questions today */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">AI Questions Today</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {usage.today.aiQuestions} / {usage.limits.aiQuestionsPerDay === -1 ? '∞' : usage.limits.aiQuestionsPerDay}
+                      </span>
+                    </div>
+                    {usage.limits.aiQuestionsPerDay !== -1 && (
+                      <ProgressBar
+                        progress={Math.min((usage.today.aiQuestions / usage.limits.aiQuestionsPerDay) * 100, 100)}
+                        color={usage.today.aiQuestions >= usage.limits.aiQuestionsPerDay ? 'bg-rose-500' : 'bg-indigo-500'}
+                      />
+                    )}
+                  </div>
+                  {/* Boards */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">Boards</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {usage.totals.boards} / {usage.limits.boards === -1 ? '∞' : usage.limits.boards}
+                      </span>
+                    </div>
+                    {usage.limits.boards !== -1 && (
+                      <ProgressBar
+                        progress={Math.min((usage.totals.boards / usage.limits.boards) * 100, 100)}
+                        color={usage.totals.boards >= usage.limits.boards ? 'bg-rose-500' : 'bg-emerald-500'}
+                      />
+                    )}
+                  </div>
+                  {/* Notebooks */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">Notebooks</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {usage.totals.notebooks} / {usage.limits.notebooks === -1 ? '∞' : usage.limits.notebooks}
+                      </span>
+                    </div>
+                    {usage.limits.notebooks !== -1 && (
+                      <ProgressBar
+                        progress={Math.min((usage.totals.notebooks / usage.limits.notebooks) * 100, 100)}
+                        color={usage.totals.notebooks >= usage.limits.notebooks ? 'bg-rose-500' : 'bg-amber-500'}
+                      />
+                    )}
+                  </div>
+                  {/* File uploads today */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">File Uploads Today</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {usage.today.fileUploads} / {usage.limits.fileUploadsPerDay === -1 ? '∞' : usage.limits.fileUploadsPerDay}
+                      </span>
+                    </div>
+                    {usage.limits.fileUploadsPerDay !== -1 && (
+                      <ProgressBar
+                        progress={Math.min((usage.today.fileUploads / usage.limits.fileUploadsPerDay) * 100, 100)}
+                        color={usage.today.fileUploads >= usage.limits.fileUploadsPerDay ? 'bg-rose-500' : 'bg-cyan-500'}
+                      />
+                    )}
+                  </div>
+                  {/* Storage */}
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Storage Limit</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      {formatBytes(user?.storageUsed || 0)} / {usage.limits.storageGB} GB
+                    </span>
+                  </div>
                 </div>
               </Card>
             )}

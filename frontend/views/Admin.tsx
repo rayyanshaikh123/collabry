@@ -25,6 +25,9 @@ import DeepReports from '../components/admin/DeepReports';
 import CouponManagement from '../components/admin/CouponManagement';
 import UserDetailModal from '../components/admin/UserDetailModal';
 import BoardAnalyticsModal from '../components/admin/BoardAnalyticsModal';
+import AuditLogViewer from '../components/admin/AuditLogViewer';
+import AdminNotifications from '../components/admin/AdminNotifications';
+import SubscriptionManagement from '../components/admin/SubscriptionManagement';
 
 interface AdminDashboardProps {
   currentSubRoute: AppRoute;
@@ -658,9 +661,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
       bg: 'bg-rose-100' 
     },
     { 
-      label: 'AI Usage (Tokens)', 
-      value: globalUsage ? usageService.formatNumber(globalUsage.total_tokens) : usageService.formatNumber(realtimeStats?.last_hour?.total_tokens || 0),
-      change: `${usageService.formatNumber(realtimeStats?.last_hour?.total_tokens || 0)} in last hour`, 
+      label: 'AI Questions', 
+      value: globalUsage ? usageService.formatNumber(globalUsage.total_operations) : usageService.formatNumber(realtimeStats?.last_hour?.total_operations || 0),
+      change: `${usageService.formatNumber(realtimeStats?.last_hour?.total_operations || 0)} in last hour`, 
       icon: ICONS.Sparkles, 
       color: 'text-amber-600', 
       bg: 'bg-amber-100' 
@@ -673,7 +676,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
         .map(([date, data]: [string, any]) => ({
           name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
           usage: data.operations || 0,
-          growth: data.tokens ? Math.floor(data.tokens / 100) : 0,
+          growth: data.questions || data.operations || 0,
         }))
     : [
         { name: 'Mon', usage: 400, growth: 240 },
@@ -807,6 +810,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentSubRoute }) => {
 
       case AppRoute.ADMIN_COUPONS:
         return <CouponManagement />;
+
+      case AppRoute.ADMIN_AUDIT:
+        return <AuditLogViewer />;
+
+      case AppRoute.ADMIN_NOTIFICATIONS:
+        return <AdminNotifications />;
+
+      case AppRoute.ADMIN_SUBSCRIPTIONS:
+        return <SubscriptionManagement />;
 
       case AppRoute.ADMIN_SETTINGS:
         return (

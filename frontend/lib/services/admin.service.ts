@@ -22,6 +22,25 @@ export interface UsersResponse {
   total: number;
 }
 
+export interface UserUsageData {
+  today: {
+    aiQuestions: number;
+    fileUploads: number;
+  };
+  totals: {
+    boards: number;
+    notebooks: number;
+  };
+  limits: {
+    aiQuestionsPerDay: number;
+    boards: number;
+    notebooks: number;
+    groupMembers: number;
+    storageGB: number;
+    fileUploadsPerDay: number;
+  };
+}
+
 export const adminService = {
   /**
    * Get all users with pagination and filters
@@ -54,11 +73,11 @@ export const adminService = {
   /**
    * Get single user by ID
    */
-  async getUser(id: string): Promise<User> {
-    const response = await apiClient.get<{ user: User }>(`/admin/users/${id}`);
+  async getUser(id: string): Promise<{ user: User; usage?: UserUsageData }> {
+    const response = await apiClient.get<{ user: User; usage?: UserUsageData }>(`/admin/users/${id}`);
 
     if (response.success && response.data) {
-      return response.data.user;
+      return response.data;
     }
 
     throw new Error(response.error?.message || 'Failed to fetch user');
