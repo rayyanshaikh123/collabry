@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import {useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Tldraw, createTLStore, defaultShapeUtils, Editor } from 'tldraw';
 import 'tldraw/tldraw.css';
