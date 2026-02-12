@@ -11,14 +11,18 @@ let io = null;
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: config.cors.origin === '*' 
-        ? '*' 
-        : ['http://localhost:3000', 'https://colab-back.onrender.com'],
+      origin: [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+      ],
       credentials: true,
       methods: ['GET', 'POST']
     },
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    allowEIO3: true,
   });
 
   // Authentication middleware

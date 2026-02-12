@@ -354,7 +354,7 @@ class BoardService {
     board.members.push({
       userId: user._id,
       role,
-      joinedAt: new Date()
+      addedAt: new Date()
     });
 
     board.lastActivity = new Date();

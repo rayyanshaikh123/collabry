@@ -51,28 +51,17 @@ export const usePendingElements = ({
         return;
       }
 
-      console.log('=== tryApply: Applying imported shapes ===');
-      console.log('Import payload:', importPayloadRef.current);
-
       try {
         const { shapes, assets } = await buildShapesFromImport(importPayloadRef.current);
-        console.log('Built shapes:', shapes.length, 'assets:', assets.length);
-        console.log('Shapes:', shapes);
-        console.log('Assets:', assets);
         
         const records = [...assets, ...shapes];
         if (records.length > 0) {
-          console.log('Putting', records.length, 'records into editor store');
           editor.store.mergeRemoteChanges(() => {
             editor.store.put(records);
           });
-          console.log('Successfully added shapes to board');
-        } else {
-          console.warn('No records to add to board');
         }
       } catch (e) {
         console.error('Failed to apply imported shapes:', e);
-        console.error('Error details:', e instanceof Error ? e.stack : String(e));
       } finally {
         importAppliedRef.current = true;
         importPayloadRef.current = null;
@@ -120,18 +109,15 @@ export const usePendingElements = ({
             
             // Check for Drive file ID
             if (shape.meta?.driveFileId) {
-              console.log('Loading image from Google Drive:', shape.meta.driveFileId);
               try {
                 assetSrc = googleDriveService.getPublicUrl(shape.meta.driveFileId);
-                console.log('Using Drive public URL');
               } catch (error) {
-                console.error('Failed to get Drive image, trying fallback:', error);
+                console.error('Failed to get Drive image:', error);
               }
             }
             
             // Check for SVG data (mindmaps) if no Drive file
             if (!assetSrc && shape.meta?.svgDataUri) {
-              console.log('Reconstructing SVG asset for image shape:', shape.id);
               assetSrc = shape.meta.svgDataUri;
               assets.push({
                 id: shape.props.assetId,
@@ -152,7 +138,6 @@ export const usePendingElements = ({
             
             // Check for local image data fallback
             if (!assetSrc && shape.meta?.imageData?.src) {
-              console.log('Reconstructing general image asset from local storage:', shape.id);
               assetSrc = shape.meta.imageData.src;
             }
             
@@ -179,7 +164,6 @@ export const usePendingElements = ({
         // Add assets first, then shapes
         editor.store.mergeRemoteChanges(() => {
           if (assets.length > 0) {
-            console.log('Recreating', assets.length, 'assets for image shapes');
             editor.store.put(assets);
           }
           
@@ -196,22 +180,11 @@ export const usePendingElements = ({
     }
 
     // Setup element event listeners
-    const bs = socketClient.getBoardSocket();
-    console.log('[PendingElements] Registering listeners. boardSocket exists:', !!bs, 'connected:', bs?.connected);
-    
-    // Raw debug listener to verify events arrive at all
-    const debugCreated = (data: any) => console.log('[DEBUG RAW] element:created received on boardSocket:', !!data, 'userId:', data?.userId);
-    const debugUpdated = (data: any) => console.log('[DEBUG RAW] element:updated received on boardSocket:', !!data, 'userId:', data?.userId);
-    bs?.on('element:created', debugCreated);
-    bs?.on('element:updated', debugUpdated);
-    
     socketClient.onElementCreated(handleElementCreated);
     socketClient.onElementUpdated(handleElementUpdated);
     socketClient.onElementDeleted(handleElementDeleted);
 
     return () => {
-      bs?.off('element:created', debugCreated);
-      bs?.off('element:updated', debugUpdated);
       socketClient.off('element:created', handleElementCreated);
       socketClient.off('element:updated', handleElementUpdated);
       socketClient.off('element:deleted', handleElementDeleted);

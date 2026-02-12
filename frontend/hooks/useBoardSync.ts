@@ -84,8 +84,6 @@ export function useBoardSync({
       
       if (!hasShapeChanges) return;
 
-      console.log('[useBoardSync] Shape changes detected — added:', Object.keys(added || {}).length, 'updated:', Object.keys(updated || {}).length, 'removed:', Object.keys(removed || {}).length);
-
       if (added) {
         Object.values(added).forEach((record: any) => {
           if (record?.typeName === 'shape') {
@@ -94,7 +92,6 @@ export function useBoardSync({
             if (record.type === 'image' && record.props?.assetId && !meta.driveFileId && !meta.imageData) {
               const asset = editor?.store.get(record.props.assetId) as any;
               if (asset?.props?.src) {
-                console.log('Uploading image to Google Drive...');
                 
                 (async () => {
                   try {
@@ -113,8 +110,6 @@ export function useBoardSync({
                       filename,
                       asset.props.mimeType || 'image/png'
                     );
-                    
-                    console.log('Image uploaded to Drive:', driveFile.id);
                     
                     const updatedMeta = {
                       ...record.meta,

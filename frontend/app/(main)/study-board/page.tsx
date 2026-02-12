@@ -201,10 +201,22 @@ export default function StudyBoardListPage() {
                       </p>
                     )}
                   </div>
-                  {board.isPublic && (
-                    <Badge variant="indigo" className="ml-2">Public</Badge>
-                  )}
+                  <div className="flex items-center gap-1.5 ml-2">
+                    {board.owner._id !== user?.id && (
+                      <Badge variant="cyan" className="text-[11px]">Shared</Badge>
+                    )}
+                    {board.isPublic && (
+                      <Badge variant="indigo">Public</Badge>
+                    )}
+                  </div>
                 </div>
+
+                {/* Owner info for shared boards */}
+                {board.owner._id !== user?.id && (
+                  <p className="text-xs text-indigo-500 dark:text-indigo-400 -mt-1">
+                    by {board.owner.name || board.owner.email}
+                  </p>
+                )}
 
                 {/* Stats */}
                 <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">

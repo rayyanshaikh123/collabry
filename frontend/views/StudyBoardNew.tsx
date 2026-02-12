@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Tldraw, createTLStore, defaultShapeUtils, Editor } from 'tldraw';
 import 'tldraw/tldraw.css';
 
 import { useAuthStore } from '@/lib/stores/auth.store';
-import { socketClient } from '@/lib/socket';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
-import { ICONS } from '@/constants';
 import type { BoardParticipant } from '@/types/studyBoard.types';
 import type { StudyBoard } from '@/types';
 
@@ -89,14 +87,27 @@ const CollaborativeBoard = () => {
   }, []);
 
   // Socket event handlers
-  const handleUserJoined = useCallback((data: { participants: ParticipantData[] }) => {
-    console.log('User joined:', data);
-    setParticipants(data.participants.filter(p => p.userId !== user?.id));
+  const handleUserJoined = useCallback((data: any) => {
+    if (data.participants) {
+      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
+    } else {
+      // Single user joined — add them
+      if (data.userId && data.userId !== user?.id) {
+        setParticipants(prev => {
+          if (prev.some(p => p.userId === data.userId)) return prev;
+          return [...prev, { userId: data.userId, name: data.email || 'User', email: data.email, color: data.color || '#888', userName: data.email }];
+        });
+      }
+    }
   }, [user]);
 
-  const handleUserLeft = useCallback((data: { participants: ParticipantData[] }) => {
-    console.log('User left:', data);
-    setParticipants(data.participants.filter(p => p.userId !== user?.id));
+  const handleUserLeft = useCallback((data: any) => {
+    if (data.participants) {
+      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
+    } else {
+      // Single user left — remove them
+      setParticipants(prev => prev.filter(p => p.userId !== data.userId));
+    }
   }, [user]);
 
   const handleCursorMove = useCallback((data: { userId: string; position: CursorData }) => {
@@ -109,7 +120,6 @@ const CollaborativeBoard = () => {
   }, [user]);
 
   const handleElementCreated = useCallback((data: any) => {
-    console.log('[handleElementCreated] FIRED. editor:', !!editor, 'data:', !!data, 'data.element:', !!data?.element, 'data.userId:', data?.userId, 'myId:', user?.id);
     if (!editor || !data?.element) return;
     if (user?.id === data.userId) return;
 
@@ -174,7 +184,6 @@ const CollaborativeBoard = () => {
   }, [editor, user]);
 
   const handleElementUpdated = useCallback((data: any) => {
-    console.log('[handleElementUpdated] FIRED. editor:', !!editor, 'data keys:', data ? Object.keys(data) : 'null');
     if (!editor) return;
     // Backend sends { elementId, changes, userId } — NOT data.element
     const elementId = data.elementId || data.element?.id;
@@ -269,9 +278,6 @@ const CollaborativeBoard = () => {
     handleElementDeleted
   });
 
-  // Memoized participant list
-  const visibleParticipants = useMemo(() => participants.slice(0, 3), [participants]);
-  
   // Convert ParticipantData to BoardParticipant format
   const boardParticipants: BoardParticipant[] = useMemo(() => 
     participants.map(p => ({
@@ -286,8 +292,6 @@ const CollaborativeBoard = () => {
     })),
     [participants]
   );
-  
-  const visibleBoardParticipants = useMemo(() => boardParticipants.slice(0, 3), [boardParticipants]);
 
   if (isLoading) {
     return (

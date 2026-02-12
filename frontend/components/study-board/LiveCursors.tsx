@@ -38,7 +38,7 @@ const LiveCursor = memo<LiveCursorProps>(({ cursor, participant }) => {
         className="ml-6 -mt-2 px-2 py-1 rounded text-white text-xs font-bold whitespace-nowrap shadow-lg"
         style={{ backgroundColor: participant.color }}
       >
-        {participant.name.split('@')[0]}
+        {(participant.name || participant.email || 'User').split('@')[0]}
       </div>
     </div>
   );
