@@ -6,7 +6,7 @@ based on the user's study materials.
 """
 
 import json
-from typing import Optional, List
+from typing import Optional, List, Any
 from langchain_core.tools import tool
 from rag.retriever import get_retriever
 from core.llm import get_async_openai_client, get_llm_config
@@ -14,8 +14,8 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def generate_quiz(
-    topic: str,
-    num_questions: int = 10,
+    topic: Optional[str] = "main concepts",
+    num_questions: Any = 10,
     difficulty: str = "medium",
     notebook_id: Optional[str] = None,
     user_id: str = "default",
@@ -42,7 +42,23 @@ async def generate_quiz(
         JSON quiz with questions, options, and correct answers
     """
     try:
-        # Validate inputs
+        # Validate and robustly parse inputs
+        try:
+            if isinstance(num_questions, str):
+                if num_questions.lower() in ["less", "fewer"]:
+                    num_questions = 5
+                elif num_questions.lower() in ["more", "many"]:
+                    num_questions = 20
+                else:
+                    # Try to extract numbers from string if possible
+                    import re
+                    match = re.search(r'\d+', num_questions)
+                    num_questions = int(match.group()) if match else 10
+            else:
+                num_questions = int(num_questions)
+        except Exception:
+            num_questions = 10
+
         num_questions = min(max(num_questions, 1), 20)  # Limit 1-20
         difficulty = difficulty.lower() if difficulty else "medium"
         

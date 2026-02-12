@@ -6,7 +6,7 @@ based on the user's goals and timeline.
 """
 
 import json
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime, timedelta
 from langchain_core.tools import tool
 from core.llm import get_async_openai_client, get_llm_config
@@ -15,11 +15,11 @@ from rag.retriever import get_retriever
 
 @tool
 async def generate_study_plan(
-    subject: str,
-    topics: str,
+    subject: Optional[str] = "Personalized Study Session",
+    topics: Optional[str] = "main concepts and key terms",
     user_id: str = "default",
-    duration_days: int = 7,
-    daily_hours: float = 2.0,
+    duration_days: Any = 7,
+    daily_hours: Any = 2.0,
     difficulty: str = "intermediate",
     notebook_id: Optional[str] = None,
     source_ids: Optional[List[str]] = None,
@@ -74,7 +74,27 @@ async def generate_study_plan(
         if not topic_list:
             topic_list = [topics]
         
-        # Validate inputs
+        # Validate and robustly parse inputs
+        try:
+            import re
+            
+            # Parse duration_days
+            if isinstance(duration_days, str):
+                match = re.search(r'\d+', duration_days)
+                duration_days = int(match.group()) if match else 7
+            else:
+                duration_days = int(duration_days)
+                
+            # Parse daily_hours
+            if isinstance(daily_hours, str):
+                match = re.search(r'\d+(\.\d+)?', daily_hours)
+                daily_hours = float(match.group()) if match else 2.0
+            else:
+                daily_hours = float(daily_hours)
+        except Exception:
+            duration_days = 7
+            daily_hours = 2.0
+
         duration_days = max(1, min(duration_days, 90))  # Limit 1-90 days
         daily_hours = max(0.5, min(daily_hours, 12))  # Limit 0.5-12 hours
         

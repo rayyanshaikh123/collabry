@@ -13,47 +13,33 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def summarize_notes(
-    topic: str = "all notes",
+    topic: Optional[str] = "all notes",
     notebook_id: Optional[str] = None,
     user_id: str = "default",
     source_ids: Optional[List[str]] = None,
+    retrieval_policy: str = "PREFER_SELECTED",
+    retrieval_mode: str = "CHUNK_SEARCH",
+    token: Optional[str] = None
 ) -> str:
     """
     Generate a comprehensive summary of notes in a notebook.
-    
-    Use this tool when the user asks for a summary of their study materials.
-    
-    Examples of when to use:
-    - "Summarize my biology notes"
-    - "Give me a summary of what I've learned"
-    - "Create a study summary"
-    
-    Args:
-        topic: Specific topic to focus on or "all notes" for everything
-        notebook_id: Target notebook to summarize (optional, auto-injected)
-        user_id: User identifier (optional, auto-injected)
-        source_ids: Optional list of source IDs to filter by (optional, auto-injected)
-    
-    Returns:
-        Structured summary with key topics and concepts
     """
     try:
-        query = topic if topic else "main topics and key concepts"
-
-        # First: scoped to the notebook (preferred)
-        retriever = get_retriever(user_id=user_id, notebook_id=notebook_id, source_ids=source_ids, k=20)
-        docs = retriever.invoke(query)
-
-        # Fallback: user-wide (handles notebook/session id mismatches)
-        if not docs and not source_ids:
-            retriever = get_retriever(user_id=user_id, notebook_id=None, k=20)
-            docs = retriever.invoke(query)
-
-        if not docs:
-            return "No documents found. Please upload some study materials first."
+        from core.retrieval_service import get_hybrid_context
         
-        # Combine document content
-        combined_text = "\n\n".join([doc.page_content for doc in docs])
+        # Use the intelligent grounding service
+        combined_text = await get_hybrid_context(
+            user_id=user_id,
+            notebook_id=notebook_id,
+            policy=retrieval_policy,
+            mode=retrieval_mode,
+            source_ids=source_ids or [],
+            query=topic,
+            token=token
+        )
+
+        if not combined_text:
+            return "No documents found. Please upload some study materials first."
         
         # Generate summary using LLM
         client = get_async_openai_client()

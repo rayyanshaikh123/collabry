@@ -14,7 +14,11 @@ class ResponseManager:
             return ResponseManager._coerce_quiz(str(output))
         if fmt == "json_flashcards":
             topic = params.get("topic") or "Study Flashcards"
-            return ResponseManager._coerce_flashcards(str(output), topic)
+            return f"[FLASHCARDS_GENERATION_REQUEST]\n{ResponseManager._coerce_flashcards(str(output), topic)}"
+        if fmt == "json_mindmap":
+            return f"[MINDMAP_GENERATION_REQUEST]\n{str(output)}"
+        if tool_name == "generate_infographic":
+            return f"[INFOGRAPHIC_GENERATION_REQUEST]\n{str(output)}"
         if tool_name == "search_web":
             return ResponseManager._format_web_search(str(output))
         

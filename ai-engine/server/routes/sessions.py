@@ -2,9 +2,10 @@
 Chat Sessions Management
 Handles session creation, retrieval, and rate limiting
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from server.deps import get_current_user
+from fastapi.security import HTTPAuthorizationCredentials
+from server.deps import get_current_user, security
 from server.schemas import ErrorResponse, ChatRequest
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -61,6 +62,8 @@ def verify_session_access(session_id: str, user_id: str) -> dict:
         notebook_doc = notebooks_collection.find_one({"aiSessionId": session_id})
         if notebook_doc:
             notebook_id = str(notebook_doc["_id"])
+            # Update session object in memory for current request
+            session["notebook_id"] = notebook_id
             # Backfill for next time
             sessions_collection.update_one(
                 {"_id": session_obj_id},
@@ -465,7 +468,8 @@ async def session_chat_stream_get(
 async def session_chat_stream(
     session_id: str,
     request: ChatRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """
     Streaming chat endpoint for a specific session using SSE.
@@ -498,6 +502,7 @@ async def session_chat_stream(
                     notebook_id=notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
+                    token=credentials.credentials if credentials else None,
                     stream=True
                 ):
                     if not event:

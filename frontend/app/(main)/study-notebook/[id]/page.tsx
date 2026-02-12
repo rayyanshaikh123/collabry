@@ -91,7 +91,13 @@ export default function StudyNotebookPage() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // State to track if we've initialized messages for this session
+  const lastSessionIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    const currentSessionId = notebook?.aiSessionId;
+    if (!currentSessionId) return;
+
     if (sessionMessagesData && Array.isArray(sessionMessagesData)) {
       const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => {
         // Resolve sender attribution
@@ -129,9 +135,21 @@ export default function StudyNotebookPage() {
           senderAvatar
         };
       });
-      setLocalMessages(formattedMessages);
+
+      // ONLY overwrite local messages if the session ID changed
+      // Otherwise, keep the real-time messages (which might be more up-to-date)
+      if (lastSessionIdRef.current !== currentSessionId) {
+        setLocalMessages(formattedMessages);
+        lastSessionIdRef.current = currentSessionId;
+      } else {
+        // If it's the same session, we ONLY update if local is empty (initial load)
+        setLocalMessages(prev => {
+          if (prev.length === 0) return formattedMessages;
+          return prev;
+        });
+      }
     }
-  }, [sessionMessagesData, notebook]);
+  }, [sessionMessagesData, notebook?.aiSessionId, notebook]);
 
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
@@ -180,9 +198,16 @@ export default function StudyNotebookPage() {
     refetchNotebook();
   }, [refetchNotebook]);
 
+  const onChatClear = React.useCallback(() => {
+    setLocalMessages([]);
+  }, []);
+
   const {
     participants,
+    typingUsers,
+    sendTyping,
     broadcastSourceUpdate,
+    broadcastChatClear,
     broadcastChatMessage,
     broadcastAIToken,
     broadcastAIComplete
@@ -190,7 +215,8 @@ export default function StudyNotebookPage() {
     notebookId,
     onMessageReceived,
     onTokenReceived,
-    onSourceUpdate
+    onSourceUpdate,
+    onChatClear
   });
 
   // Custom logic hooks
@@ -214,6 +240,7 @@ export default function StudyNotebookPage() {
     onToken: broadcastAIToken,
     onComplete: broadcastAIComplete,
     onMessageSent: broadcastChatMessage,
+    onClear: broadcastChatClear
   });
 
   const { handleGenerateArtifact } = useArtifactGenerator({
@@ -442,6 +469,8 @@ export default function StudyNotebookPage() {
         onEditArtifact={openEditModal}
         selectedArtifact={selectedArtifact}
         participants={participants}
+        typingUsers={typingUsers}
+        onTyping={sendTyping}
         onInvite={() => setInviteModalOpen(true)}
       />
 

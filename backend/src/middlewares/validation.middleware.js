@@ -30,7 +30,7 @@ const validateFlashcardSet = [
     .trim()
     .isLength({ max: 1000 }).withMessage('Description cannot exceed 1000 characters'),
   body('subject')
-    .notEmpty().withMessage('Subject ID is required')
+    .optional({ checkFalsy: true })
     .isMongoId().withMessage('Invalid subject ID'),
   body('sourceType')
     .optional()
@@ -87,7 +87,7 @@ const validateMindMap = [
     .trim()
     .notEmpty().withMessage('Topic is required'),
   body('subject')
-    .notEmpty().withMessage('Subject ID is required')
+    .optional({ checkFalsy: true })
     .isMongoId().withMessage('Invalid subject ID'),
   body('sourceType')
     .optional()
@@ -139,10 +139,10 @@ const validateQuiz = [
     .trim()
     .isLength({ max: 1000 }).withMessage('Description cannot exceed 1000 characters'),
   body('subject')
-    .optional()
+    .optional({ checkFalsy: true })
     .isMongoId().withMessage('Invalid subject ID'),
   body('linkedSetId')
-    .optional()
+    .optional({ checkFalsy: true })
     .isMongoId().withMessage('Invalid linked set ID'),
   body('sourceType')
     .optional()

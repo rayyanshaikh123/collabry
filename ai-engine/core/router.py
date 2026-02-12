@@ -4,59 +4,85 @@ import re
 from core.llm import chat_completion
 from core.session_state import SessionTaskState
 
-ROUTER_PROMPT = """You are a Study Assistant Router. Your job is to classify the user's intent and extract tool parameters.
+ROUTER_PROMPT = """You are the CONTROL PLANNER of a Study Assistant system.
 
-TOOLS:
-- search_web(query): Search the global internet for courses, tutorials, news, and general info.
-- search_sources(query): Search the user's specific uploaded documents and notes.
-- generate_quiz(topic, num_questions): Create a practice quiz.
-- generate_flashcards(topic, num_cards): Create study flashcards.
-- generate_mindmap(topic): Create a visual concept map.
-- summarize_notes(topic): Summarize documents or notes.
+Your job is to decide what the system should do and how information must be retrieved.
+You DO NOT answer the user. You ONLY decide the plan.
 
-CONVERSATION:
-If the user is just chatting, asking a general question, or following up on a previous topic without needing a new tool run, return tool="none".
+---
+TASK ACTIONS
 
+START_TASK: Begin a new tool-based task.
+MODIFY_PARAM: Tweak parameters of an existing task (difficulty, count).
+ASK_ARTIFACT: User is asking about a specific item in a quiz/mindmap/report.
+ANSWER_GENERAL: Small-talk or general questions not needing sources.
+CLARIFY: Ask the user for more info if needed.
+
+---
+TASK TYPES
+QUIZ, FLASHCARDS, MINDMAP, SUMMARY, STUDY_PLAN, COURSE_SEARCH, NONE
+
+---
+RETRIEVAL POLICY (AUTHORITY)
+
+STRICT_SELECTED: Answer must come ONLY from selected sources.
+PREFER_SELECTED: Use selected sources first, fallback to notebook if needed.
+AUTO_EXPAND: Search across all user knowledge.
+GLOBAL: General info; ignore notebook sources.
+
+---
+RETRIEVAL MODE (HOW TO READ DATA)
+
+CHUNK_SEARCH: Semantic search over chunks. (Used for specific detail questions)
+FULL_DOCUMENT: Process the entire raw source. (Used for summary, recap, overview)
+MULTI_DOC_SYNTHESIS: Combine info across >1 source. (Used for comparisons)
+NONE: No retrieval needed.
+
+---
 SESSION STATE:
 Active Task: %s
-Topic: %s
+Current Topic: %s
+Selected Sources (%d):
+%s
 
 RESPONSE FORMAT (JSON ONLY):
 {
-  "thought": "brief reasoning",
-  "tool": "tool_name or none",
-  "params": { ... }
+  "action": "START_TASK | MODIFY_PARAM | ASK_ARTIFACT | ANSWER_GENERAL | SWITCH_TASK | CLARIFY",
+  "task": "QUIZ | FLASHCARDS | MINDMAP | SUMMARY | STUDY_PLAN | COURSE_SEARCH | NONE",
+  "retrieval_policy": "STRICT_SELECTED | PREFER_SELECTED | AUTO_EXPAND | GLOBAL",
+  "retrieval_mode": "CHUNK_SEARCH | FULL_DOCUMENT | MULTI_DOC_SYNTHESIS | NONE",
+  "param_updates": {
+    "topic": string | null,
+    "difficulty": string | null,
+    "count": number | null
+  },
+  "thought": "brief reasoning"
 }
-
-EXAMPLES:
-User: "find Python courses" -> {"tool": "search_web", "params": {"query": "Python courses"}, "thought": "Web search for courses"}
-User: "make a quiz about it" -> {"tool": "generate_quiz", "params": {"topic": "%s"}, "thought": "Quiz on current topic"}
-User: "make it 10 questions" -> {"tool": "none", "params": {"num_questions": 10}, "thought": "Mutation for active quiz"}
-User: "tell me more" -> {"tool": "none", "params": {}, "thought": "Conversational follow-up"}
 """
 
 async def route_message(
     message: str,
     history: List[Dict[str, str]],
-    session_state: SessionTaskState
-) -> Tuple[Optional[str], Dict[str, Any], str]:
+    session_state: SessionTaskState,
+    selected_sources: List[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    Route a message to a tool or determine it's conversational.
-    
-    Returns: (tool_name_or_none, params, thought)
+    Route a message using the Control Planner architecture.
     """
     active_task = session_state.active_task or "none"
-    current_topic = session_state.task_params.get("topic") or session_state.task_params.get("subject") or "none"
+    current_topic = session_state.task_params.get("topic") or "none"
     
-    # 1. Check for manual mutations first (fast & reliable)
-    mutation = _detect_mutation(message, session_state)
-    if mutation:
-        return session_state.last_tool, {**session_state.task_params, **mutation}, f"Detected mutation: {mutation}"
+    sources_text = ""
+    if selected_sources:
+        for s in selected_sources:
+            sources_text += f"- {s.get('name')} ({s.get('type')})\n"
+    else:
+        sources_text = "None"
 
-    # 2. Use LLM for routing
-    history_text = "\n".join([f"{h['role']}: {h['content'][:100]}" for h in history[-3:]])
+    # Use LLM for routing
+    history_text = "\n".join([f"{h['role']}: {h['content'][:300]}" for h in history[-5:]])
     
-    prompt = ROUTER_PROMPT % (active_task, current_topic, current_topic)
+    prompt = ROUTER_PROMPT % (active_task, current_topic, len(selected_sources or []), sources_text)
     
     try:
         response = await chat_completion(
@@ -65,7 +91,7 @@ async def route_message(
                 {"role": "user", "content": f"History:\n{history_text}\n\nUser Message: {message}"}
             ],
             temperature=0,
-            max_tokens=200,
+            max_tokens=300,
             stream=False
         )
         
@@ -75,18 +101,27 @@ async def route_message(
             raw_content = re.sub(r"```(json)?", "", raw_content).strip("`").strip()
             
         data = json.loads(raw_content)
-        tool = data.get("tool")
-        params = data.get("params", {})
-        thought = data.get("thought", "Classified intent")
         
-        if tool == "none":
-            return None, params, thought
-            
-        return tool, params, thought
+        # Ensure minimal fields exist
+        data.setdefault("action", "ANSWER_GENERAL")
+        data.setdefault("task", "NONE")
+        data.setdefault("retrieval_policy", "GLOBAL")
+        data.setdefault("retrieval_mode", "NONE")
+        data.setdefault("param_updates", {})
+        data.setdefault("thought", "Determined intent")
+        
+        return data
         
     except Exception as e:
-        print(f"⚠️ Router error: {e}")
-        return None, {}, "Router failed, falling back to conversation"
+        print(f"⚠️ Planner error: {e}")
+        return {
+            "action": "ANSWER_GENERAL",
+            "task": "NONE",
+            "retrieval_policy": "GLOBAL",
+            "retrieval_mode": "NONE",
+            "param_updates": {},
+            "thought": "Planner failed, falling back to general chat."
+        }
 
 def _detect_mutation(message: str, state: SessionTaskState) -> Optional[Dict[str, Any]]:
     """Simple heuristic for common follow-up mutations."""

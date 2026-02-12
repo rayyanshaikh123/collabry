@@ -23,20 +23,20 @@ export interface MindMapStructure {
  */
 function cleanJSON(jsonString: string): string {
   let cleaned = jsonString.trim();
-  
+
   // Remove trailing commas before } or ]
   cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
-  
+
   // Remove comments (single line // and multi-line /* */)
   cleaned = cleaned.replace(/\/\/.*$/gm, '');
   cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
-  
+
   // Remove any text after the closing brace
   const lastBrace = cleaned.lastIndexOf('}');
   if (lastBrace > 0) {
     cleaned = cleaned.substring(0, lastBrace + 1);
   }
-  
+
   return cleaned;
 }
 
@@ -46,10 +46,13 @@ function cleanJSON(jsonString: string): string {
 function extractJSON(text: string): any | null {
   // Clean text - remove common prefixes/suffixes
   let cleanText = text.trim();
-  
+
   // Remove markdown code block markers if present
   cleanText = cleanText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  
+
+  // Remove explicit intent markers like [MINDMAP_GENERATION_REQUEST]
+  cleanText = cleanText.replace(/^\[[A-Z_]+_REQUEST\]\s*/i, '');
+
   // Try to find JSON in markdown code blocks first
   const codeBlockRegex = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/i;
   const codeBlockMatch = cleanText.match(codeBlockRegex);
@@ -191,10 +194,10 @@ function treeToNodesEdges(
 export function parseMindMapFromText(text: string): MindMapStructure | null {
   // Try to extract JSON first
   const jsonData = extractJSON(text);
-  
+
   if (jsonData) {
     // Handle different JSON formats
-    
+
     // Format 1: Direct nodes/edges format
     if (jsonData.nodes && Array.isArray(jsonData.nodes) && jsonData.edges && Array.isArray(jsonData.edges)) {
       return {
@@ -249,8 +252,8 @@ export function extractMindMapFromMarkdown(markdownText: string): {
 } {
   // Check if text contains JSON mindmap
   const hasJsonPattern = /\{[\s\S]*"nodes"[\s\S]*"edges"[\s\S]*\}/i.test(markdownText) ||
-                        /\{[\s\S]*"children"[\s\S]*\}/i.test(markdownText) ||
-                        /```(?:json)?\s*\{[\s\S]*\}/i.test(markdownText);
+    /\{[\s\S]*"children"[\s\S]*\}/i.test(markdownText) ||
+    /```(?:json)?\s*\{[\s\S]*\}/i.test(markdownText);
 
   const mindmap = parseMindMapFromText(markdownText);
 
@@ -284,30 +287,30 @@ export function extractMindMapFromMarkdown(markdownText: string): {
     /ActualMainTopic/i,
     /REAL_TOPIC_FROM_CONTEXT/i
   ];
-  
+
   const hasPlaceholders = mindmap.nodes.some((node: any) => {
     const label = (node.label || '').toString();
     return placeholderPatterns.some(pattern => pattern.test(label));
   });
-  
+
   if (hasPlaceholders) {
     console.warn('Mindmap rejected: contains placeholder text');
     return { cleanMarkdown: markdownText, mindmap: null };
   }
-  
+
   // Ensure edges array exists
   if (!mindmap.edges || !Array.isArray(mindmap.edges)) {
     mindmap.edges = [];
   }
-  
+
   // Debug logging (only if we detected JSON pattern and it's valid)
   if (hasJsonPattern) {
     console.log('Mindmap parsing:', {
       hasJsonPattern,
       textLength: markdownText.length,
-      parsed: { 
-        nodeCount: mindmap.nodes?.length || 0, 
-        edgeCount: mindmap.edges?.length || 0 
+      parsed: {
+        nodeCount: mindmap.nodes?.length || 0,
+        edgeCount: mindmap.edges?.length || 0
       }
     });
   }

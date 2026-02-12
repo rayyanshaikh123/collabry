@@ -61,9 +61,10 @@ module.exports = function (io) {
         });
 
         // Typing indicator
-        socket.on('user:typing', ({ notebookId, userId, isTyping }) => {
+        socket.on('user:typing', ({ notebookId, userId, displayName, isTyping }) => {
             socket.to(`notebook:${notebookId}`).emit('user:typing', {
                 userId,
+                displayName,
                 isTyping
             });
         });
@@ -88,6 +89,10 @@ module.exports = function (io) {
 
         socket.on('ai:complete', ({ notebookId, message, messageId }) => {
             nsp.to(`notebook:${notebookId}`).emit('ai:complete', { message, messageId });
+        });
+
+        socket.on('chat:clear', ({ notebookId }) => {
+            nsp.to(`notebook:${notebookId}`).emit('chat:clear');
         });
 
         // Leave notebook room

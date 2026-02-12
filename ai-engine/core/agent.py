@@ -11,16 +11,23 @@ from core.llm import get_langchain_llm, get_llm_config, chat_completion
 from core.conversation import get_conversation_manager
 from core.session_state import get_session_state, SessionTaskState
 from core.router import route_message
+from core.validator import validate_retrieval_plan
+from core.retrieval_service import get_hybrid_context, fetch_source_metadata
 from core.tool_registry import registry
 from core.response_manager import ResponseManager
 from tools import ALL_TOOLS
 import json
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _clean_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove placeholder strings like 'none' or 'null' from params."""
+    """Remove placeholder strings and actual None values from params."""
     cleaned = {}
     for k, v in params.items():
+        if v is None:
+            continue
         if isinstance(v, str) and v.lower() in ("none", "null", "n/a", "undefined", ""):
             continue
         cleaned[k] = v
@@ -36,7 +43,8 @@ async def run_agent(
     source_ids: Optional[List[str]] = None,
     stream: bool = True,
     sender_name: Optional[str] = None,
-    is_collaborative: bool = False
+    is_collaborative: bool = False,
+    token: Optional[str] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Main entry point using the simplified linear flow.
@@ -46,21 +54,57 @@ async def run_agent(
     conv_manager = get_conversation_manager()
     history = conv_manager.get_history(user_id, session_id, limit=10)
     
-    # 2. Route Message (Decision point)
-    tool_name, params, thought = await route_message(message, history, session_state)
+    # Pre-fetch source metadata for the Planner
+    selected_sources = []
+    if source_ids:
+        selected_sources = await fetch_source_metadata(notebook_id, source_ids, token)
     
+    # 2. Control Planner - Decide Task & Initial Retrieval Strategy
+    planner_output = await route_message(message, history, session_state, selected_sources)
+    thought = planner_output.get("thought")
+    action = planner_output.get("action")
+    task = planner_output.get("task")
+    
+    # 3. Retrieval Validator - Determine Final Policy & Mode (Deterministic)
+    validation = validate_retrieval_plan(
+        policy=planner_output.get("retrieval_policy", "GLOBAL"),
+        mode=planner_output.get("retrieval_mode", "NONE"),
+        selected_sources_count=len(source_ids or [])
+    )
+    
+    final_policy = validation["final_policy"]
+    final_mode = validation["final_mode"]
+    
+    if validation["changed"]:
+        logger.info(f"🛡️ Validator corrected plan: {validation['reason']}")
+
     # Emit thinking step for UI
     if thought:
-        yield {"type": "thinking", "content": f"💭 {thought}"}
-    
-    # 3. Handle Tool routing
-    if tool_name:
+        msg = f"💭 {thought}"
+        if validation["changed"]:
+            msg += f" (Note: {validation['reason']})"
+        yield {"type": "thinking", "content": msg}
+
+    # 4. Handle Task Actions
+    if action == "START_TASK" or action == "MODIFY_PARAM":
+        # Resolve tool name from task
+        tool_name = f"generate_{task.lower()}" if task != "COURSE_SEARCH" else "search_web"
+        if task == "SUMMARY": tool_name = "summarize_notes"
+        
+        params = planner_output.get("param_updates", {})
         params = _clean_params(params)
+        
+        # Map 'topic' to 'query' or 'subject' where needed
+        if tool_name == "search_web" and "topic" in params:
+            params["query"] = params.pop("topic")
+        elif tool_name == "generate_study_plan" and "topic" in params:
+            params["subject"] = params.get("topic")
+            params["topics"] = params.pop("topic")
+        
         yield {"type": "tool_start", "tool": tool_name, "inputs": params}
         
         # Track task in session state
-        task_type = tool_name.replace("generate_", "").replace("search_", "")
-        session_state.set_task(task_type, tool_name, params)
+        session_state.set_task(task, tool_name, params)
         
         # Locate tool object
         tool_obj = next((t for t in ALL_TOOLS if t.name == tool_name), None)
@@ -74,6 +118,11 @@ async def run_agent(
         if "notebook_id" not in final_params and notebook_id: final_params["notebook_id"] = notebook_id
         if "source_ids" not in final_params and source_ids: final_params["source_ids"] = source_ids
         
+        # Inject Validated Policy & Mode into tool params
+        final_params["retrieval_policy"] = final_policy
+        final_params["retrieval_mode"] = final_mode
+        final_params["token"] = token
+        
         try:
             # Execute tool
             print(f"🛠️ Executing {tool_name} with {final_params}")
@@ -84,19 +133,18 @@ async def run_agent(
                 
             yield {"type": "tool_end", "tool": tool_name, "output": output}
             
-            # Dynamic Formatting: Use Registry + ResponseManager
+            # Dynamic Formatting
             metadata = registry.get_metadata(tool_name)
             if metadata:
                 content = await ResponseManager.format_response(tool_name, output, metadata, final_params)
             else:
                 content = str(output)
             
-            # Stream tokens to the frontend
+            # Stream tokens
             if isinstance(content, str):
-                for token in re.split(r"(\s+)", content):
-                    if token: yield {"type": "token", "content": token}
+                for token_chunk in re.split(r"(\s+)", content):
+                    if token_chunk: yield {"type": "token", "content": token_chunk}
                 yield {"type": "complete", "message": content}
-                # Track turn in conversation history
                 conv_manager.save_turn(user_id, session_id, message, content, notebook_id,
                                        sender_id=user_id, sender_name=sender_name)
             else:
@@ -112,9 +160,36 @@ async def run_agent(
             
         return
 
-    # 4. Standard Conversation (No tool)
+    # 5. Hybrid Retrieval Stage (For general chat grounded in sources)
+    context = await get_hybrid_context(
+        user_id=user_id,
+        notebook_id=notebook_id,
+        policy=final_policy,
+        mode=final_mode,
+        source_ids=source_ids or [],
+        query=message,
+        token=token
+    )
+
+    # 6. Standard Conversation with Grounded Context
+    system_prompt = "You are a helpful study assistant. Be supportive and keep answers clear."
+    
+    # Source Awareness in System Prompt
+    if selected_sources:
+        source_names = ", ".join([s['name'] for s in selected_sources])
+        system_prompt += f"\n\nYou are currently grounded in the following sources: {source_names}."
+
+    if context:
+        system_prompt += f"\n\nUse the following context to help answer the user. Be concise and prioritize information from the context if it matches the query.\n\nCONTEXT:\n{context}"
+        if final_policy == "STRICT_SELECTED":
+            system_prompt += "\n\nCRITICAL: Use ONLY the provided context. If the answer is not there, say you don't know based on the selected sources."
+        else:
+            system_prompt += "\n\nIf the provided context doesn't contain the answer but is related, say so. If completely unrelated, you may use your general knowledge but mention it's not in the sources."
+    elif final_mode == "NONE" and notebook_id:
+        system_prompt += "\n\nYou have access to the notebook but no specific context was retrieved for this turn. If the user is asking about the sources, suggest that they ask for a 'summary' or 'more detail'."
+
     messages = [
-        {"role": "system", "content": "You are a helpful study assistant. Be supportive and keep answers clear."},
+        {"role": "system", "content": system_prompt},
     ]
     
     # For collaborative sessions, include sender context

@@ -27,6 +27,8 @@ interface NotebookLayoutProps {
   onSaveMindMapToStudio?: (mindmap: any) => void;
   onSaveInfographicToStudio?: (infographic: any) => void;
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
+  typingUsers?: string[];
+  onTyping?: (isTyping: boolean) => void;
 
   // Studio
   artifacts: Artifact[];
@@ -58,6 +60,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   onSaveMindMapToStudio,
   onSaveInfographicToStudio,
   onSaveFlashcardsToStudio,
+  typingUsers = [],
+  onTyping,
   artifacts,
   onGenerateArtifact,
   onDeleteArtifact,
@@ -173,6 +177,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onSaveMindMapToStudio={onSaveMindMapToStudio}
             onSaveInfographicToStudio={onSaveInfographicToStudio}
             onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
+            typingUsers={typingUsers}
+            onTyping={onTyping}
           />
         </div>
 
@@ -241,6 +247,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onSaveMindMapToStudio={onSaveMindMapToStudio}
                 onSaveInfographicToStudio={onSaveInfographicToStudio}
                 onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
+                typingUsers={typingUsers}
+                onTyping={onTyping}
               />
             </div>
           )}

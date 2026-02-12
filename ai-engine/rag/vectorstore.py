@@ -15,6 +15,9 @@ from typing import Optional, List, Dict, Any
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from core.embeddings import get_embedding_client
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStoreConfig:
@@ -270,10 +273,16 @@ def similarity_search(
         
         # Post-filter by metadata
         filtered = []
-        for doc in results:
-            if doc.metadata.get("user_id") != user_id:
+        for i, doc in enumerate(results):
+            doc_user_id = str(doc.metadata.get("user_id"))
+            doc_notebook_id = str(doc.metadata.get("notebook_id"))
+            
+            # Diagnostic: Only log for individual chunks if there's a problem later or in debug mode
+            # logger.debug(f"Chunk {i}: user='{doc_user_id}', notebook='{doc_notebook_id}'")
+            
+            if doc_user_id != str(user_id):
                 continue
-            if notebook_id and doc.metadata.get("notebook_id") != notebook_id:
+            if notebook_id and doc_notebook_id != str(notebook_id):
                 continue
             
             # Source filtering: Match either source_id or filename (source)
@@ -290,6 +299,42 @@ def similarity_search(
             if len(filtered) >= k:
                 break
         
+        if not filtered and results:
+            # Critical Diagnostic: Why did everything fail filtering?
+            sample_metadata = results[0].metadata if results else {}
+            logger.warning(
+                f"⚠️ RAG Search: 0/{len(results)} chunks matched filters!\n"
+                f"  Target user_id:     '{user_id}' (type={type(user_id).__name__})\n"
+                f"  Target notebook_id: '{notebook_id}' (type={type(notebook_id).__name__})\n"
+                f"  Target source_ids:  {source_ids}\n"
+                f"  Sample metadata:    {sample_metadata}"
+            )
+            
+            # FALLBACK: If we filtered by notebook/sources and got NOTHING, but we HAVE results for this user,
+            # try returning results for this user that MATCH the source_ids (if provided).
+            # We must NEVER return unselected sources if source_ids is set.
+            logger.info(f"🔄 RAG Fallback: Checking user-wide matches for {user_id}...")
+            fallback_filtered = []
+            for doc in results:
+                doc_user_id = str(doc.metadata.get("user_id"))
+                doc_source_id = str(doc.metadata.get("source_id"))
+                
+                # Check user ownership always
+                if doc_user_id != str(user_id):
+                    continue
+                    
+                # If source_ids is provided, STRICTLY filter by it
+                if source_ids and doc_source_id not in [str(sid) for sid in source_ids]:
+                    continue
+                    
+                fallback_filtered.append(doc)
+                if len(fallback_filtered) >= k:
+                    break
+            
+            if fallback_filtered:
+                logger.info(f"✅ RAG Fallback: Found {len(fallback_filtered)} matches across user documents.")
+                return fallback_filtered
+            
         logger.debug(f"✅ RAG Search Result: Found {len(filtered)} matches (after post-filtering {len(results)} chunks)")
         return filtered
     

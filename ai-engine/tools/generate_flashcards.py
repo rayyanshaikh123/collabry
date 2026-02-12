@@ -6,7 +6,7 @@ for spaced repetition learning.
 """
 
 import json
-from typing import Optional, List
+from typing import Optional, List, Any
 from langchain_core.tools import tool
 from rag.retriever import get_retriever
 from core.llm import get_async_openai_client, get_llm_config
@@ -14,8 +14,8 @@ from core.llm import get_async_openai_client, get_llm_config
 
 @tool
 async def generate_flashcards(
-    topic: str,
-    num_cards: int = 10,
+    topic: Optional[str] = "key concepts",
+    num_cards: Any = 10,
     notebook_id: Optional[str] = None,
     user_id: str = "default",
     source_ids: Optional[List[str]] = None,
@@ -40,7 +40,23 @@ async def generate_flashcards(
         JSON array of flashcards with front/back content
     """
     try:
-        # Validate inputs
+        # Validate and robustly parse inputs
+        try:
+            if isinstance(num_cards, str):
+                if num_cards.lower() in ["less", "fewer"]:
+                    num_cards = 5
+                elif num_cards.lower() in ["more", "many"]:
+                    num_cards = 20
+                else:
+                    # Try to extract numbers from string if possible
+                    import re
+                    match = re.search(r'\d+', num_cards)
+                    num_cards = int(match.group()) if match else 10
+            else:
+                num_cards = int(num_cards)
+        except Exception:
+            num_cards = 10
+
         num_cards = min(max(num_cards, 1), 50)  # Limit 1-50
         
         # Get retriever

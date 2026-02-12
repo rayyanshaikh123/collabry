@@ -15,13 +15,15 @@ interface UseNotebookCollabProps {
     onMessageReceived?: (message: ChatMessage) => void;
     onTokenReceived?: (token: string, messageId: string) => void;
     onSourceUpdate?: (action: string, source: any) => void;
+    onChatClear?: () => void;
 }
 
 export function useNotebookCollab({
     notebookId,
     onMessageReceived,
     onTokenReceived,
-    onSourceUpdate
+    onSourceUpdate,
+    onChatClear
 }: UseNotebookCollabProps) {
     const [participants, setParticipants] = useState<Participant[]>([]);
     const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -34,12 +36,14 @@ export function useNotebookCollab({
     const onMessageReceivedRef = useRef(onMessageReceived);
     const onTokenReceivedRef = useRef(onTokenReceived);
     const onSourceUpdateRef = useRef(onSourceUpdate);
+    const onChatClearRef = useRef(onChatClear);
 
     useEffect(() => {
         onMessageReceivedRef.current = onMessageReceived;
         onTokenReceivedRef.current = onTokenReceived;
         onSourceUpdateRef.current = onSourceUpdate;
-    }, [onMessageReceived, onTokenReceived, onSourceUpdate]);
+        onChatClearRef.current = onChatClear;
+    }, [onMessageReceived, onTokenReceived, onSourceUpdate, onChatClear]);
 
     useEffect(() => {
         if (!notebookId || !user || !accessToken) return;
@@ -65,11 +69,11 @@ export function useNotebookCollab({
             setParticipants(participants);
         });
 
-        newSocket.on('user:typing', ({ userId, isTyping }) => {
+        newSocket.on('user:typing', ({ userId, displayName, isTyping }) => {
             setTypingUsers(prev =>
                 isTyping
-                    ? [...prev.filter(id => id !== userId), userId]
-                    : prev.filter(id => id !== userId)
+                    ? [...prev.filter(name => name !== displayName), displayName]
+                    : prev.filter(name => name !== displayName)
             );
         });
 
@@ -96,6 +100,10 @@ export function useNotebookCollab({
             if (onSourceUpdateRef.current) onSourceUpdateRef.current(action, source);
         });
 
+        newSocket.on('chat:clear', () => {
+            if (onChatClearRef.current) onChatClearRef.current();
+        });
+
         return () => {
             newSocket.disconnect();
             socketRef.current = null;
@@ -107,6 +115,7 @@ export function useNotebookCollab({
             socketRef.current.emit('user:typing', {
                 notebookId,
                 userId: user.id,
+                displayName: user.name,
                 isTyping
             });
         }
@@ -151,6 +160,14 @@ export function useNotebookCollab({
         }
     }, [notebookId]);
 
+    const broadcastChatClear = useCallback(() => {
+        if (socketRef.current && notebookId) {
+            socketRef.current.emit('chat:clear', {
+                notebookId
+            });
+        }
+    }, [notebookId]);
+
     return {
         participants,
         typingUsers,
@@ -158,6 +175,7 @@ export function useNotebookCollab({
         broadcastChatMessage,
         broadcastAIToken,
         broadcastAIComplete,
-        broadcastSourceUpdate
+        broadcastSourceUpdate,
+        broadcastChatClear
     };
 }

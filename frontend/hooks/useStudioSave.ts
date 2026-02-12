@@ -37,13 +37,13 @@ export function useStudioSave({
           title: `Practice Quiz - ${displayCount} Questions`,
           description: quizPrompt || 'Generated from study session',
           sourceType: 'ai',
-          subject: '',
+          subject: notebook.subject || null, // Use notebook's subject if available, otherwise null
           questions: questions.map((q, index) => {
             const options = Array.isArray(q.options)
               ? q.options
               : Array.isArray(q.choices)
-              ? q.choices
-              : [];
+                ? q.choices
+                : [];
 
             let correctAnswerText = '';
             if (typeof q.correctAnswer === 'number') {
@@ -121,7 +121,7 @@ export function useStudioSave({
 
         try {
           const renderResult = await renderMindmap(mindmap, 'both');
-          svgBase64 = renderResult.svg_base64;
+          svgBase64 = (renderResult as any).svg_base64;
           mermaidCode = renderResult.mermaid;
           console.log('Mindmap rendered successfully:', {
             hasSvg: !!svgBase64,
@@ -141,7 +141,7 @@ export function useStudioSave({
           maxNodes: mindmap.nodes.length,
           useRag: false,
           save: true,
-          subjectId: '',
+          subjectId: notebook.subject || null,
         });
 
         const savedId =

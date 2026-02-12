@@ -16,6 +16,7 @@ interface UseNotebookChatProps {
   onToken?: (token: string, messageId: string) => void;
   onComplete?: (message: string, messageId: string) => void;
   onMessageSent?: (message: ChatMessage) => void;
+  onClear?: () => void;
 }
 
 export function useNotebookChat({
@@ -32,6 +33,7 @@ export function useNotebookChat({
   onToken,
   onComplete,
   onMessageSent,
+  onClear,
 }: UseNotebookChatProps) {
   const chatAbortRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -312,6 +314,7 @@ export function useNotebookChat({
           try {
             await clearSessionMessages.mutateAsync(sessionId);
             setLocalMessages([]);
+            if (onClear) onClear();
             showSuccess('Chat history cleared');
           } catch (error) {
             console.error('Failed to clear chat:', error);

@@ -54,10 +54,10 @@ function cleanJSON(jsonString: string): string {
   cleaned = cleaned
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2018\u2019]/g, "'");
-  
+
   // Remove trailing commas before } or ]
   cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
-  
+
   // Remove comments
   cleaned = cleaned.replace(/\/\/.*$/gm, '');
   cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -67,13 +67,13 @@ function cleanJSON(jsonString: string): string {
     .replace(/\bNone\b/g, 'null')
     .replace(/\bTrue\b/g, 'true')
     .replace(/\bFalse\b/g, 'false');
-  
+
   // Remove any text after the closing brace
   const lastBrace = cleaned.lastIndexOf('}');
   if (lastBrace > 0) {
     cleaned = cleaned.substring(0, lastBrace + 1);
   }
-  
+
   return cleaned;
 }
 
@@ -177,7 +177,10 @@ function extractBalancedObject(text: string): string | null {
  * Extract JSON from text (handles code blocks, plain JSON, etc.)
  */
 function extractJSON(text: string): any | null {
-  const raw = text.trim();
+  let raw = text.trim();
+
+  // Remove explicit intent markers like [INFOGRAPHIC_GENERATION_REQUEST]
+  raw = raw.replace(/^\[[A-Z_]+_REQUEST\]\s*/i, '');
 
   // 1) Prefer fenced JSON blocks
   const fenced = extractFencedJsonBlock(raw);
@@ -203,19 +206,19 @@ function extractJSON(text: string): any | null {
  */
 function isValidInfographicData(data: any): data is InfographicData {
   if (!data || typeof data !== 'object') return false;
-  
+
   // Must have title and sections array
   if (!data.title || !Array.isArray(data.sections)) return false;
-  
+
   // Sections must have required fields
   if (data.sections.length === 0) return false;
-  
+
   for (const section of data.sections) {
     // Accept both V1 (icon/keyPoints/stats) and V2 (type + items/events)
     if (!section || typeof section !== 'object') return false;
     if (!section.title) return false;
   }
-  
+
   return true;
 }
 
@@ -230,14 +233,14 @@ export function extractInfographicFromMarkdown(markdownText: string): {
   try {
     // Extract JSON from the text
     const jsonData = extractJSON(markdownText);
-    
+
     if (!jsonData) {
       return {
         success: false,
         error: 'No valid JSON found in response'
       };
     }
-    
+
     // Validate structure
     if (!isValidInfographicData(jsonData)) {
       return {
@@ -245,7 +248,7 @@ export function extractInfographicFromMarkdown(markdownText: string): {
         error: 'Invalid infographic data structure'
       };
     }
-    
+
     return {
       success: true,
       data: jsonData

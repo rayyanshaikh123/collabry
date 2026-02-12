@@ -15,7 +15,7 @@ from rag.retriever import get_retriever
 
 @tool
 async def generate_mindmap(
-    topic: str,
+    topic: Optional[str] = "main concepts",
     user_id: str = "default",
     notebook_id: Optional[str] = None,
     source_ids: Optional[List[str]] = None,

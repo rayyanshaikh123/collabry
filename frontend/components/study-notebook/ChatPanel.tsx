@@ -43,6 +43,8 @@ interface ChatPanelProps {
   onSaveMindMapToStudio?: (mindmap: any) => void;
   onSaveInfographicToStudio?: (infographic: any) => void;
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
+  typingUsers?: string[];
+  onTyping?: (isTyping: boolean) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -58,6 +60,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onSaveMindMapToStudio,
   onSaveInfographicToStudio,
   onSaveFlashcardsToStudio,
+  typingUsers = [],
+  onTyping,
 }) => {
   const router = useRouter();
   const [inputText, setInputText] = useState('');
@@ -72,6 +76,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     | { kind: 'infographic'; data: any; title?: string }
     | null
   >(null);
+
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isCurrentlyTyping = useRef(false);
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
@@ -148,6 +155,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputText.trim() && !isLoading) {
+      if (onTyping) {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        isCurrentlyTyping.current = false;
+        onTyping(false);
+      }
       onSendMessage(inputText.trim());
       setInputText('');
     }
@@ -456,7 +468,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           const result = extractMindMapFromMarkdown(contentToParse);
                           mindmap = result.mindmap;
                           cleanMarkdown = result.cleanMarkdown;
-
+                          // Remove explicit intent markers
+                          cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
                         }
 
                         // Check for infographic JSON
@@ -473,6 +486,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/g, '').trim();
+                            // Remove explicit intent markers
+                            cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
 
                             // If the assistant responded with JSON only, don't show it as markdown
                             if (cleanMarkdown.trim().startsWith('{')) {
@@ -495,6 +510,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                             // Remove JSON from markdown display
                             cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"cards"[\s\S]*"front"[\s\S]*\}/g, '').trim();
+                            // Remove explicit intent markers
+                            cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
 
                             // If the assistant responded with JSON only, don't show it as markdown
                             if (cleanMarkdown.trim().startsWith('{')) {
@@ -738,13 +755,47 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
       </div>
 
+      {/* Typing Indicator */}
+      {typingUsers.length > 0 && (
+        <div className="px-6 py-1 bg-slate-50 dark:bg-slate-900 flex items-center gap-2">
+          <div className="flex gap-1">
+            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></span>
+          </div>
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            {typingUsers.length === 1
+              ? `${typingUsers[0]} is typing...`
+              : typingUsers.length === 2
+                ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+          </p>
+        </div>
+      )}
+
       {/* Input */}
       <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <div className="flex-1">
             <textarea
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+
+                // Handle typing indicator
+                if (onTyping) {
+                  if (!isCurrentlyTyping.current) {
+                    isCurrentlyTyping.current = true;
+                    onTyping(true);
+                  }
+
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => {
+                    isCurrentlyTyping.current = false;
+                    onTyping(false);
+                  }, 3000);
+                }
+              }}
               onKeyPress={handleKeyPress}
               placeholder={
                 hasSelectedSources

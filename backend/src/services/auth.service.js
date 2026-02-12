@@ -38,6 +38,7 @@ const issueTokenPair = async (user, family, meta = {}) => {
     id: user._id,
     email: user.email,
     role: user.role,
+    subscriptionTier: user.subscriptionTier,
   };
 
   const jti = generateJti();
