@@ -57,7 +57,6 @@ module.exports = (io) => {
 
   // Authentication middleware for board namespace
   boardNamespace.use((socket, next) => {
-    console.log('[Board NS] Connection attempt from:', socket.handshake.address, '| Has token:', !!socket.handshake.auth.token);
     const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
     
     if (!token) {
