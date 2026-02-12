@@ -252,9 +252,11 @@ def similarity_search(
     vectorstore = get_vectorstore()
     
     # Build metadata filter
-    filter_dict = {"user_id": user_id}
+    filter_dict = {"user_id": str(user_id)}
     if notebook_id:
-        filter_dict["notebook_id"] = notebook_id
+        filter_dict["notebook_id"] = str(notebook_id)
+    
+    logger.debug(f"🔍 RAG Search: query='{query}', filter={filter_dict}, source_ids={source_ids}")
     
     # Search with filter
     # Note: FAISS doesn't support native filtering, so we'll post-filter
@@ -288,6 +290,7 @@ def similarity_search(
             if len(filtered) >= k:
                 break
         
+        logger.debug(f"✅ RAG Search Result: Found {len(filtered)} matches (after post-filtering {len(results)} chunks)")
         return filtered
     
     else:
@@ -306,6 +309,8 @@ def similarity_search(
                 filtered.append(doc)
             if len(filtered) >= k:
                 break
+        
+        logger.debug(f"✅ RAG Search Result: Found {len(filtered)} matches")
         return filtered
 
 

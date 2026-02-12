@@ -71,11 +71,9 @@ def ingest_document_background(
             }
         )
 
-        # IMPORTANT: The /ai/sessions/{session_id}/chat/stream endpoint currently
-        # passes notebook_id=session_id into the agent. To keep ingestion and
-        # retrieval consistent, prefer session_id as the notebook_id key used
-        # in the vectorstore metadata.
-        notebook_id = (metadata or {}).get("session_id") or (metadata or {}).get("notebook_id") or "default"
+        # IMPORTANT: Tools (flashcards, quiz, etc.) use the actual MongoDB notebook_id
+        # for retrieval. We must prioritize storing documents under this ID.
+        notebook_id = (metadata or {}).get("notebook_id") or (metadata or {}).get("session_id") or "default"
 
         # Chunk before writing, so retrieval works well and chunk metadata is preserved.
         chunk_size = int(CONFIG.get("chunk_size", 1000))
