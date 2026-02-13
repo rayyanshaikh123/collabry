@@ -11,6 +11,7 @@ All vector stores support metadata filtering by user_id and notebook_id.
 """
 
 import os
+import time
 from typing import Optional, List, Dict, Any
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
@@ -206,6 +207,7 @@ def add_documents(
 ) -> List[str]:
     """
     Add documents to vector store with user and notebook metadata.
+    SECURITY FIX - Phase 3: Enhanced with input validation and sanitization.
     
     Args:
         documents: List of LangChain Document objects
@@ -215,22 +217,90 @@ def add_documents(
     Returns:
         List of document IDs
     """
+    from core.validator import sanitize_user_input
+    import re
+    
+    # SECURITY FIX - Validate inputs
+    if not isinstance(user_id, str) or not user_id:
+        raise ValueError("user_id is required and must be a non-empty string")
+    if not isinstance(notebook_id, str) or not notebook_id:
+        raise ValueError("notebook_id is required and must be a non-empty string")
+    if not documents:
+        raise ValueError("documents list cannot be empty")
+    
+    # Validate user_id and notebook_id format (prevent injection)
+    if not re.match(r'^[A-Za-z0-9_-]{1,50}$', user_id):
+        raise ValueError(f"Invalid user_id format: {user_id}")
+    if not re.match(r'^[A-Za-z0-9_-]{1,50}$', notebook_id):
+        raise ValueError(f"Invalid notebook_id format: {notebook_id}")
+    
     vectorstore = get_vectorstore()
     
-    # Add metadata to all documents
-    for doc in documents:
-        doc.metadata["user_id"] = user_id
-        doc.metadata["notebook_id"] = notebook_id
+    # SECURITY FIX - Sanitize and validate documents
+    sanitized_documents = []
+    for i, doc in enumerate(documents[:1000]):  # Limit to prevent DoS
+        if not isinstance(doc, Document):
+            logger.warning(f"🚨 Skipping non-Document object at index {i}")
+            continue
+            
+        # Sanitize page content
+        sanitized_content = sanitize_user_input(doc.page_content)
+        if len(sanitized_content.strip()) < 10:  # Skip very short content
+            logger.warning(f"🚨 Skipping document with insufficient content at index {i}")
+            continue
+        
+        # Create sanitized document with security metadata
+        sanitized_doc = Document(
+            page_content=sanitized_content[:50000],  # Limit size to prevent DoS
+            metadata={
+                **doc.metadata,
+                "user_id": user_id,
+                "notebook_id": notebook_id,
+                "added_at": str(int(time.time())),  # Timestamp for audit
+                "content_length": len(sanitized_content)
+            }
+        )
+        
+        # Sanitize metadata keys and values
+        clean_metadata = {}
+        for key, value in sanitized_doc.metadata.items():
+            # Validate metadata key
+            if not isinstance(key, str) or not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]{0,49}$', key):
+                logger.warning(f"🚨 Skipping invalid metadata key: {key}")
+                continue
+                
+            # Sanitize metadata value
+            if isinstance(value, str):
+                clean_value = sanitize_user_input(value)[:500]  # Limit metadata size
+            elif isinstance(value, (int, float, bool)):
+                clean_value = value
+            else:
+                clean_value = str(value)[:500]  # Convert to string and limit
+                
+            clean_metadata[key] = clean_value
+        
+        sanitized_doc.metadata = clean_metadata
+        sanitized_documents.append(sanitized_doc)
     
-    # Add to vector store
-    ids = vectorstore.add_documents(documents)
+    if not sanitized_documents:
+        raise ValueError("No valid documents after sanitization")
     
-    # Save FAISS index if using FAISS
-    config = VectorStoreConfig()
-    if config.provider == "faiss":
-        vectorstore.save_local(config.faiss_index_path)
+    logger.info(f"✅ Adding {len(sanitized_documents)} sanitized documents for user {user_id}")
     
-    return ids
+    try:
+        # Add to vector store
+        ids = vectorstore.add_documents(sanitized_documents)
+        
+        # Save FAISS index if using FAISS
+        config = VectorStoreConfig()
+        if config.provider == "faiss":
+            vectorstore.save_local(config.faiss_index_path)
+        
+        return ids
+        
+    except Exception as e:
+        logger.error(f"🚨 Error adding documents: {e}")
+        raise ValueError(f"Failed to add documents: {str(e)}")
 
 
 def similarity_search(
@@ -242,24 +312,47 @@ def similarity_search(
 ) -> List[Document]:
     """
     Search for similar documents with metadata filtering.
+    SECURITY FIX - Phase 3: Enhanced with source boundary validation.
     
     Args:
         query: Search query
         user_id: User identifier (required for isolation)
         notebook_id: Optional notebook filter
+        source_ids: Optional list of source IDs to filter by
         k: Number of results to return
     
     Returns:
         List of relevant documents
     """
+    from core.validator import validate_source_boundaries, sanitize_user_input
+    
+    # SECURITY FIX - Phase 3: Validate and sanitize inputs
+    if not isinstance(user_id, str) or not user_id:
+        raise ValueError("user_id is required and must be a non-empty string")
+    
+    # Sanitize query to prevent injection attacks
+    query = sanitize_user_input(query)
+    if not query or len(query.strip()) < 3:
+        logger.warning("🚨 Query too short or empty after sanitization")
+        return []
+    
+    # Validate source boundaries if source_ids provided
+    if source_ids:
+        if not validate_source_boundaries(user_id, notebook_id, source_ids, user_id):
+            logger.error(f"🚨 Source boundary validation failed for user {user_id}")
+            return []
+    
+    # Limit result count to prevent DoS
+    k = min(k, 100)
+    
     vectorstore = get_vectorstore()
     
-    # Build metadata filter
+    # Build metadata filter with strict user isolation
     filter_dict = {"user_id": str(user_id)}
     if notebook_id:
         filter_dict["notebook_id"] = str(notebook_id)
     
-    logger.debug(f"🔍 RAG Search: query='{query}', filter={filter_dict}, source_ids={source_ids}")
+    logger.debug(f"🔍 RAG Search: query='{query[:50]}...', filter={filter_dict}, source_ids={source_ids}")
     
     # Search with filter
     # Note: FAISS doesn't support native filtering, so we'll post-filter

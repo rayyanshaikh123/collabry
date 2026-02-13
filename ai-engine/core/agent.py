@@ -23,15 +23,194 @@ import logging
 logger = logging.getLogger(__name__)
 
 def _clean_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Remove placeholder strings and actual None values from params."""
+    """
+    SECURITY FIX - Phase 2: Enhanced parameter sanitization.
+    Remove placeholder strings, validate types, and prevent injection attacks.
+    """
     cleaned = {}
     for k, v in params.items():
+        # Reject None values
         if v is None:
             continue
-        if isinstance(v, str) and v.lower() in ("none", "null", "n/a", "undefined", ""):
+            
+        # SECURITY FIX: Strict type validation - only allow safe types
+        if not isinstance(v, (str, int, float, bool)):
+            logger.warning(f"🚨 Rejected parameter {k} with unsafe type {type(v)}: {v}")
             continue
+            
+        if isinstance(v, str):
+            # Remove placeholder strings
+            if v.lower() in ("none", "null", "n/a", "undefined", ""):
+                continue
+                
+            # SECURITY FIX: Reject MongoDB operators and injection patterns
+            dangerous_patterns = [
+                '$ne', '$gt', '$lt', '$in', '$or', '$and',  # MongoDB operators
+                'drop table', 'delete from', 'insert into', 'update set',  # SQL injection
+                '<script>', 'javascript:', 'eval(', 'function(',  # XSS attempts
+                '../', '.\\',  # Path traversal
+                '; rm -rf', '; del ',  # Command injection
+            ]
+            
+            if any(dangerous in str(v).lower() for dangerous in dangerous_patterns):
+                logger.warning(f"🚨 Rejected parameter {k} with dangerous content: {v}")
+                continue
+                
+            # Sanitize and limit string length  
+            v = re.sub(r'[<>{}();\'"\\$]', '', v)  # Remove dangerous chars
+            v = v[:200]  # Reasonable length limit
+            
+        # Validate numeric ranges
+        elif isinstance(v, int):
+            if k in ['count', 'num_questions', 'num_cards']:
+                if v < 1 or v > 100:  # Reasonable bounds
+                    logger.warning(f"🚨 Parameter {k} out of range: {v}")
+                    continue
+            
         cleaned[k] = v
+    
+    logger.info(f"✅ Cleaned parameters: {list(cleaned.keys())}")
     return cleaned
+
+def _is_artifact_related_question(message: str, artifact_context: Dict[str, Any]) -> bool:
+    """
+    SECURITY FIX - Phase 2: Detect if user question refers to previously generated artifact.
+    """
+    if not artifact_context:
+        return False
+        
+    artifact_type = artifact_context.get('type', '').lower()
+    message_lower = message.lower()
+    
+    # Check for explicit artifact type references
+    artifact_indicators = {
+        'quiz': ['question', 'quiz', 'answer', 'correct', 'wrong'],
+        'flashcards': ['card', 'flashcard', 'front', 'back'],
+        'mindmap': ['mindmap', 'mind map', 'node', 'branch'], 
+        'summary': ['summary', 'summarized', 'point'],
+        'report': ['report', 'section'],
+        'study_plan': ['plan', 'schedule', 'timeline']
+    }
+    
+    if artifact_type in artifact_indicators:
+        indicators = artifact_indicators[artifact_type]
+        if any(indicator in message_lower for indicator in indicators):
+            return True
+    
+    # Check for positional references (question 3, card 2, etc.)
+    if re.search(r'\b(question|card|item|point|step)\s+\d+', message_lower):
+        return True
+        
+    # Check for relative references that likely refer to recent content
+    relative_refs = ['this', 'that', 'it', 'them', 'these', 'those']
+    if any(ref in message_lower for ref in relative_refs):
+        return True
+        
+    return False
+
+async def _handle_artifact_question(message: str, artifact_context: Dict[str, Any], history: List) -> str:
+    """
+    SECURITY FIX - Phase 2: Handle questions about previously generated artifacts.
+    """
+    artifact_content = artifact_context.get('content', '')
+    artifact_type = artifact_context.get('type', '')
+    
+    # Truncate artifact content for prompt (prevent context overflow)
+    if len(str(artifact_content)) > 2000:
+        content_preview = str(artifact_content)[:2000] + "...[truncated]"
+    else:
+        content_preview = str(artifact_content)
+    
+    system_prompt = f"""
+    You are helping the user with their {artifact_type} that you previously generated.
+    
+    The {artifact_type} content is:
+    {content_preview}
+    
+    Answer the user's question about this {artifact_type} specifically.
+    Be precise and refer to the exact content when possible.
+    If asked about a specific item (like "question 3"), identify it clearly.
+    """
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Add recent conversation context
+    for h in history[-3:]:  # Limit context to prevent overflow
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": message})
+    
+    response = await chat_completion(messages, stream=False)
+    return response.choices[0].message.content
+
+def _sanitize_conversation_history(history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """
+    SECURITY FIX - Phase 3: Filter conversation history for prompt injection patterns.
+    """
+    sanitized_history = []
+    
+    for message in history:
+        content = message.get("content", "")
+        role = message.get("role", "user")
+        
+        # Known prompt injection patterns to filter
+        injection_patterns = [
+            # Direct instruction attempts
+            r'(ignore|forget|disregard)\s+(previous|all|above|system|instructions)',
+            r'you\s+are\s+now\s+(a|an)\s+',
+            r'your\s+(new|actual|real)\s+(role|instructions|purpose)',
+            
+            # System prompt exposure attempts  
+            r'(show|tell|reveal|display)\s+(me\s+)?(your|the)\s+(system\s+)?(prompt|instructions)',
+            r'what\s+(are|were)\s+your\s+(original|initial)\s+instructions',
+            r'(repeat|echo)\s+(back\s+)?your\s+instructions',
+            
+            # Role manipulation attempts
+            r'act\s+as\s+(if\s+)?you\s+(are|were)',
+            r'pretend\s+(you\s+are|to\s+be)',
+            r'roleplay\s+as',
+            
+            # Context injection attempts
+            r'\\n\\n(system|user|assistant):',
+            r'\{"role":\s*"(system|assistant)"',
+            
+            # Jailbreak attempts
+            r'(developer|admin|root)\s+mode',
+            r'break\s+out\s+of\s+(character|role)',
+            r'stop\s+(acting|being)',
+        ]
+        
+        # Check for injection patterns
+        has_injection = False
+        for pattern in injection_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                logger.warning(f"🚨 Prompt injection detected in {role} message: {pattern}")
+                has_injection = True
+                break
+        
+        if has_injection:
+            # Replace with sanitized message but preserve conversational flow
+            sanitized_content = "[Content filtered for security]"
+            if role == "user":
+                sanitized_content = "User message contained problematic content."
+            elif role == "assistant":
+                sanitized_content = "I provided a response to the user."
+        else:
+            # Standard sanitization - remove potential injection markers
+            sanitized_content = content
+            # Remove obvious injection markers but preserve normal content
+            sanitized_content = re.sub(r'\\n\\n(system|user|assistant):', ' [filtered] ', sanitized_content)
+            sanitized_content = re.sub(r'\{"role":\s*"[^"]*"[^}]*\}', '[filtered]', sanitized_content)
+            
+        # Limit message length to prevent context overflow attacks
+        sanitized_content = sanitized_content[:1000]
+        
+        sanitized_history.append({
+            "role": role,
+            "content": sanitized_content
+        })
+    
+    logger.debug(f"✅ Sanitized {len(history)} history messages")
+    return sanitized_history
 
 
 async def run_agent(
@@ -48,16 +227,43 @@ async def run_agent(
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Main entry point using the simplified linear flow.
+    SECURITY FIX - Phase 2/3: Enhanced with artifact precedence and security fixes.
     """
-    # 1. Initialize State and History
-    session_state = get_session_state(session_id)
+    # 1. Initialize State with proper user isolation
+    session_state = get_session_state(session_id, user_id)
     conv_manager = get_conversation_manager()
     history = conv_manager.get_history(user_id, session_id, limit=10)
+    
+    # SECURITY FIX - Phase 2: Check for artifact context BEFORE retrieval planning
+    artifact_context = session_state.get_artifact_context()
+    
+    if artifact_context and _is_artifact_related_question(message, artifact_context):
+        yield {"type": "thinking", "content": f"💭 Referring to previous {artifact_context['type']}..."}
+        
+        # Handle artifact-specific questions without retrieval
+        response = await _handle_artifact_question(message, artifact_context, history)
+        
+        # Stream response tokens
+        for token_chunk in re.split(r"(\s+)", response):
+            if token_chunk.strip(): 
+                yield {"type": "token", "content": token_chunk}
+        
+        yield {"type": "complete", "message": response}
+        conv_manager.save_turn(user_id, session_id, message, response, notebook_id,
+                               sender_id=user_id, sender_name=sender_name)
+        return
     
     # Pre-fetch source metadata for the Planner
     selected_sources = []
     if source_ids:
-        selected_sources = await fetch_source_metadata(notebook_id, source_ids, token)
+        try:
+            # SECURITY FIX: Use validated source IDs
+            from core.retrieval_service import validate_source_ids
+            validated_source_ids = validate_source_ids(source_ids)
+            selected_sources = await fetch_source_metadata(notebook_id, validated_source_ids, token)
+        except ValueError as e:
+            yield {"type": "error", "message": f"Invalid source selection: {str(e)}"}
+            return
     
     # 2. Control Planner - Decide Task & Initial Retrieval Strategy
     planner_output = await route_message(message, history, session_state, selected_sources)
@@ -140,6 +346,9 @@ async def run_agent(
             else:
                 content = str(output)
             
+            # Store generated artifact for follow-up questions
+            session_state.store_artifact(tool_name.replace('generate_', ''), content, {"tool": tool_name, "params": final_params})
+            
             # Stream tokens
             if isinstance(content, str):
                 for token_chunk in re.split(r"(\s+)", content):
@@ -196,7 +405,8 @@ async def run_agent(
     if is_collaborative and sender_name:
         messages[0]["content"] += f"\n\nNote: This is a collaborative study session. The current speaker is '{sender_name}'."
     
-    for h in history:
+    # SECURITY FIX - Phase 3: Sanitize conversation history before including in prompt
+    for h in _sanitize_conversation_history(history):
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": message})
     

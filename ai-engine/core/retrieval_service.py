@@ -4,11 +4,73 @@ Retrieval Service - Orchestrates semantic search (RAG) and full-text retrieval.
 
 import logging
 import httpx
+import re
 from typing import List, Optional, Dict, Any
 from rag.vectorstore import similarity_search
 from config import CONFIG
 
 logger = logging.getLogger(__name__)
+
+def validate_source_ids(source_ids: List[str]) -> List[str]:
+    """
+    SECURITY FIX - Phase 1: Validate and sanitize source IDs to prevent injection attacks.
+    
+    Args:
+        source_ids: List of source ID strings to validate
+        
+    Returns:
+        List of validated source IDs
+        
+    Raises:
+        ValueError: If any source ID is invalid/malicious
+    """
+    if not source_ids:
+        return []
+        
+    validated_ids = []
+    
+    for source_id in source_ids:
+        # Check for basic type safety
+        if not isinstance(source_id, str):
+            logger.warning(f"Invalid source_id type: {type(source_id)}")
+            raise ValueError(f"Invalid source_id type: {type(source_id)}")
+            
+        # Remove whitespace
+        source_id = source_id.strip()
+        
+        # Check minimum length
+        if len(source_id) < 12:
+            logger.warning(f"Source ID too short: {source_id}")
+            raise ValueError(f"Invalid source_id format: {source_id}")
+        
+        # Reject obviously malicious patterns
+        malicious_patterns = [
+            r'[./\\]',  # Path traversal attempts
+            r'[;\'"{}()]',  # SQL/NoSQL injection characters
+            r'\s*(OR|AND|DROP|SELECT|INSERT|UPDATE|DELETE|UNION)\s*',  # SQL keywords
+            r'<script>|javascript:|eval\(',  # XSS attempts
+            r'\$\w+',  # MongoDB operators like $ne, $gt
+            r'\.\./',  # Directory traversal
+        ]
+        
+        for pattern in malicious_patterns:
+            if re.search(pattern, source_id, re.IGNORECASE):
+                logger.warning(f"Malicious pattern detected in source_id: {source_id}")
+                raise ValueError(f"Malicious pattern detected in source_id: {source_id}")
+        
+        # Validate ObjectId/MongoDB format (24 hex characters)
+        if len(source_id) == 24 and all(c in '0123456789abcdefABCDEF' for c in source_id):
+            validated_ids.append(source_id)
+        else:
+            # Could be UUID or other valid format - validate more strictly
+            if re.match(r'^[a-zA-Z0-9_-]{12,50}$', source_id):
+                validated_ids.append(source_id)
+            else:
+                logger.warning(f"Invalid source_id format: {source_id}")
+                raise ValueError(f"Invalid source_id format: {source_id}")
+    
+    logger.info(f"✅ Validated {len(validated_ids)} source IDs successfully")
+    return validated_ids
 
 BACKEND_URL = CONFIG.get("backend_url", "http://localhost:5000")
 
@@ -23,18 +85,26 @@ async def get_hybrid_context(
 ) -> str:
     """
     Retrieves context based on the validated plan.
+    SECURITY FIX - Phase 1: Enhanced with source ID validation.
     """
     logger.info(f"🚀 Retrieval: policy={policy}, mode={mode}, sources={len(source_ids)}")
     
     if mode == "NONE":
         return ""
 
+    # SECURITY FIX: Validate source IDs before ANY processing
+    try:
+        validated_source_ids = validate_source_ids(source_ids)
+    except ValueError as e:
+        logger.error(f"🚨 Security: Invalid source_ids provided: {e}")
+        return ""  # Fail safe - return empty context instead of risking data exposure
+
     context_parts = []
 
     # 1. Handle FULL_DOCUMENT (High fidelity recap/summary)
     if mode == "FULL_DOCUMENT" or mode == "MULTI_DOC_SYNTHESIS":
-        if source_ids and token:
-            full_texts = await fetch_full_sources(notebook_id, source_ids, token)
+        if validated_source_ids and token:
+            full_texts = await fetch_full_sources(notebook_id, validated_source_ids, token)
             for st in full_texts:
                 context_parts.append(f"--- SOURCE: {st['name']} (Type: {st['type']}) ---\n{st['content']}")
         
@@ -46,7 +116,7 @@ async def get_hybrid_context(
     # 2. Handle CHUNK_SEARCH (Standard RAG)
     # We always do this for specific queries or if full text failed/wasn't requested.
     search_policy_notebook = notebook_id if policy != "AUTO_EXPAND" else None
-    search_source_ids = source_ids if policy == "STRICT_SELECTED" or policy == "PREFER_SELECTED" else None
+    search_source_ids = validated_source_ids if policy == "STRICT_SELECTED" or policy == "PREFER_SELECTED" else None
     
     docs = similarity_search(
         query=query,
@@ -71,10 +141,18 @@ async def fetch_full_sources(
 ) -> List[Dict[str, Any]]:
     """
     Call the Node.js backend to get the full raw text of specific sources.
+    SECURITY FIX - Phase 1: Enhanced with source ID validation.
     """
+    # SECURITY FIX: Double-validate source IDs (defense in depth)
+    try:
+        validated_source_ids = validate_source_ids(source_ids)
+    except ValueError as e:
+        logger.error(f"🚨 Security: Invalid source_ids in fetch_full_sources: {e}")
+        return []  # Fail safe
+    
     results = []
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for sid in source_ids:
+        for sid in validated_source_ids:
             try:
                 # Use the existing backend endpoint
                 url = f"{BACKEND_URL}/api/notebook/notebooks/{notebook_id}/sources/{sid}/content"
@@ -102,9 +180,17 @@ async def fetch_source_metadata(
 ) -> List[Dict[str, Any]]:
     """
     Fetch names and types for the provided source IDs.
+    SECURITY FIX - Phase 1: Enhanced with source ID validation.
     """
     if not notebook_id or not token:
         return []
+
+    # SECURITY FIX: Validate source IDs before metadata fetch
+    try:
+        validated_source_ids = validate_source_ids(source_ids)
+    except ValueError as e:
+        logger.error(f"🚨 Security: Invalid source_ids in fetch_source_metadata: {e}")
+        return []  # Fail safe
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -116,11 +202,11 @@ async def fetch_source_metadata(
                 notebook = response.json().get("data", {})
                 sources = notebook.get("sources", [])
                 
-                # Filter to requested IDs
+                # Filter to requested IDs (using validated IDs)
                 meta_list = []
                 for s in sources:
                     sid = str(s.get("_id") or s.get("id"))
-                    if sid in [str(requested_id) for requested_id in source_ids]:
+                    if sid in [str(requested_id) for requested_id in validated_source_ids]:
                         meta_list.append({
                             "id": sid,
                             "name": s.get("name", "Unknown"),
