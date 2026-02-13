@@ -309,10 +309,13 @@ Generate the JSON now:"""
         # Generate plan with AI
         logger.info("Calling LLM for study plan generation...")
         response = llm.invoke(prompt)
-        logger.info(f"LLM response length: {len(response)} chars")
+        
+        # Extract content from AIMessage object
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        logger.info(f"LLM response length: {len(response_text)} chars")
         
         # Extract and parse JSON with multiple strategies
-        response_text = response.strip()
+        response_text = response_text.strip()
         ai_plan = None
         
         # Strategy 1: Direct JSON parse
