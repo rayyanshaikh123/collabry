@@ -289,34 +289,25 @@ class AIService {
   }
 
   /**
-   * Generate mind map from topic using AI engine
+   * Generate mind map from topic using AI agent (tool calling)
    */
   async generateMindMap(topic, options = {}, userToken) {
     try {
       const mapTopic = topic || 'Concept';
       
-      // Call AI engine to generate mindmap structure
-      console.log('Calling AI engine /ai/mindmap with topic:', mapTopic);
+      console.log('Calling AI agent for mindmap generation via chat:', mapTopic);
       
-      // Calculate depth: ensure it's between 1-4 (AI engine validation requirement)
-      let depth = 3; // Default
-      if (options.maxNodes) {
-        depth = Math.max(1, Math.min(Math.ceil(options.maxNodes / 5), 4));
-      }
-      
-      console.log('Mind map generation params:', {
-        topic: mapTopic,
-        use_documents: options.useRag || false,
-        depth: depth,
-        maxNodes: options.maxNodes
-      });
-      
+      // Use the chat agent which will route to the generate_mindmap tool
       const response = await this.client.post(
-        '/ai/mindmap',
+        '/ai/chat',
         {
-          topic: mapTopic,
-          use_documents: options.useRag || false,
-          depth: depth
+          message: `Generate a mind map for: ${mapTopic}`,
+          user_id: 'system', // Temporary user ID for generation
+          session_id: `mindmap_${Date.now()}`, // Unique session for this generation
+          notebook_id: null,
+          use_rag: options.useRag || false,
+          source_ids: null,
+          stream: false
         },
         {
           headers: {
@@ -325,11 +316,76 @@ class AIService {
         }
       );
 
-      const mindmapData = response.data;
-      console.log('AI engine mindmap response:', {
-        topic: mindmapData.topic,
-        totalNodes: mindmapData.total_nodes
+      // The agent returns the tool output in response field
+      const agentResponse = response.data;
+      console.log('AI agent response received:', {
+        hasResponse: !!agentResponse.response,
+        responsePreview: (agentResponse.response || '').substring(0, 100)
       });
+      
+      // Parse the mindmap from the agent's response
+      let mindmapData;
+      try {
+        // The agent returns JSON as a string in the response field
+        let responseText = agentResponse.response || '';
+        
+        // Remove common prefixes that the AI might add
+        responseText = responseText
+          .replace(/^\[MINDMAP_GENERATION_REQUEST\]\s*/i, '')
+          .replace(/^\[MINDMAP\]\s*/i, '')
+          .trim();
+        
+        mindmapData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse mindmap JSON from agent response:', parseError);
+        console.log('Raw response:', (agentResponse.response || '').substring(0, 500));
+        
+        // Try to extract JSON from markdown code blocks
+        let responseText = agentResponse.response || '';
+        
+        // Remove prefixes again before markdown extraction
+        responseText = responseText
+          .replace(/^\[MINDMAP_GENERATION_REQUEST\]\s*/i, '')
+          .replace(/^\[MINDMAP\]\s*/i, '')
+          .trim();
+          
+        if (responseText.includes('```json')) {
+          const jsonMatch = responseText.match(/```json\s*\n?([\s\S]*?)\n?```/);
+          if (jsonMatch && jsonMatch[1]) {
+            responseText = jsonMatch[1].trim();
+          }
+        } else if (responseText.includes('```')) {
+          const jsonMatch = responseText.match(/```\s*\n?([\s\S]*?)\n?```/);
+          if (jsonMatch && jsonMatch[1]) {
+            responseText = jsonMatch[1].trim();
+          }
+        }
+        
+        // Try parsing the cleaned text
+        try {
+          mindmapData = JSON.parse(responseText);
+        } catch (secondParseError) {
+          // Last resort: extract first JSON object from text
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            mindmapData = JSON.parse(jsonMatch[0]);
+          } else {
+            throw new Error('Agent did not return valid mindmap JSON');
+          }
+        }
+      }
+
+      console.log('Parsed mindmap data:', {
+        hasRoot: !!mindmapData.root || !!mindmapData.id,
+        hasLabel: !!mindmapData.label,
+        hasChildren: !!(mindmapData.children || mindmapData.root?.children)
+      });
+
+      // Normalize the structure - handle both {root: {...}} and {id, label, children}
+      let rootNode = mindmapData.root || mindmapData;
+      if (!rootNode.id) rootNode.id = 'root';
+      if (!rootNode.label) rootNode.label = mapTopic;
+      if (!rootNode.children) rootNode.children = [];
 
       // Convert the tree structure to flat nodes and edges for frontend
       const nodes = [];
@@ -359,41 +415,24 @@ class AIService {
         }
       }
 
-      traverseTree(mindmapData.root);
+      traverseTree(rootNode);
 
-      // Now render the mindmap to get Mermaid code
-      console.log('Calling AI engine /ai/mindmap/render');
-      const renderResponse = await this.client.post(
-        '/ai/mindmap/render',
-        mindmapData.root,
-        {
-          headers: {
-            Authorization: `Bearer ${userToken}`
-          },
-          params: {
-            format: 'both'
-          }
-        }
-      );
+      console.log('Converted to nodes/edges:', { nodeCount: nodes.length, edgeCount: edges.length });
 
-      const renderData = renderResponse.data;
-      console.log('AI engine render response:', {
-        hasMermaid: !!renderData.mermaid,
-        hasSvg: !!renderData.svg_base64
-      });
-
+      // Return the hierarchical tree structure for frontend rendering
+      // Frontend will handle visualization using ReactFlow, vis.js, or mermaid
       return {
-        nodes,
-        edges,
-        mermaidCode: renderData.mermaid,
-        svgBase64: renderData.svg_base64
+        tree: rootNode,  // Original hierarchical structure
+        nodes,           // Flat node list for graph libraries
+        edges,           // Edges connecting nodes
+        metadata: {
+          topic: mapTopic,
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+          maxDepth: Math.max(...nodes.map(n => n.level))
+        }
       };
 
-      if (result.root) {
-        flattenNode(result.root);
-      }
-
-      return { nodes, edges };
     } catch (error) {
       console.error('AI generateMindMap error:', error.response?.data || error.message);
       throw new Error(error.response?.data?.detail || 'Failed to generate mind map from AI engine');
