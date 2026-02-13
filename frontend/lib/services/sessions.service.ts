@@ -44,8 +44,8 @@ class SessionsService {
     // Use absolute URL to call AI engine while still benefiting
     // from the centralized token handling in apiClient.
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
-    const response = await apiClient.getClient().get<SessionsListResponse>(url);
-    return response.data;
+    const response = await apiClient.getClient().get<{ success: boolean; data: SessionsListResponse }>(url);
+    return response.data.data;
   }
 
   /**
@@ -53,8 +53,8 @@ class SessionsService {
    */
   async createSession(title: string = 'New Chat Session'): Promise<ChatSession> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
-    const response = await apiClient.getClient().post<ChatSession>(url, { title });
-    return response.data;
+    const response = await apiClient.getClient().post<{ success: boolean; data: ChatSession }>(url, { title });
+    return response.data.data;
   }
 
   /**
@@ -62,8 +62,8 @@ class SessionsService {
    */
   async getSessionMessages(sessionId: string): Promise<Message[]> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    const response = await apiClient.getClient().get<Message[]>(url);
-    return response.data;
+    const response = await apiClient.getClient().get<{ success: boolean; data: Message[] }>(url);
+    return response.data.data;
   }
 
   /**
@@ -71,8 +71,8 @@ class SessionsService {
    */
   async saveMessage(sessionId: string, message: Message): Promise<Message> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    const response = await apiClient.getClient().post<Message>(url, message);
-    return response.data;
+    const response = await apiClient.getClient().post<{ success: boolean; data: Message }>(url, message);
+    return response.data.data;
   }
 
   /**
@@ -88,8 +88,8 @@ class SessionsService {
    */
   async clearSessionMessages(sessionId: string): Promise<{ message: string; deleted_count: number }> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    const response = await apiClient.getClient().delete<{ message: string; deleted_count: number }>(url);
-    return response.data;
+    const response = await apiClient.getClient().delete<{ success: boolean; data: { message: string; deleted_count: number } }>(url);
+    return response.data.data;
   }
 }
 

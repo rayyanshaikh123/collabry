@@ -119,12 +119,27 @@ export function useNotebookChat({
         const apiUrl = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
         const endpoint = `${apiUrl}/ai/sessions/${sessionId}/chat/stream`;
 
+        // Get CSRF token from cookie
+        const getCsrfToken = (): string | null => {
+          if (typeof document === 'undefined') return null;
+          const match = document.cookie.match(/(?:^|;\s*)csrfToken=([^;]*)/);
+          return match ? decodeURIComponent(match[1]) : null;
+        };
+
+        const csrfToken = getCsrfToken();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        };
+        
+        if (csrfToken) {
+          headers['x-csrf-token'] = csrfToken;
+        }
+
         const response = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
+          headers,
+          credentials: 'include', // Required to send cookies (including CSRF token cookie)
           body: JSON.stringify({
             message: userText,
             session_id: sessionId,

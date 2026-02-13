@@ -3,7 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const { globalLimiter, authLimiter } = require('./middlewares/rateLimiter');
 const config = require('./config/env');
 const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/auth.routes');
@@ -26,7 +26,7 @@ const usageRoutes = require('./routes/usage.routes');
 const couponRoutes = require('./routes/coupon.routes');
 const gamificationRoutes = require('./routes/gamification.routes');
 const focusRoutes = require('./routes/focus.routes');
-const recycleBinRoutes = require('./routes/recycleBin.routes');
+const recycleBinRoutes = require ('./routes/recycleBin.routes');
 
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 const { ensureCsrfToken, verifyCsrfToken } = require('./middlewares/csrf.middleware');
@@ -55,34 +55,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
-// Security: Rate limiting for all routes
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // More lenient in dev
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Security: Stricter rate limiting for authentication routes
-// Keyed by IP + email so distributed botnets and per-account attacks are both throttled
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 5 : 100, // Much more lenient in dev
-  skipSuccessfulRequests: true, // Don't count successful requests
-  keyGenerator: (req) => {
-    // Combine IP + lowercase email for a per-account-per-IP key
-    const email = (req.body?.email || '').toLowerCase().trim();
-    // Normalize IPv6 addresses via the built-in helper
-    const ip = req.ip?.replace(/^::ffff:/, '') || 'unknown';
-    return `${ip}:${email}`;
-  },
-  // We handle IPv6 normalization manually above
-  validate: { keyGeneratorIpFallback: false },
-  message: 'Too many login attempts, please try again after 15 minutes.',
-});
-
-// Apply global rate limiter to all API routes
+// Security: Rate limiting (Redis-based for multi-replica support)
 app.use('/api/', globalLimiter);
 
 // Webhook routes BEFORE express.json() middleware
@@ -107,7 +80,10 @@ app.use(verifyCsrfToken({
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/api/auth', authLimiter, authRoutes); // Apply stricter rate limiting to auth routes
+
+// Auth routes with stricter rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);

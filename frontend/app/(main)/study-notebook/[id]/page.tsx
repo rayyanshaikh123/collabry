@@ -93,10 +93,21 @@ export default function StudyNotebookPage() {
 
   // State to track if we've initialized messages for this session
   const lastSessionIdRef = useRef<string | null>(null);
+  const hasLoadedMessagesRef = useRef(false);
 
   useEffect(() => {
     const currentSessionId = notebook?.aiSessionId;
-    if (!currentSessionId) return;
+    if (!currentSessionId) {
+      setLocalMessages([]);
+      hasLoadedMessagesRef.current = false;
+      return;
+    }
+
+    // Session changed - reset loaded flag
+    if (lastSessionIdRef.current !== currentSessionId) {
+      hasLoadedMessagesRef.current = false;
+      lastSessionIdRef.current = currentSessionId;
+    }
 
     if (sessionMessagesData && Array.isArray(sessionMessagesData)) {
       const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => {
@@ -136,17 +147,10 @@ export default function StudyNotebookPage() {
         };
       });
 
-      // ONLY overwrite local messages if the session ID changed
-      // Otherwise, keep the real-time messages (which might be more up-to-date)
-      if (lastSessionIdRef.current !== currentSessionId) {
+      // Load history only once per session or when explicitly requested
+      if (!hasLoadedMessagesRef.current) {
         setLocalMessages(formattedMessages);
-        lastSessionIdRef.current = currentSessionId;
-      } else {
-        // If it's the same session, we ONLY update if local is empty (initial load)
-        setLocalMessages(prev => {
-          if (prev.length === 0) return formattedMessages;
-          return prev;
-        });
+        hasLoadedMessagesRef.current = true;
       }
     }
   }, [sessionMessagesData, notebook?.aiSessionId, notebook]);
@@ -154,6 +158,7 @@ export default function StudyNotebookPage() {
   // Studio state
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactPanelType | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingType, setGeneratingType] = useState<ArtifactType | null>(null);
   const [artifactEdits, setArtifactEdits] = useState<Record<string, { prompt?: string; numberOfQuestions?: number; difficulty?: string }>>({});
 
   // Edit Modal states
@@ -253,6 +258,7 @@ export default function StudyNotebookPage() {
     editNumber,
     editDifficulty,
     setIsGenerating,
+    setGeneratingType,
     handleSendMessage,
     handleArtifactRequest,
     showWarning,
@@ -427,7 +433,6 @@ export default function StudyNotebookPage() {
   return (
     <>
       {isGenerating && <LoadingOverlay message="Generating your AI artifact..." />}
-      {isChatLoading && localMessages.length === 0 && <LoadingOverlay message="Initializing AI tutor..." />}
       {addSource.isPending && <LoadingOverlay message="Uploading source content..." />}
 
       <NotebookLayout
@@ -467,6 +472,7 @@ export default function StudyNotebookPage() {
         onGenerateArtifact={handleGenerateArtifact}
         onSelectArtifact={handleSelectArtifact}
         isGenerating={isGenerating}
+        generatingType={generatingType}
         onDeleteArtifact={handleDeleteArtifact}
         onEditArtifact={openEditModal}
         selectedArtifact={selectedArtifact}

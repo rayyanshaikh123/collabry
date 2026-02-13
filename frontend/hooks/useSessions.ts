@@ -43,7 +43,7 @@ export function useSessionMessages(sessionId: string) {
     enabled: !!user && isAuthenticated && !!sessionId,
     staleTime: 60000, // Consider data fresh for 60 seconds
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
-    refetchOnMount: false, // Don't refetch on component mount if data exists
+    refetchOnMount: true, // Fetch on mount to restore messages after page reload
   });
 }
 

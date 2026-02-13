@@ -223,7 +223,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-        {messages.length === 0 && !hasSelectedSources ? (
+        {isLoading && messages.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center max-w-md">
+              <div className="flex justify-center mb-4">
+                <div className="flex gap-2">
+                  <div className="w-3 h-3 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-3 h-3 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-3 h-3 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+              <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 mb-2">
+                Initializing AI tutor...
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Setting up your study session
+              </p>
+            </div>
+          </div>
+        ) : messages.length === 0 && !hasSelectedSources ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center max-w-md">
               <div className="text-6xl mb-4">💬</div>

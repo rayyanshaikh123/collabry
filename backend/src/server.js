@@ -3,10 +3,8 @@ const http = require('http');
 const connectDB = require('./config/db');
 const config = require('./config/env');
 const { initializeSocket } = require('./socket');
-const { startNotificationScheduler, stopNotificationScheduler } = require('./services/notificationScheduler');
-const { startSubscriptionExpiryJob, stopSubscriptionExpiryJob } = require('./jobs/subscriptionExpiry');
-const { startRecycleBinCleanupJob, stopRecycleBinCleanupJob } = require('./jobs/recycleBinCleanup');
 const { registerEventListeners } = require('./utils/eventListeners');
+const { getRedisClient, closeRedis } = require('./config/redis');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -15,26 +13,36 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-// Connect to database
-connectDB();
+// Initialize services
+async function initializeServices() {
+  // Connect to database
+  await connectDB();
+  
+  // Connect to Redis (for rate limiting)
+  try {
+    await getRedisClient();
+    console.log('✅ Redis initialized for rate limiting');
+  } catch (error) {
+    console.warn('⚠️  Redis connection failed. Rate limiting will use memory store.');
+    console.warn('   This is NOT recommended for production with multiple replicas.');
+  }
+}
+
+// Start initialization
+initializeServices();
 
 // Create HTTP server
 const server = http.createServer(app);
 
 // Initialize Socket.IO
-initializeSocket(server);
+const io = initializeSocket(server);
 
 // Register Tier-2/3 event listeners
 registerEventListeners();
 
-// Start notification scheduler
-startNotificationScheduler();
-
-// Start subscription expiry cron job
-startSubscriptionExpiryJob();
-
-// Start recycle bin cleanup cron job (30-day auto-purge)
-startRecycleBinCleanupJob();
+// NOTE: Cron jobs are now handled by backend-worker service
+// See: backend/src/workers/cron.js
+// This prevents duplicate job execution in multi-replica deployments
 
 // Start server
 server.listen(config.port, () => {
@@ -45,21 +53,43 @@ server.listen(config.port, () => {
 process.on('unhandledRejection', (err) => {
   console.error('UNHANDLED REJECTION! 💥 Shutting down...');
   console.error(err.name, err.message);
-  stopNotificationScheduler();
-  stopSubscriptionExpiryJob();
-  stopRecycleBinCleanupJob();
   server.close(() => {
     process.exit(1);
   });
 });
 
 // Graceful shutdown
+let isShuttingDown = false;
+
 process.on('SIGTERM', () => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
   console.log('👋 SIGTERM received. Shutting down gracefully...');
-  stopNotificationScheduler();
-  stopSubscriptionExpiryJob();
-  stopRecycleBinCleanupJob();
+  
+  // 1. Stop accepting new connections (HTTP server)
   server.close(() => {
-    console.log('💥 Process terminated!');
+    console.log('✅ HTTP server closed');
   });
+  
+  // 2. Close Socket.IO connections gracefully
+  if (io) {
+    console.log('🔌 Closing Socket.IO connections...');
+    io.close(() => {
+      console.log('✅ Socket.IO closed');
+    });
+  }
+  
+  // 3. Close Redis connection
+  closeRedis().then(() => {
+    console.log('✅ Redis connection closed');
+  }).catch((err) => {
+    console.error('Error closing Redis:', err.message);
+  });
+  
+  // 4. Force shutdown after grace period
+  setTimeout(() => {
+    console.error('⏱️  Forcing shutdown after 30s grace period');
+    process.exit(0);
+  }, 30000); // 30 second grace period
 });

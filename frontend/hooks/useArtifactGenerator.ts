@@ -11,6 +11,7 @@ interface UseArtifactGeneratorProps {
   editNumber: number;
   editDifficulty: string;
   setIsGenerating: (value: boolean) => void;
+  setGeneratingType?: (type: ArtifactType | null) => void;
   handleSendMessage: (message: string) => Promise<void>;
   handleArtifactRequest?: (payload: {
     artifact: 'quiz' | 'flashcards' | 'mindmap' | 'summary';
@@ -31,6 +32,7 @@ export function useArtifactGenerator({
   editNumber,
   editDifficulty,
   setIsGenerating,
+  setGeneratingType,
   handleSendMessage,
   handleArtifactRequest,
   showWarning,
@@ -48,6 +50,7 @@ export function useArtifactGenerator({
       }
 
       setIsGenerating(true);
+      if (setGeneratingType) setGeneratingType(type);
 
       try {
         const topics = selectedSources
@@ -78,6 +81,7 @@ export function useArtifactGenerator({
 
         handleSendMessage(message);
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -110,6 +114,7 @@ Rules:
           await handleSendMessage(message);
         }
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -165,6 +170,7 @@ Rules:
             await handleSendMessage(message);
           }
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -198,6 +204,7 @@ Rules:
             await handleSendMessage(message);
           }
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -228,6 +235,7 @@ No preamble; output the report only.`;
             await handleSendMessage(message);
           }
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -258,6 +266,7 @@ Rules:
 
           handleSendMessage(message);
           setIsGenerating(false);
+          if (setGeneratingType) setGeneratingType(null);
           return;
         }
 
@@ -267,6 +276,7 @@ Rules:
         showError('Failed to generate artifact. Please try again.');
       } finally {
         setIsGenerating(false);
+        if (setGeneratingType) setGeneratingType(null);
       }
     },
     [

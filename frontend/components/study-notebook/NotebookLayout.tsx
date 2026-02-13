@@ -38,6 +38,7 @@ interface NotebookLayoutProps {
   selectedArtifact: Artifact | null;
   onSelectArtifact: (id: string) => void;
   isGenerating?: boolean;
+  generatingType?: ArtifactType | null;
 
   // Collaboration
   participants?: { userId: string; displayName: string; avatar?: string; isOnline: boolean }[];
@@ -69,6 +70,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   selectedArtifact,
   onSelectArtifact,
   isGenerating = false,
+  generatingType = null,
   participants = [],
   onInvite,
 }) => {
@@ -192,6 +194,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onEditArtifact={onEditArtifact}
             selectedArtifact={selectedArtifact}
             isGenerating={isGenerating}
+            generatingType={generatingType}
             hasSelectedSources={hasSelectedSources}
           />
         </div>
@@ -263,6 +266,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onEditArtifact={onEditArtifact}
                 selectedArtifact={selectedArtifact}
                 isGenerating={isGenerating}
+                generatingType={generatingType}
                 hasSelectedSources={hasSelectedSources}
               />
             </div>

@@ -82,6 +82,10 @@ const config = {
     uri: process.env.MONGODB_URI,
     options: {},
   },
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379', // Shorthand for compatibility
   cors: {
     origin: function (origin, callback) {
       // PERFORMANCE: In development, be more permissive with origins

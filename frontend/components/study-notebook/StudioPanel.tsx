@@ -28,6 +28,7 @@ interface StudioPanelProps {
   onEditArtifact?: (id: string) => void;
   selectedArtifact: Artifact | null;
   isGenerating?: boolean;
+  generatingType?: ArtifactType | null;
   hasSelectedSources: boolean;
 }
 
@@ -39,6 +40,7 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
   onEditArtifact,
   selectedArtifact,
   isGenerating = false,
+  generatingType = null,
   hasSelectedSources,
 }) => {
   const [showArtifacts, setShowArtifacts] = useState(false);
@@ -134,32 +136,48 @@ const StudioPanel: React.FC<StudioPanelProps> = ({
       {/* Action Buttons */}
       <div className="p-4 space-y-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         <div className="grid grid-cols-2 gap-2">
-          {studioActions.map((action) => (
-            <div key={action.type} className="relative">
-              <div className="h-28">
-                <Button
-                  variant={action.available ? 'outline' : 'ghost'}
-                  size="sm"
-                  onClick={() => action.available && onGenerateArtifact(action.type)}
-                  disabled={!hasSelectedSources || isGenerating || !action.available}
-                  className={`w-full h-full px-0 py-0 flex flex-col items-center justify-center gap-2 text-center ${
-                    action.available ? 'hover:border-indigo-500 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : 'opacity-50'
-                  }`}
-                >
-                  <span className="text-3xl leading-none">{action.icon}</span>
-                  <span className="text-sm font-bold leading-tight max-w-full break-words">{action.label}</span>
-                  {!action.available && (
-                    <Badge variant="slate" className="text-[10px] mt-1">
-                      Coming Soon
-                    </Badge>
-                  )}
-                </Button>
-              </div>
+          {studioActions.map((action) => {
+            const isThisGenerating = generatingType === action.type;
+            return (
+              <div key={action.type} className="relative">
+                <div className="h-28">
+                  <Button
+                    variant={action.available ? 'outline' : 'ghost'}
+                    size="sm"
+                    onClick={() => action.available && onGenerateArtifact(action.type)}
+                    disabled={!hasSelectedSources || isGenerating || !action.available}
+                    className={`w-full h-full px-0 py-0 flex flex-col items-center justify-center gap-2 text-center ${
+                      action.available ? 'hover:border-indigo-500 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : 'opacity-50'
+                    }`}
+                  >
+                    {isThisGenerating ? (
+                      <>
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-2 h-2 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-2 h-2 bg-indigo-600 dark:bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        <span className="text-xs font-bold leading-tight text-slate-500 dark:text-slate-400">Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-3xl leading-none">{action.icon}</span>
+                        <span className="text-sm font-bold leading-tight max-w-full break-words">{action.label}</span>
+                        {!action.available && (
+                          <Badge variant="slate" className="text-[10px] mt-1">
+                            Coming Soon
+                          </Badge>
+                        )}
+                      </>
+                    )}
+                  </Button>
+                </div>
 
-              {/* Small edit button for generator presets (Quiz) - render as a sibling to avoid nested <button> */}
-              {/* per-action small edit removed; use the top Edit control instead */}
-            </div>
-          ))}
+                {/* Small edit button for generator presets (Quiz) - render as a sibling to avoid nested <button> */}
+                {/* per-action small edit removed; use the top Edit control instead */}
+              </div>
+            );
+          })}
         </div>
       </div>
 

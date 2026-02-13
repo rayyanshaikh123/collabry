@@ -229,6 +229,10 @@ router.get('/sessions/:id', protect, proxyToAI);
 router.delete('/sessions/:id', protect, proxyToAI);
 router.get('/sessions/:id/messages', protect, proxyToAI);
 router.post('/sessions/:id/messages', protect, proxyToAI);
+router.delete('/sessions/:id/messages', protect, proxyToAI);
+router.post('/sessions/:id/chat/stream', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
+router.get('/sessions/:id/chat/stream', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
+router.post('/sessions/:id/chat', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
 
 // AI operation routes - with usage enforcement
 router.post('/chat', protect, checkAIUsageLimit, createTrackedProxyHandler('chat'));
