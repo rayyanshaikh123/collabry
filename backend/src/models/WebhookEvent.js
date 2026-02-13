@@ -29,4 +29,4 @@ const webhookEventSchema = new mongoose.Schema(
 // Auto-expire after 7 days so the collection stays small
 webhookEventSchema.index({ processedAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
 
-module.exports = mongoose.model('WebhookEvent', webhookEventSchema);
+module.exports = mongoose.models.WebhookEvent || mongoose.model('WebhookEvent', webhookEventSchema);

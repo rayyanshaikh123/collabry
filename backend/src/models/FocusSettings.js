@@ -83,4 +83,4 @@ focusSettingsSchema.methods.getDurationForType = function(type) {
   }
 };
 
-module.exports = mongoose.model('FocusSettings', focusSettingsSchema);
+module.exports = mongoose.models.FocusSettings || mongoose.model('FocusSettings', focusSettingsSchema);

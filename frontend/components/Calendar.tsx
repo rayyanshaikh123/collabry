@@ -13,6 +13,26 @@ interface CalendarProps {
   onDateClick?: (date: Date) => void;
 }
 
+/**
+ * Helper function to format time range from timeSlot fields
+ */
+const formatTimeRange = (task: StudyTask): string => {
+  if (!task.timeSlotStart || !task.timeSlotEnd) {
+    return '🕐 Unscheduled';
+  }
+  
+  const start = new Date(task.timeSlotStart);
+  const end = new Date(task.timeSlotEnd);
+  
+  const formatTime = (date: Date) => {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  
+  return `⏰ ${formatTime(start)}-${formatTime(end)}`;
+};
+
 const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onPlanClick, onDateClick }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -180,9 +200,14 @@ const Calendar: React.FC<CalendarProps> = ({ tasks, plans = [], onTaskClick, onP
                           ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400'
                           : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
                       }`}
-                      title={task.title}
+                      title={`${formatTimeRange(task)} ${task.title}`}
                     >
-                      {task.title.slice(0, 15)}
+                      <div className="font-mono text-[10px] opacity-75">
+                        {formatTimeRange(task)}
+                      </div>
+                      <div className="font-semibold">
+                        {task.title.slice(0, 12)}
+                      </div>
                     </div>
                   ))}
                   {dateTasks.length > 2 && (

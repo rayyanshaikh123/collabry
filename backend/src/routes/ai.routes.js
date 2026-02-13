@@ -10,6 +10,16 @@ const { checkAIUsageLimit, trackAIUsage, checkFileUploadLimit, checkStorageLimit
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
+const getSafeErrorData = (error) => {
+  const data = error?.response?.data;
+  if (!data) return undefined;
+  // Avoid circular structures from streams/sockets
+  if (typeof data === 'object' && typeof data.pipe === 'function') {
+    return undefined;
+  }
+  return data;
+};
+
 /**
  * Proxy middleware for AI engine requests
  */
@@ -76,11 +86,12 @@ const proxyToAI = async (req, res) => {
     console.error('AI Proxy Error:', error.message);
     
     if (error.response) {
+      const safeData = getSafeErrorData(error);
       // Forward error from AI engine
       res.status(error.response.status).json({
         success: false,
-        message: error.response.data?.message || error.response.data?.detail || 'AI engine error',
-        error: error.response.data,
+        message: safeData?.message || safeData?.detail || 'AI engine error',
+        error: safeData,
       });
     } else {
       // Network or other error
@@ -182,11 +193,12 @@ const createTrackedProxyHandler = (questionType = 'chat') => {
       console.error('AI Proxy Error:', error.message);
       
       if (error.response) {
+        const safeData = getSafeErrorData(error);
         // Forward error from AI engine
         res.status(error.response.status).json({
           success: false,
-          message: error.response.data?.message || error.response.data?.detail || 'AI engine error',
-          error: error.response.data,
+          message: safeData?.message || safeData?.detail || 'AI engine error',
+          error: safeData,
         });
       } else {
         // Network or other error

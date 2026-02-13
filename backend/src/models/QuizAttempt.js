@@ -65,4 +65,4 @@ const quizAttemptSchema = new mongoose.Schema({
 quizAttemptSchema.index({ quizId: 1, userId: 1 });
 quizAttemptSchema.index({ userId: 1, completedAt: -1 });
 
-module.exports = mongoose.model('QuizAttempt', quizAttemptSchema);
+module.exports = mongoose.models.QuizAttempt || mongoose.model('QuizAttempt', quizAttemptSchema);

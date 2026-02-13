@@ -351,6 +351,96 @@ class StudyTaskController {
       next(error);
     }
   }
+
+  // ============================================================================
+  // TIER-2/3: ADAPTIVE SCHEDULING
+  // ============================================================================
+
+  /**
+   * Trigger adaptive rescheduling
+   * POST /api/study-planner/scheduling/adaptive-reschedule
+   */
+  async adaptiveReschedule(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { planId, reason = 'manual_trigger' } = req.body;
+
+      if (!planId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Plan ID is required'
+        });
+      }
+
+      const adaptiveSchedulingService = require('../services/adaptiveScheduling.service');
+      const result = await adaptiveSchedulingService.redistributeMissedTasks(
+        userId,
+        planId,
+        { reason }
+      );
+
+      res.json({
+        success: true,
+        message: `Rescheduled ${result.rescheduled} tasks`,
+        data: result
+      });
+
+    } catch (error) {
+      console.error('[StudyTask] Error in adaptive rescheduling:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * Link task to notebook
+   * PATCH /api/study-planner/tasks/:id/link-notebook
+   */
+  async linkNotebook(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { notebookId, artifactType, artifactCategory } = req.body;
+
+      if (!notebookId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Notebook ID is required'
+        });
+      }
+
+      const StudyTask = require('../models/StudyTask.ENHANCED');
+      const task = await StudyTask.findOne({ _id: id, userId });
+
+      if (!task) {
+        return res.status(404).json({
+          success: false,
+          message: 'Task not found'
+        });
+      }
+
+      // Update task with linked notebook
+      task.linkedNotebookId = notebookId;
+
+      if (artifactType) {
+        task.linkedArtifact = {
+          type: artifactType,
+          category: artifactCategory || 'general'
+        };
+      }
+
+      await task.save();
+
+      res.json({
+        success: true,
+        message: 'Task linked to notebook successfully',
+        data: task
+      });
+
+    } catch (error) {
+      console.error('[StudyTask] Error linking notebook:', error);
+      next(error);
+    }
+  }
 }
 
 module.exports = new StudyTaskController();

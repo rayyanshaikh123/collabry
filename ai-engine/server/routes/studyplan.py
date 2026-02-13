@@ -2,6 +2,7 @@
 Study Plan Generation Route
 
 Generates intelligent study plans with daily task breakdown using AI.
+Integrates with backend strategy system for constraint-based scheduling.
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 from server.deps import get_current_user
 from server.schemas import ErrorResponse
 from core.llm import get_langchain_llm
+from core.backend_client import get_backend_client
 from config import CONFIG
 import logging
 import json
@@ -31,6 +33,8 @@ class StudyPlanRequest(BaseModel):
     examDate: Optional[str] = Field(None, description="Exam/deadline date if applicable")
     currentKnowledge: Optional[str] = Field(None, description="Current knowledge level")
     goals: Optional[str] = Field(None, description="Learning goals")
+    planId: Optional[str] = Field(None, description="Existing plan ID for strategy context")
+    authToken: Optional[str] = Field(None, description="User auth token for backend API calls")
 
 
 class TaskGenerated(BaseModel):
@@ -156,6 +160,82 @@ def normalize_recommendations(recommendations: List) -> List[str]:
     return normalized
 
 
+def validate_task_duration(duration: int) -> int:
+    """
+    Validate and clamp task duration to MongoDB limits.
+    Backend enforces: min=15 minutes, max=480 minutes (8 hours)
+    """
+    return max(15, min(duration, 480))
+
+
+def apply_cognitive_load_limits(
+    tasks: List[Dict[str, Any]],
+    num_days: int,
+    strategy_context: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Apply cognitive load protection to task distribution.
+    
+    Constraints:
+    - Max 4 tasks/day (balanced/adaptive mode)
+    - Max 6-8 tasks/day (emergency mode)
+    - Max 2 hard tasks/day
+    - Balance difficulty across days
+    
+    Args:
+        tasks: List of task dictionaries
+        num_days: Number of study days
+        strategy_context: Optional strategy metadata (intensity, mode)
+        
+    Returns:
+        Filtered and redistributed tasks
+    """
+    # Determine max tasks per day from strategy
+    max_tasks_per_day = 4  # Default (balanced mode)
+    if strategy_context:
+        mode = strategy_context.get('recommendedMode', 'balanced')
+        if mode == 'emergency':
+            max_tasks_per_day = 8
+        elif mode == 'adaptive':
+            task_density = strategy_context.get('phaseConfig', {}).get('taskDensityPerDay', 4)
+            max_tasks_per_day = task_density
+    
+    logger.info(f"Applying cognitive load limits: max {max_tasks_per_day} tasks/day")
+    
+    # Group tasks by day
+    tasks_by_day = {}
+    for i, task in enumerate(tasks):
+        day_index = i // max_tasks_per_day
+        if day_index >= num_days:
+            day_index = num_days - 1
+        
+        if day_index not in tasks_by_day:
+            tasks_by_day[day_index] = []
+        tasks_by_day[day_index].append(task)
+    
+    # Apply difficulty balancing: max 2 hard tasks per day
+    balanced_tasks = []
+    for day_index in sorted(tasks_by_day.keys()):
+        day_tasks = tasks_by_day[day_index]
+        
+        # Count hard tasks
+        hard_tasks = [t for t in day_tasks if t.get('difficulty') == 'hard']
+        easy_medium_tasks = [t for t in day_tasks if t.get('difficulty') != 'hard']
+        
+        # If too many hard tasks, downgrade some to medium
+        if len(hard_tasks) > 2:
+            logger.warning(f"Day {day_index} has {len(hard_tasks)} hard tasks, limiting to 2")
+            for task in hard_tasks[2:]:
+                task['difficulty'] = 'medium'
+                task['title'] = f"[Medium] {task['title']}"
+        
+        # Add tasks back (limit to max_tasks_per_day)
+        balanced_tasks.extend(day_tasks[:max_tasks_per_day])
+    
+    logger.info(f"Cognitive load applied: {len(tasks)} → {len(balanced_tasks)} tasks")
+    return balanced_tasks
+
+
 def _get_phase_description(phase: str, topic: str) -> str:
     """Generate description for learning phase"""
     descriptions = {
@@ -220,7 +300,7 @@ def distribute_topics_across_days(
     response_model=StudyPlanResponse,
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Generate AI study plan",
-    description="Generate a comprehensive study plan with daily tasks using AI"
+    description="Generate a comprehensive study plan with daily tasks using AI with strategy-aware constraints"
 )
 async def generate_study_plan(
     request: StudyPlanRequest,
@@ -234,6 +314,9 @@ async def generate_study_plan(
     - Available time
     - User preferences
     - Topic dependencies
+    - Backend strategy constraints (if planId provided)
+    - Exam proximity and phase (if examDate present)
+    - Cognitive load limits
     
     Returns structured plan with daily tasks.
     """
@@ -254,6 +337,49 @@ async def generate_study_plan(
         num_days = calculate_study_days(start_date, end_date)
         logger.info(f"Plan duration: {num_days} days")
         
+        # ========================================================================
+        # PHASE 2: FETCH STRATEGY CONTEXT FROM BACKEND
+        # ========================================================================
+        strategy_context = None
+        exam_strategy = None
+        behavior_profile = None
+        
+        if request.planId and request.authToken:
+            logger.info("🔗 Fetching strategy context from backend...")
+            backend_client = get_backend_client()
+            
+            try:
+                # Get recommended mode
+                strategy_context = await backend_client.get_recommended_mode(
+                    request.planId, 
+                    request.authToken
+                )
+                if strategy_context:
+                    logger.info(f"✓ Strategy context: {strategy_context.get('recommendedMode')} mode "
+                              f"(confidence: {strategy_context.get('confidence')}%)")
+                
+                # Get exam strategy if exam date present
+                if request.examDate:
+                    exam_strategy = await backend_client.get_exam_strategy(
+                        request.planId,
+                        request.authToken
+                    )
+                    if exam_strategy:
+                        logger.info(f"✓ Exam strategy: Phase={exam_strategy.get('currentPhase')}, "
+                                  f"Intensity={exam_strategy.get('intensityMultiplier')}x, "
+                                  f"Days to exam={exam_strategy.get('daysToExam')}")
+                
+                # Get user behavior profile for optimal scheduling
+                behavior_profile = await backend_client.get_behavior_profile(
+                    request.authToken
+                )
+                if behavior_profile:
+                    logger.info(f"✓ Behavior profile: Peak hours={behavior_profile.get('productivityPeakHours')}, "
+                              f"Consistency={behavior_profile.get('consistencyScore')}")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to fetch backend context: {e} - continuing with defaults")
+        
         # Assess plan complexity and generate warnings
         complexity_warnings = assess_plan_complexity(
             request.topics,
@@ -263,11 +389,69 @@ async def generate_study_plan(
         )
         logger.info(f"Generated {len(complexity_warnings)} warnings for plan complexity")
         
-        # Calculate minimum tasks needed (at least 2 per topic)
-        min_tasks = max(len(request.topics) * 2, num_days)
+        # ========================================================================
+        # BUILD STRATEGY-AWARE LLM PROMPT
+        # ========================================================================
         
-        # Build AI prompt optimized for llama3.1
-        prompt = f"""You are an expert study planner. Create a detailed study schedule.
+        # Calculate task constraints based on strategy
+        max_tasks_per_day = 4  # Default (balanced mode)
+        intensity_multiplier = 1.0  # Default
+        strategy_description = "standard balanced scheduling"
+        
+        if strategy_context:
+            mode = strategy_context.get('recommendedMode', 'balanced')
+            if mode == 'emergency':
+                max_tasks_per_day = 8
+                intensity_multiplier = 2.0
+                strategy_description = "🚨 EMERGENCY MODE: Crisis compression with hyper time blocks (90-120 min sessions)"
+            elif mode == 'adaptive':
+                if exam_strategy:
+                    max_tasks_per_day = exam_strategy.get('taskDensityPerDay', 4)
+                    intensity_multiplier = exam_strategy.get('intensityMultiplier', 1.3)
+                    phase = exam_strategy.get('currentPhase', 'unknown')
+                    strategy_description = f"📚 ADAPTIVE MODE: Exam-driven ({phase} phase, {intensity_multiplier}x intensity)"
+                else:
+                    max_tasks_per_day = 4
+                    intensity_multiplier = 1.3
+                    strategy_description = "📚 ADAPTIVE MODE: Smart priority-based scheduling"
+            else:
+                strategy_description = "⚖️ BALANCED MODE: Standard scheduling with optimal distribution"
+        
+        # Calculate minimum tasks needed
+        min_tasks = max(len(request.topics) * 2, num_days)
+        recommended_tasks = min(min_tasks, num_days * max_tasks_per_day)
+        
+        # Build enhanced AI prompt with strategy context
+        strategy_constraints = f"""
+SCHEDULING STRATEGY: {strategy_description}
+- Maximum tasks per day: {max_tasks_per_day}
+- Intensity multiplier: {intensity_multiplier}x
+- Cognitive load protection: Max 2 hard tasks per day
+"""
+        
+        exam_context = ""
+        if request.examDate and exam_strategy:
+            exam_context = f"""
+EXAM MODE ACTIVE:
+- Exam date: {request.examDate}
+- Days remaining: {exam_strategy.get('daysToExam')}
+- Current phase: {exam_strategy.get('currentPhase')}
+- Focus areas: {', '.join(exam_strategy.get('phaseConfig', {}).get('focusAreas', []))}
+- Priority: HIGH-PRIORITY topics first, exam-critical concepts emphasized
+"""
+        
+        behavior_context = ""
+        if behavior_profile:
+            peak_hours = behavior_profile.get('productivityPeakHours', [])
+            optimal_slot = behavior_profile.get('optimalTimeOfDay', 'evening')
+            behavior_context = f"""
+USER BEHAVIOR INSIGHTS:
+- Peak productivity hours: {', '.join(map(str, peak_hours))}
+- Optimal time of day: {optimal_slot}
+- Consistency score: {behavior_profile.get('consistencyScore', 0)}/100
+"""
+        
+        prompt = f"""You are an expert study planner with constraint-based scheduling intelligence.
 
 INPUT:
 - Subject: {request.subject}
@@ -277,8 +461,20 @@ INPUT:
 - Level: {request.difficulty}
 {f"- Exam: {request.examDate}" if request.examDate else ""}
 
+{strategy_constraints}
+{exam_context if exam_context else ""}
+{behavior_context if behavior_context else ""}
+
 TASK:
-Generate at least {min_tasks} study tasks covering all topics. Each topic should have multiple tasks.
+Generate {recommended_tasks} study tasks covering all topics. Each topic should have multiple tasks.
+
+CRITICAL CONSTRAINTS:
+- Each task duration must be between 15 and 480 minutes (0.25 to 8 hours)
+- Daily task count must not exceed {max_tasks_per_day} tasks
+- Maximum 2 hard-difficulty tasks per day
+- Total daily task durations should not exceed {int(request.dailyStudyHours * 60)} minutes
+- Apply {intensity_multiplier}x intensity factor to pacing
+{"- EMERGENCY MODE: Prioritize core concepts, skip low-priority details" if strategy_context and strategy_context.get('recommendedMode') == 'emergency' else ""}
 
 OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
 {{
@@ -310,20 +506,24 @@ Generate the JSON now:"""
         logger.info("Calling LLM for study plan generation...")
         response = llm.invoke(prompt)
         
-        # Extract content from AIMessage object
-        response_text = response.content if hasattr(response, 'content') else str(response)
+        # Extract content from AIMessage (LangChain returns AIMessage, not string)
+        if hasattr(response, 'content'):
+            response_text = response.content.strip()
+        else:
+            response_text = str(response).strip()
+        
         logger.info(f"LLM response length: {len(response_text)} chars")
         
         # Extract and parse JSON with multiple strategies
-        response_text = response_text.strip()
         ai_plan = None
+        parse_errors = []
         
         # Strategy 1: Direct JSON parse
         try:
             ai_plan = json.loads(response_text)
             logger.info("✓ Parsed JSON directly")
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            parse_errors.append(f"Direct parse: {e}")
         
         # Strategy 2: Remove markdown code blocks
         if not ai_plan:
@@ -335,8 +535,8 @@ Generate the JSON now:"""
                     cleaned = cleaned.split('```')[1].split('```')[0].strip()
                 ai_plan = json.loads(cleaned)
                 logger.info("✓ Parsed JSON after removing markdown")
-            except (json.JSONDecodeError, IndexError):
-                pass
+            except (json.JSONDecodeError, IndexError) as e:
+                parse_errors.append(f"Markdown removal: {e}")
         
         # Strategy 3: Extract JSON from text
         if not ai_plan:
@@ -347,12 +547,13 @@ Generate the JSON now:"""
                     json_str = response_text[start_idx:end_idx + 1]
                     ai_plan = json.loads(json_str)
                     logger.info("✓ Extracted JSON from response")
-            except (json.JSONDecodeError, ValueError):
-                pass
+            except (json.JSONDecodeError, ValueError) as e:
+                parse_errors.append(f"JSON extraction: {e}")
         
         # Strategy 4: Fallback to programmatic generation
         if not ai_plan:
-            logger.warning(f"All JSON parsing failed. Response preview: {response_text[:200]}")
+            logger.warning(f"All JSON parsing failed. Errors: {parse_errors}")
+            logger.warning(f"Response preview: {response_text[:300]}")
             logger.info("Using intelligent fallback task distribution")
             
             # Fallback: Create intelligent programmatic plan
@@ -392,11 +593,12 @@ Generate the JSON now:"""
             # Generate tasks from expanded distribution
             for i, task_info in enumerate(expanded_tasks):
                 day_offset = (i * num_days) // len(expanded_tasks)
+                calculated_duration = int((request.dailyStudyHours * 60) // (len(expanded_tasks) / num_days))
                 ai_plan["tasks"].append({
                     "title": task_info["title"],
                     "description": task_info["description"],
                     "topic": task_info["topic"],
-                    "duration": int((request.dailyStudyHours * 60) // (len(expanded_tasks) / num_days)),
+                    "duration": validate_task_duration(calculated_duration),
                     "priority": "high" if i < len(expanded_tasks) * 0.3 else "medium",
                     "difficulty": request.difficulty,
                     "resources": []
@@ -408,29 +610,52 @@ Generate the JSON now:"""
             ai_plan = {
                 "title": f"{request.subject} Study Plan",
                 "description": f"Study {len(request.topics)} topics",
-                "tasks": [{"title": f"Learn {topic}", "description": f"Study {topic} concepts", "topic": topic, "duration": 60, "priority": "medium", "difficulty": request.difficulty} for topic in request.topics],
+                "tasks": [{"title": f"Learn {topic}", "description": f"Study {topic} concepts", "topic": topic, "duration": validate_task_duration(60), "priority": "medium", "difficulty": request.difficulty} for topic in request.topics],
                 "recommendations": ["Study consistently", "Practice regularly", "Review often"]
             }
         
         logger.info(f"✓ AI plan has {len(ai_plan.get('tasks', []))} tasks")
         
+        # ========================================================================
+        # PHASE 2: APPLY COGNITIVE LOAD PROTECTION
+        # ========================================================================
+        raw_tasks = ai_plan.get("tasks", [])
+        
+        # Apply cognitive load limits based on strategy context
+        if strategy_context or exam_strategy:
+            logger.info("🧠 Applying cognitive load protection...")
+            context_for_limits = {
+                'recommendedMode': strategy_context.get('recommendedMode') if strategy_context else 'balanced',
+                'phaseConfig': exam_strategy if exam_strategy else {}
+            }
+            filtered_tasks = apply_cognitive_load_limits(raw_tasks, num_days, context_for_limits)
+        else:
+            # Apply default cognitive load limits
+            filtered_tasks = apply_cognitive_load_limits(raw_tasks, num_days, None)
+        
+        logger.info(f"✓ Cognitive load applied: {len(raw_tasks)} → {len(filtered_tasks)} tasks")
+        
         # Assign dates to tasks
         tasks_with_dates = []
-        tasks_per_day = max(1, len(ai_plan.get("tasks", [])) // num_days)
+        tasks_per_day = max(1, len(filtered_tasks) // num_days)
         
-        for i, task in enumerate(ai_plan.get("tasks", [])):
+        for i, task in enumerate(filtered_tasks):
             day_offset = i // tasks_per_day
             if day_offset >= num_days:
                 day_offset = num_days - 1
             
             task_date = start_date + timedelta(days=day_offset)
             
+            # Validate duration to ensure it meets MongoDB constraints (15-480 minutes)
+            raw_duration = task.get("duration", 60)
+            validated_duration = validate_task_duration(raw_duration)
+            
             tasks_with_dates.append(TaskGenerated(
                 title=task.get("title", f"Study Session {i+1}"),
                 description=task.get("description", "Study and practice"),
                 topic=task.get("topic", request.topics[i % len(request.topics)]),
                 scheduledDate=task_date.isoformat(),
-                duration=task.get("duration", 60),
+                duration=validated_duration,
                 priority=task.get("priority", "medium"),
                 difficulty=task.get("difficulty", request.difficulty),
                 order=i,
@@ -443,6 +668,18 @@ Generate the JSON now:"""
             "Review regularly to reinforce learning",
             "Practice actively, don't just read passively"
         ])
+        
+        # Add strategy-specific recommendations
+        if strategy_context:
+            mode = strategy_context.get('recommendedMode')
+            if mode == 'emergency':
+                raw_recommendations.insert(0, "⚠️ Emergency mode active: Focus on high-priority topics only")
+                raw_recommendations.insert(1, "🔥 Use hyper time blocks (90-120 min) for intensive study")
+            elif mode == 'adaptive':
+                if exam_strategy:
+                    phase = exam_strategy.get('currentPhase', '')
+                    raw_recommendations.insert(0, f"📚 {phase.replace('_', ' ').title()} phase: Adjust study intensity accordingly")
+        
         normalized_recommendations = normalize_recommendations(raw_recommendations)
         
         # Build response with warnings

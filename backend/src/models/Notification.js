@@ -161,6 +161,7 @@ notificationSchema.statics.deleteOldNotifications = async function (userId, days
   });
 };
 
-const Notification = mongoose.model('Notification', notificationSchema);
+// Prevent model overwrite error in development
+const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
 
 module.exports = Notification;

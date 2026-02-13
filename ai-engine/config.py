@@ -136,6 +136,11 @@ class Config:
     CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
     RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "4"))
     
+    # ========== Backend Integration ==========
+    BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
+    BACKEND_API_PREFIX = os.getenv("BACKEND_API_PREFIX", "/api")
+    BACKEND_TIMEOUT = int(os.getenv("BACKEND_TIMEOUT", "30"))  # seconds
+    
     # ========== CORS Configuration ==========
     CORS_ORIGINS = [
         origin.strip()

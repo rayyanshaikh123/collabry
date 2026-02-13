@@ -54,6 +54,8 @@ export interface StudyTask {
   isOverdue?: boolean;
   isToday?: boolean;
   planMeta?: { title: string; subject?: string };
+  timeSlotStart?: string; // ISO timestamp for scheduled block start
+  timeSlotEnd?: string;   // ISO timestamp for scheduled block end
 }
 
 export interface Resource {
@@ -170,7 +172,14 @@ class StudyPlannerService {
 
   async createPlan(data: CreatePlanData): Promise<StudyPlan> {
     try {
-      const response = await apiClient.post(this.baseURL + '/plans', data);
+      // Sanitize plan data to meet backend validation limits
+      const sanitizedData = {
+        ...data,
+        title: data.title?.substring(0, 200) || 'Untitled Plan',
+        description: data.description?.substring(0, 1000),
+      };
+      
+      const response = await apiClient.post(this.baseURL + '/plans', sanitizedData);
       // Backend returns { success, data: plan } but apiClient already unwraps to just the plan
       const planData = response.data.data || response.data;
       
@@ -187,7 +196,16 @@ class StudyPlannerService {
   }
 
   async updatePlan(planId: string, data: Partial<CreatePlanData>): Promise<StudyPlan> {
-    const response = await apiClient.put(`${this.baseURL}/plans/${planId}`, data);
+    // Sanitize plan data to meet backend validation limits
+    const sanitizedData: Partial<CreatePlanData> = { ...data };
+    if (data.title !== undefined) {
+      sanitizedData.title = data.title.substring(0, 200);
+    }
+    if (data.description !== undefined) {
+      sanitizedData.description = data.description.substring(0, 1000);
+    }
+    
+    const response = await apiClient.put(`${this.baseURL}/plans/${planId}`, sanitizedData);
     return response.data.data;
   }
 
@@ -279,15 +297,31 @@ class StudyPlannerService {
   }
 
   async createTask(data: CreateTaskData): Promise<StudyTask> {
-    const response = await apiClient.post(this.baseURL + '/tasks', data);
+    // Sanitize task data to meet backend validation limits
+    const sanitizedData = {
+      ...data,
+      title: data.title?.substring(0, 200) || 'Untitled Task',
+      description: data.description?.substring(0, 1000),
+    };
+    
+    const response = await apiClient.post(this.baseURL + '/tasks', sanitizedData);
     return response.data.data;
   }
 
   async createBulkTasks(planId: string, tasks: CreateTaskData[]): Promise<StudyTask[]> {
     try {
+      // Sanitize tasks to meet backend validation limits
+      const sanitizedTasks = tasks.map(task => ({
+        ...task,
+        // Truncate title to 200 chars (backend limit)
+        title: task.title?.substring(0, 200) || 'Untitled Task',
+        // Truncate description to 1000 chars (backend limit)
+        description: task.description?.substring(0, 1000),
+      }));
+
       const response = await apiClient.post(this.baseURL + '/tasks/bulk', {
         planId,
-        tasks,
+        tasks: sanitizedTasks,
       });
       
       const tasksData = response.data.data || response.data;
@@ -305,7 +339,16 @@ class StudyPlannerService {
   }
 
   async updateTask(taskId: string, data: Partial<CreateTaskData>): Promise<StudyTask> {
-    const response = await apiClient.put(`${this.baseURL}/tasks/${taskId}`, data);
+    // Sanitize task data to meet backend validation limits
+    const sanitizedData: Partial<CreateTaskData> = { ...data };
+    if (data.title !== undefined) {
+      sanitizedData.title = data.title.substring(0, 200);
+    }
+    if (data.description !== undefined) {
+      sanitizedData.description = data.description.substring(0, 1000);
+    }
+    
+    const response = await apiClient.put(`${this.baseURL}/tasks/${taskId}`, sanitizedData);
     return response.data.data;
   }
 
@@ -345,6 +388,161 @@ class StudyPlannerService {
   async generatePlan(data: CreatePlanData): Promise<AIGeneratedPlan> {
     const response = await apiClient.post(this.aiURL + '/generate-study-plan', data);
     return response.data;
+  }
+
+  // ============================================================================
+  // STRATEGY SYSTEM (Phase 3)
+  // ============================================================================
+
+  async getAvailableStrategies(): Promise<Array<{
+    name: string;
+    description: string;
+    characteristics: Record<string, any>;
+    useCases: string[];
+  }>> {
+    const response = await apiClient.get(this.baseURL + '/strategies');
+    return response.data.data;
+  }
+
+  async getRecommendedMode(planId: string): Promise<{
+    recommendedMode: string;
+    confidence: number;
+    reasoning: string[];
+    metrics: Record<string, any>;
+    triggers?: string[];
+  }> {
+    try {
+      console.log('[StudyPlannerService] Calling GET', `${this.baseURL}/plans/${planId}/recommended-mode`);
+      const response = await apiClient.get(`${this.baseURL}/plans/${planId}/recommended-mode`);
+      console.log('[StudyPlannerService] Response:', response);
+      
+      if (!response) {
+        throw new Error('Empty response from server');
+      }
+      
+      if (!response.success) {
+        throw new Error(response.message || 'API request failed');
+      }
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('[StudyPlannerService] getRecommendedMode error:', error);
+      console.error('[StudyPlannerService] Error details:', {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      throw error;
+    }
+  }
+
+  async getAllRecommendedModes(): Promise<Array<{
+    planId: string;
+    planTitle: string;
+    recommendedMode: string;
+    confidence: number;
+    reasoning: string[];
+  }>> {
+    const response = await apiClient.get(this.baseURL + '/plans/recommended-modes/all');
+    return response.data;
+  }
+
+  async executeStrategy(
+    planId: string,
+    mode: 'balanced' | 'adaptive' | 'emergency'
+  ): Promise<{
+    success: boolean;
+    message: string;
+    details: Record<string, any>;
+    warnings?: string[];
+  }> {
+    const response = await apiClient.post(`${this.baseURL}/plans/${planId}/execute-strategy`, { mode });
+    return response.data;
+  }
+
+  async autoExecuteStrategy(planId: string): Promise<{
+    success: boolean;
+    message: string;
+    details: Record<string, any>;
+    warnings?: string[];
+  }> {
+    const response = await apiClient.post(`${this.baseURL}/plans/${planId}/auto-strategy`);
+    return response.data;
+  }
+
+  async autoSchedulePlan(planId: string): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      tasksScheduled: number;
+      conflictsDetected: number;
+      executionTimeMs: number;
+      totalSlots: number;
+    };
+  }> {
+    const response = await apiClient.post(`${this.baseURL}/plans/${planId}/auto-schedule`);
+    return response.data;
+  }
+
+  async getExamStrategy(planId: string): Promise<{
+    enabled: boolean;
+    examDate?: string;
+    daysUntilExam?: number;
+    currentPhase?: string | null;
+    intensityMultiplier?: number;
+    taskDensityPerDay?: number;
+    phaseDescription?: string;
+    recommendations?: string[];
+  } | null> {
+    try {
+      console.log('[StudyPlannerService] Calling GET', `${this.baseURL}/plans/${planId}/exam-strategy`);
+      const response = await apiClient.get(`${this.baseURL}/plans/${planId}/exam-strategy`);
+      console.log('[StudyPlannerService] Exam strategy response:', response);
+      
+      if (!response) {
+        return null;
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.warn('No exam strategy available for plan:', planId);
+      return null;
+    }
+  }
+
+  async enableExamMode(planId: string, examDate: string, examMode: boolean = true): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      planId: string;
+      examDate: string;
+      currentPhase: string;
+      config: any;
+    };
+  }> {
+    const response = await apiClient.patch(`${this.baseURL}/plans/${planId}/exam-mode`, {
+      examDate,
+      examMode
+    });
+    return response;
+  }
+
+  async getBehaviorProfile(): Promise<{
+    productivityPeakHours: string[];
+    consistencyScore: number;
+    averageDailyMinutes: number;
+    preferredSessionLength: number;
+    completionRate: number;
+    rescheduleFrequency: number;
+  } | null> {
+    try {
+      const response = await apiClient.get(this.baseURL + '/behavior-profile');
+      return response.data.data;
+    } catch (error) {
+      console.warn('No behavior profile available');
+      return null;
+    }
   }
 }
 

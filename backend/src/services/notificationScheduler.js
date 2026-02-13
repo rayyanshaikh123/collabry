@@ -173,28 +173,205 @@ const sendDailyMotivation = cron.schedule('0 9 * * *', async () => {
   }
 });
 
+// ============================================================================
+// TIER-2/3: ADVANCED AUTOMATION
+// ============================================================================
+
+/**
+ * Nightly behavior analysis - Learn user patterns
+ * Runs every night at 2 AM
+ */
+const runBehaviorAnalysis = cron.schedule('0 2 * * *', async () => {
+  try {
+    console.log('🧠 Running nightly behavior analysis...');
+    
+    const behaviorService = require('./behaviorLearning.service');
+    const result = await behaviorService.batchAnalyze();
+    
+    console.log(`✓ Behavior analysis complete: ${result.analyzed}/${result.total} users, ${result.reliable} reliable profiles`);
+  } catch (error) {
+    console.error('Error running behavior analysis:', error);
+  }
+});
+
+/**
+ * Heatmap precomputation - Update daily study stats
+ * Runs every night at 3 AM
+ */
+const updateHeatmapData = cron.schedule('0 3 * * *', async () => {
+  try {
+    console.log('📊 Updating heatmap data...');
+    
+    const DailyStudyStats = require('../models/DailyStudyStats');
+    const StudyTask = require('../models/StudyTask.ENHANCED');
+    const FocusSession = require('../models/FocusSession');
+    const User = require('../models/User');
+    
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    
+    // Get all active users
+    const users = await User.find({}).select('_id');
+    
+    for (const user of users) {
+      // Aggregate user's data from yesterday
+      const tasksCompleted = await StudyTask.countDocuments({
+        userId: user._id,
+        status: 'completed',
+        completedAt: {
+          $gte: yesterday,
+          $lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
+        }
+      });
+      
+      const tasksMissed = await StudyTask.countDocuments({
+        userId: user._id,
+        status: { $in: ['pending', 'rescheduled'] },
+        timeSlotStart: {
+          $gte: yesterday,
+          $lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
+        }
+      });
+      
+      const focusSessions = await FocusSession.find({
+        userId: user._id,
+        sessionStatus: 'completed',
+        startTime: {
+          $gte: yesterday,
+          $lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
+        }
+      });
+      
+      const totalMinutes = focusSessions.reduce((sum, s) => sum + (s.actualDurationMinutes || 0), 0);
+      
+      // Upsert daily stats
+      await DailyStudyStats.upsertStats(
+        user._id,
+        yesterday,
+        {
+          totalStudyMinutes: totalMinutes,
+          tasksCompleted,
+          tasksMissed,
+          focusSessionsCount: focusSessions.length
+        }
+      );
+    }
+    
+    console.log(`✓ Heatmap data updated for ${users.length} users`);
+  } catch (error) {
+    console.error('Error updating heatmap data:', error);
+  }
+});
+
+/**
+ * Check exam phase transitions
+ * Runs daily at midnight
+ */
+const checkExamPhases = cron.schedule('0 0 * * *', async () => {
+  try {
+    console.log('🎯 Checking exam phase transitions...');
+    
+    const StudyPlan = require('../models/StudyPlan');
+    const examStrategyService = require('./examStrategy.service');
+    
+    // Get all plans in exam mode
+    const examPlans = await StudyPlan.find({
+      examMode: true,
+      examDate: { $gte: new Date() }, // Future exams only
+      status: 'active'
+    });
+    
+    let transitionCount = 0;
+    
+    for (const plan of examPlans) {
+      const strategy = await examStrategyService.getStrategy(plan);
+      if (strategy.phaseChanged) {
+        transitionCount++;
+      }
+    }
+    
+    console.log(`✓ Exam phase check complete: ${transitionCount} transitions detected`);
+  } catch (error) {
+    console.error('Error checking exam phases:', error);
+  }
+});
+
+/**
+ * Auto-trigger adaptive rescheduling
+ * Runs every 15 minutes (aligned with task reminders)
+ */
+const autoAdaptiveReschedule = cron.schedule('*/15 * * * *', async () => {
+  try {
+    console.log('⚡ Checking for auto-rescheduling triggers...');
+    
+    const StudyPlan = require('../models/StudyPlan');
+    const adaptiveSchedulingService = require('./adaptiveScheduling.service');
+    
+    // Get plans with recent adaptations enabled
+    const plans = await StudyPlan.find({
+      status: 'active',
+      'adaptiveMetadata.lastAutoSchedule': {
+        $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last auto-schedule > 24h ago
+      }
+    }).limit(10); // Process 10 plans per run to avoid overload
+    
+    for (const plan of plans) {
+      try {
+        const result = await adaptiveSchedulingService.redistributeMissedTasks(
+          plan.userId,
+          plan._id,
+          { reason: 'auto_scheduled', maxTasksToReschedule: 10 }
+        );
+        
+        if (result.rescheduled > 0) {
+          console.log(`  Rescheduled ${result.rescheduled} tasks for plan ${plan._id}`);
+        }
+      } catch (err) {
+        console.error(`  Failed to reschedule plan ${plan._id}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('Error in auto-rescheduling:', error);
+  }
+});
+
 /**
  * Start all cron jobs
  */
 const startNotificationScheduler = () => {
   console.log('🕐 Starting notification scheduler...');
   
+  // Tier-1 (existing)
   checkTasksDueSoon.start();
   checkOverdueTasks.start();
   sendDailyPlanReminders.start();
   sendDailyMotivation.start();
+  
+  // Tier-2/3 (new)
+  runBehaviorAnalysis.start();
+  updateHeatmapData.start();
+  checkExamPhases.start();
+  autoAdaptiveReschedule.start();
 
-  console.log('✓ Notification scheduler started');
+  console.log('✓ Notification scheduler started (Tier-1 + Tier-2/3)');
 };
 
 /**
  * Stop all cron jobs
  */
 const stopNotificationScheduler = () => {
+  // Tier-1
   checkTasksDueSoon.stop();
   checkOverdueTasks.stop();
   sendDailyPlanReminders.stop();
   sendDailyMotivation.stop();
+  
+  // Tier-2/3
+  runBehaviorAnalysis.stop();
+  updateHeatmapData.stop();
+  checkExamPhases.stop();
+  autoAdaptiveReschedule.stop();
 
   console.log('✗ Notification scheduler stopped');
 };

@@ -104,4 +104,4 @@ focusSessionSchema.statics.getSessionsForPeriod = function(userId, startDate, en
   }).sort({ createdAt: -1 });
 };
 
-module.exports = mongoose.model('FocusSession', focusSessionSchema);
+module.exports = mongoose.models.FocusSession || mongoose.model('FocusSession', focusSessionSchema);

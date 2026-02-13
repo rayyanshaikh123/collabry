@@ -134,4 +134,4 @@ mindMapSchema.index({ subject: 1, visibility: 1 });
 mindMapSchema.index({ createdBy: 1, createdAt: -1 });
 mindMapSchema.index({ parentVersion: 1, version: 1 });
 
-module.exports = mongoose.model('MindMap', mindMapSchema);
+module.exports = mongoose.models.MindMap || mongoose.model('MindMap', mindMapSchema);

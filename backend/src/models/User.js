@@ -392,6 +392,7 @@ userSchema.methods.getXPToNextLevel = function () {
   return xpForNextLevel - this.gamification.xp;
 };
 
-const User = mongoose.model('User', userSchema);
+// Prevent model overwrite error in development
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 module.exports = User;

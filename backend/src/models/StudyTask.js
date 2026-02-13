@@ -181,6 +181,7 @@ studyTaskSchema.methods.toJSON = function() {
   return obj;
 };
 
-const StudyTask = mongoose.model('StudyTask', studyTaskSchema);
+// Prevent model overwrite error in development with hot-reloading
+const StudyTask = mongoose.models.StudyTask || mongoose.model('StudyTask', studyTaskSchema);
 
 module.exports = StudyTask;

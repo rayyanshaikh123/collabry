@@ -85,4 +85,4 @@ authAuditLogSchema.index({ userId: 1, createdAt: -1 });
 // Compound index for querying events by type + time
 authAuditLogSchema.index({ event: 1, createdAt: -1 });
 
-module.exports = mongoose.model('AuthAuditLog', authAuditLogSchema);
+module.exports = mongoose.models.AuthAuditLog || mongoose.model('AuthAuditLog', authAuditLogSchema);

@@ -16,6 +16,21 @@ const formatTime = (timeStr?: string) => {
   return timeStr;
 };
 
+const formatTimeSlot = (start?: string, end?: string) => {
+  if (!start || !end) return null;
+  
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  
+  const formatHM = (date: Date) => {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  
+  return `${formatHM(startDate)}-${formatHM(endDate)}`;
+};
+
 const priorityColors: Record<string, string> = {
   low: 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800',
   medium: 'text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30',
@@ -118,6 +133,17 @@ export const TasksList: React.FC<TasksListProps> = ({
                             {task.scheduledTime && (
                               <Badge variant="slate" className="text-[10px]">
                                 {formatTime(task.scheduledTime)}
+                              </Badge>
+                            )}
+                            {/* Time block indicator */}
+                            {task.timeSlotStart && task.timeSlotEnd ? (
+                              <Badge variant="indigo" className="text-[10px] flex items-center gap-1">
+                                <ICONS.Clock size={10} />
+                                {formatTimeSlot(task.timeSlotStart, task.timeSlotEnd)}
+                              </Badge>
+                            ) : (
+                              <Badge variant="slate" className="text-[10px] opacity-50">
+                                🕐 Unscheduled
                               </Badge>
                             )}
                             <span

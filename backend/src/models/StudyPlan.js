@@ -112,13 +112,44 @@ const studyPlanSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    // Adaptive planning
+    // Exam Countdown Mode (Tier-2)
+    examDate: {
+      type: Date,
+      index: true,
+      validate: {
+        validator: function(v) {
+          return !v || v > this.startDate;
+        },
+        message: 'Exam date must be after plan start date'
+      }
+    },
+    examMode: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    currentExamPhase: {
+      type: String,
+      enum: ['concept_building', 'practice_heavy', 'revision', 'light_review', null],
+      default: null
+    },
+    examPhaseConfig: {
+      intensityMultiplier: { type: Number, default: 1.0 },
+      taskDensityPerDay: { type: Number, default: 3 },
+      lastPhaseUpdate: Date
+    },
+    // Adaptive planning (enhanced)
     lastAdaptedAt: {
       type: Date,
     },
     adaptationCount: {
       type: Number,
       default: 0,
+    },
+    adaptiveMetadata: {
+      missedTasksRedistributed: { type: Number, default: 0 },
+      avgReschedulesPerWeek: { type: Number, default: 0 },
+      lastAutoSchedule: Date
     },
     // Soft delete
     isArchived: {
@@ -170,6 +201,8 @@ studyPlanSchema.methods.updateStreak = function(completed) {
 // Indexes for performance
 studyPlanSchema.index({ userId: 1, status: 1 });
 studyPlanSchema.index({ userId: 1, startDate: 1, endDate: 1 });
+studyPlanSchema.index({ userId: 1, examDate: 1, examMode: 1 });
+studyPlanSchema.index({ userId: 1, currentExamPhase: 1 });
 studyPlanSchema.index({ createdAt: -1 });
 
 // Transform for frontend
@@ -181,6 +214,7 @@ studyPlanSchema.methods.toJSON = function() {
   return obj;
 };
 
-const StudyPlan = mongoose.model('StudyPlan', studyPlanSchema);
+// Prevent model overwrite error in development
+const StudyPlan = mongoose.models.StudyPlan || mongoose.model('StudyPlan', studyPlanSchema);
 
 module.exports = StudyPlan;
