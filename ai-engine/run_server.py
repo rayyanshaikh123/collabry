@@ -8,9 +8,13 @@ Usage:
     python run_server.py --host 0.0.0.0 --port 8000
     python run_server.py --reload
 """
+import os
+# Avoid OpenMP runtime conflicts on Windows (faiss/torch/numpy mix)
+# See: http://openmp.llvm.org/
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import uvicorn
 import argparse
-import os
 from pathlib import Path
 import sys
 import platform

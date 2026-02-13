@@ -6,6 +6,7 @@ import Calendar from '../components/Calendar';
 import { ICONS } from '../constants';
 import { PlannerSidebar } from '../components/planner/PlannerSidebar';
 import { TasksList } from '../components/planner/TasksList';
+import { StrategyPanel } from '../components/planner/StrategyPanel';
 import {
   usePlans,
   useTodayTasks,
@@ -45,7 +46,7 @@ const priorityColors = {
 
 const Planner: React.FC = () => {
   const { alertState, showAlert, hideAlert } = useAlert();
-  const [selectedView, setSelectedView] = useState<'today' | 'upcoming' | 'calendar' | 'plans'>('today');
+  const [selectedView, setSelectedView] = useState<'today' | 'upcoming' | 'calendar' | 'plans' | 'strategy'>('today');
   const [selectedPlan, setSelectedPlan] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -454,6 +455,22 @@ const Planner: React.FC = () => {
               }
             }
           }}
+          onAutoSchedule={async (plan) => {
+            try {
+              showAlert({ message: '⏳ Scheduling time blocks...', type: 'info' });
+              const result = await studyPlannerService.autoSchedulePlan(plan.id);
+              showAlert({ 
+                message: `✅ ${result.message} (${result.data.tasksScheduled} tasks scheduled)`, 
+                type: 'success' 
+              });
+              setTimeout(() => window.location.reload(), 1000);
+            } catch (error: any) {
+              showAlert({ 
+                message: `❌ ${error.response?.data?.message || error.message || 'Failed to schedule plan'}`, 
+                type: 'error' 
+              });
+            }
+          }}
         />
 
         {/* Main Tasks Area */}
@@ -485,6 +502,16 @@ const Planner: React.FC = () => {
               >
                 Calendar
               </Button>
+              <Button
+                variant={selectedView === 'strategy' ? 'primary' : 'ghost'}
+                size="sm"
+                className="flex-1 sm:flex-none"
+                onClick={() => setSelectedView('strategy')}
+                disabled={selectedPlan.length !== 1}
+                title={selectedPlan.length !== 1 ? 'Select exactly one plan to view strategy' : 'View strategy for selected plan'}
+              >
+                <span className="mr-1">🎯</span> Strategy
+              </Button>
             </div>
           </Card>
 
@@ -506,7 +533,28 @@ const Planner: React.FC = () => {
           )}
 
           {/* Tasks List */}
-          {selectedView === 'calendar' ? (
+          {selectedView === 'strategy' ? (
+            selectedPlan.length === 1 ? (
+              <StrategyPanel
+                planId={selectedPlan[0]}
+                tasks={tasksToShow}
+                onStrategyExecuted={() => {
+                  // Refresh tasks when strategy is executed
+                  window.location.reload();
+                }}
+              />
+            ) : (
+              <Card className="p-8 text-center">
+                <div className="text-6xl mb-4">🎯</div>
+                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Select a Plan to View Strategy
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Choose exactly one plan from the sidebar to see its scheduling strategy and recommendations.
+                </p>
+              </Card>
+            )
+          ) : selectedView === 'calendar' ? (
             <Calendar 
               tasks={[...todayTasks, ...upcomingTasks, ...overdueTasks]}
               plans={plans}

@@ -112,4 +112,4 @@ refreshTokenSchema.statics.cleanExpired = function () {
   return this.deleteMany({ expiresAt: { $lte: new Date() } });
 };
 
-module.exports = mongoose.model('RefreshToken', refreshTokenSchema);
+module.exports = mongoose.models.RefreshToken || mongoose.model('RefreshToken', refreshTokenSchema);

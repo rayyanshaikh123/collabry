@@ -109,4 +109,4 @@ NotebookSchema.virtual('artifactCount').get(function() {
   return this.artifacts.length;
 });
 
-module.exports = mongoose.model('Notebook', NotebookSchema);
+module.exports = mongoose.models.Notebook || mongoose.model('Notebook', NotebookSchema);

@@ -5,6 +5,7 @@ const config = require('./config/env');
 const { initializeSocket } = require('./socket');
 const { startNotificationScheduler, stopNotificationScheduler } = require('./services/notificationScheduler');
 const { startSubscriptionExpiryJob, stopSubscriptionExpiryJob } = require('./jobs/subscriptionExpiry');
+const { registerEventListeners } = require('./utils/eventListeners');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -21,6 +22,9 @@ const server = http.createServer(app);
 
 // Initialize Socket.IO
 initializeSocket(server);
+
+// Register Tier-2/3 event listeners
+registerEventListeners();
 
 // Start notification scheduler
 startNotificationScheduler();

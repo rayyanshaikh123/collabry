@@ -11,6 +11,7 @@ interface PlannerSidebarProps {
   selectedPlan: string[];
   onPlanToggle: (planId: string) => void;
   onPlanDelete: (plan: StudyPlan) => void;
+  onAutoSchedule?: (plan: StudyPlan) => void;
 }
 
 export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
@@ -18,7 +19,8 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
   loading,
   selectedPlan,
   onPlanToggle,
-  onPlanDelete
+  onPlanDelete,
+  onAutoSchedule
 }) => {
   return (
     <div className="md:col-span-4 lg:col-span-3 space-y-4">
@@ -55,16 +57,30 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
                 </div>
               </button>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPlanDelete(plan);
-                }}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-rose-100 hover:bg-rose-200 rounded-lg"
-                title="Delete plan"
-              >
-                <ICONS.Plus size={14} className="text-rose-600 rotate-45" />
-              </button>
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {onAutoSchedule && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAutoSchedule(plan);
+                    }}
+                    className="p-1 bg-indigo-100 hover:bg-indigo-200 rounded-lg"
+                    title="Auto-schedule time blocks"
+                  >
+                    <ICONS.Clock size={14} className="text-indigo-600" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlanDelete(plan);
+                  }}
+                  className="p-1 bg-rose-100 hover:bg-rose-200 rounded-lg"
+                  title="Delete plan"
+                >
+                  <ICONS.Plus size={14} className="text-rose-600 rotate-45" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

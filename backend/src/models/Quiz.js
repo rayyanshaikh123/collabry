@@ -136,4 +136,4 @@ quizSchema.virtual('totalPoints').get(function() {
 quizSchema.set('toJSON', { virtuals: true });
 quizSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Quiz', quizSchema);
+module.exports = mongoose.models.Quiz || mongoose.model('Quiz', quizSchema);

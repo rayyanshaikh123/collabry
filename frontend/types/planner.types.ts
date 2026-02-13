@@ -50,3 +50,58 @@ export interface StudyGoal {
   createdAt: string;
   updatedAt: string;
 }
+
+// ============================================================================
+// STRATEGY SYSTEM TYPES (Phase 3)
+// ============================================================================
+
+export type StrategyMode = 'balanced' | 'adaptive' | 'emergency';
+export type ExamPhase = 'preparation' | 'acceleration' | 'intensive' | 'final';
+
+export interface StrategyRecommendation {
+  recommendedMode: StrategyMode;
+  confidence: number; // 0-100
+  reasoning: string[];
+  metrics: {
+    completionRate: number;
+    backlog: number;
+    daysToExam?: number;
+    consistencyScore: number;
+    avgDailyMinutes: number;
+    currentStreak: number;
+  };
+  triggers?: string[];
+}
+
+export interface ExamStrategyContext {
+  enabled: boolean;
+  examDate?: string;
+  daysUntilExam?: number;
+  currentPhase?: ExamPhase | null;
+  intensityMultiplier?: number; // 1.0x to 2.0x
+  taskDensityPerDay?: number; // 4 to 8
+  phaseDescription?: string;
+  recommendations?: string[];
+}
+
+export interface BehaviorProfile {
+  productivityPeakHours: string[];
+  consistencyScore: number;
+  averageDailyMinutes: number;
+  preferredSessionLength: number;
+  completionRate: number;
+  rescheduleFrequency: number;
+}
+
+export interface StrategyExecutionResult {
+  success: boolean;
+  message: string;
+  details: {
+    strategy: StrategyMode;
+    executionTime: number;
+    tasksProcessed: number;
+    tasksScheduled: number;
+    changes: string[];
+  };
+  warnings?: string[];
+}
