@@ -275,6 +275,40 @@ class AIEngineService {
       };
     }
   }
+
+  /**
+   * List voice classes (stub - feature not yet implemented)
+   */
+  async listVoiceClasses() {
+    // TODO: Implement voice classes feature
+    return { classes: [] };
+  }
+
+  /**
+   * Schedule voice class (stub - feature not yet implemented)
+   */
+  async scheduleVoiceClass(payload: any) {
+    // TODO: Implement voice class scheduling feature
+    return {
+      id: `temp-${Date.now()}`,
+      ...payload,
+      scheduled_start: payload.scheduled_start,
+      status: 'scheduled',
+    };
+  }
+
+  /**
+   * Start scheduled voice class (stub - feature not yet implemented)
+   */
+  async startScheduledVoiceClass(classId: string) {
+    // TODO: Implement voice class start feature
+    return {
+      room_name: `room-${classId}`,
+      student_token: '',
+      ws_url: '',
+      session_id: classId,
+    };
+  }
 }
 
 export const aiEngineService = new AIEngineService();

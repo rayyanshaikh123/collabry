@@ -51,7 +51,7 @@ export const ExamPhaseTimeline: React.FC<ExamPhaseTimelineProps> = ({ examStrate
   } = examStrategy;
 
   // Guard clause - don't render if exam mode is disabled or data is missing
-  if (!examDate || !currentPhase || intensityMultiplier === undefined) {
+  if (!examDate || !currentPhase || intensityMultiplier === undefined || daysUntilExam === undefined) {
     return null;
   }
 

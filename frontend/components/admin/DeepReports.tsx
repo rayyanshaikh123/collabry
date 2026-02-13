@@ -161,7 +161,15 @@ export default function DeepReports() {
             <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Role Distribution</h4>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={roleDistribution} dataKey="count" nameKey="role" cx="50%" cy="50%" outerRadius={70} label={({ role, count }) => `${role}: ${count}`}>
+                <Pie 
+                  data={roleDistribution} 
+                  dataKey="count" 
+                  nameKey="role" 
+                  cx="50%" 
+                  cy="50%" 
+                  outerRadius={70} 
+                  label={(props) => `${props.payload.role}: ${props.payload.count}`}
+                >
                   {roleDistribution.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
@@ -393,7 +401,7 @@ export default function DeepReports() {
               <BarChart data={revenueTrend.map((r) => ({ ...r, revenue: r.revenue / 100 }))}>
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(5)} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `₹${v}`} />
-                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(v) => `₹${typeof v === 'number' ? v.toLocaleString() : v}`} />
                 <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Revenue (₹)" />
               </BarChart>
             </ResponsiveContainer>

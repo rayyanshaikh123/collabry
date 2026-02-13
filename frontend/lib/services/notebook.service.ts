@@ -44,17 +44,17 @@ export interface Notebook {
 class NotebookService {
   async getNotebooks(): Promise<ApiResponse<Notebook[]>> {
     const response = await api.get('/notebook/notebooks');
-    return response;
+    return response as ApiResponse<Notebook[]>;
   }
 
   async getNotebook(id: string): Promise<ApiResponse<Notebook>> {
     const response = await api.get(`/notebook/notebooks/${id}`);
-    return response;
+    return response as ApiResponse<Notebook>;
   }
 
   async createNotebook(data: { title?: string; description?: string }): Promise<ApiResponse<Notebook>> {
     const response = await api.post('/notebook/notebooks', data);
-    return response;
+    return response as ApiResponse<Notebook>;
   }
 
   async updateNotebook(id: string, data: { title?: string; description?: string }) {

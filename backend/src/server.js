@@ -5,6 +5,7 @@ const config = require('./config/env');
 const { initializeSocket } = require('./socket');
 const { registerEventListeners } = require('./utils/eventListeners');
 const { getRedisClient, closeRedis } = require('./config/redis');
+const { killPort } = require('./utils/killPort');
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
@@ -44,10 +45,26 @@ registerEventListeners();
 // See: backend/src/workers/cron.js
 // This prevents duplicate job execution in multi-replica deployments
 
-// Start server
-server.listen(config.port, () => {
-  console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
-});
+// Start server with automatic port cleanup
+async function startServer() {
+  try {
+    // Kill any process using the port
+    const wasKilled = await killPort(config.port);
+    if (wasKilled) {
+      console.log(`🔄 Freed up port ${config.port}`);
+    }
+    
+    // Start the server
+    server.listen(config.port, () => {
+      console.log(`🚀 Server running in ${config.env} mode on port ${config.port}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {

@@ -71,11 +71,11 @@ export default function MindMapViewer({ mindmapJson, format = 'both', className 
         if (!mounted) return;
         console.log('MindMapViewer: Render response:', {
           hasMermaid: !!res.mermaid,
-          hasSvg: !!res.svg_base64,
+          hasSvg: !!(res as any).svg_base64,
           mermaidLength: res.mermaid?.length || 0
         });
         setMermaidCode(res.mermaid || null);
-        setSvgBase64(res.svg_base64 || null);
+        setSvgBase64((res as any).svg_base64 || null);
       })
       .catch((err) => {
         if (!mounted) return;

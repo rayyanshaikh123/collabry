@@ -525,7 +525,7 @@ class StudyPlannerService {
       examDate,
       examMode
     });
-    return response;
+    return response as any;
   }
 
   async getBehaviorProfile(): Promise<{

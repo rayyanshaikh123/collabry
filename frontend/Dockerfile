@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Install dependencies first for layer caching
 COPY package.json package-lock.json ./
-RUN npm ci --only=production --ignore-scripts && \
+RUN npm ci --ignore-scripts && \
     npm cache clean --force
 
 # Copy source code

@@ -165,7 +165,7 @@ const NotebookSchema = new mongoose.Schema({
 NotebookSchema.index({ userId: 1, createdAt: -1 });
 NotebookSchema.index({ userId: 1, lastAccessed: -1 });
 NotebookSchema.index({ 'collaborators.userId': 1 });
-NotebookSchema.index({ shareCode: 1 });
+// Note: shareCode index is created automatically by 'unique: true' in schema
 
 // ─── Middleware ──────────────────────────────────────────────────────
 NotebookSchema.pre('save', function () {

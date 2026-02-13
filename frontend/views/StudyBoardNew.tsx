@@ -300,7 +300,10 @@ const CollaborativeBoard = () => {
     setPendingElements,
     isApplyingRemoteChange,
     importPayloadRef,
-    importAppliedRef
+    importAppliedRef,
+    handleElementCreated,
+    handleElementUpdated,
+    handleElementDeleted
   });
 
   // Memoized participant list

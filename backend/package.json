@@ -9,10 +9,7 @@
     "start": "npm run prestart && node src/server.js",
     "predev": "node scripts/killPort.js 5000",
     "dev": "node --watch src/server.js",
-    "create-admin": "node scripts/createAdmin.js",
-    "test": "jest --coverage --detectOpenHandles",
-    "test:watch": "jest --watch",
-    "test:ci": "jest --ci --coverage --detectOpenHandles"
+    "create-admin": "node scripts/createAdmin.js"
   },
   "keywords": [
     "collabry",

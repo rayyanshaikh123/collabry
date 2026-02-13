@@ -89,9 +89,6 @@ audit_*.py
 _debug_*.py
 run_master_audit.py
 
-# Text outputs
-*.txt
-
 # Notebooks
 *.ipynb
 

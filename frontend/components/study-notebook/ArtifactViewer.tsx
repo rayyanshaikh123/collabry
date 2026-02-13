@@ -111,12 +111,13 @@ const ArtifactViewer: React.FC<ArtifactViewerProps> = ({ artifact, onClose, onEd
             console.log('Calling renderMindmap with data:', artifact.data);
             const result = await renderMindmap(artifact.data, 'svg');
             console.log('Render result:', result);
-            svgBase64 = result.svg_base64;
+            // svg_base64 might not be available in the new implementation
+            svgBase64 = (result as any).svg_base64 || null;
             console.log('Extracted SVG:', { 
-              hasSvg: !!result.svg_base64, 
+              hasSvg: !!svgBase64, 
               hasMermaid: !!result.mermaid,
-              svgLength: result.svg_base64?.length,
-              svgPreview: result.svg_base64?.substring(0, 100)
+              svgLength: svgBase64?.length,
+              svgPreview: svgBase64?.substring(0, 100)
             });
           } catch (renderError) {
             console.error('Failed to render mindmap:', renderError);
