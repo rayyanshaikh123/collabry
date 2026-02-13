@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from server.deps import get_current_user
 from server.schemas import ChatRequest, ChatResponse, ErrorResponse
 from core.agent import run_agent, chat as agent_chat
+from core.artifact_prompts import build_artifact_prompt
 from config import CONFIG
 import logging
 from uuid import uuid4
@@ -48,12 +49,30 @@ async def chat(
         session_id = request.session_id or str(uuid4())
         
         logger.info(f"Chat request from user={user_id}, session={session_id}")
+
+        is_artifact = (request.type or "").lower() == "artifact_request"
+        artifact_type = (request.artifact or "").lower() if is_artifact else None
+        topic = (request.topic or "").strip() if is_artifact else None
+
+        if is_artifact:
+            if not artifact_type or not topic:
+                raise HTTPException(status_code=400, detail="Artifact request requires 'artifact' and 'topic'")
+            internal_prompt = build_artifact_prompt(
+                artifact_type,
+                topic,
+                (request.artifact_params or {}) if isinstance(request.artifact_params, dict) else {}
+            )
+            agent_message = internal_prompt
+        else:
+            if not request.message or not request.message.strip():
+                raise HTTPException(status_code=400, detail="message is required for chat requests")
+            agent_message = request.message
         
         # Use new agent architecture
         response = await agent_chat(
             user_id=user_id,
             session_id=session_id,
-            message=request.message,
+            message=agent_message,
             notebook_id=request.notebook_id,
             source_ids=request.source_ids
         )

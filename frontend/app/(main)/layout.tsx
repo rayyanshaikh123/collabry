@@ -3,12 +3,13 @@
 /**
  * Main Layout
  * Protected routes layout with sidebar and top navbar
- * Used for: dashboard, study-board, planner, focus, profile, study-buddy, visual-aids
+ * Used for: dashboard, study-board, planner, profile, study-buddy, visual-aids
  */
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Sidebar from '../../components/Sidebar';
+import FocusWidget from '../../components/FocusWidget';
 import { ICONS } from '../../constants';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
@@ -26,7 +27,6 @@ const getAppRouteFromPath = (path: string): string => {
     '/study-board': 'study-board',
     '/study-notebook': 'study-notebook',
     '/planner': 'planner',
-    '/focus': 'focus',
     '/flashcards': 'flashcards',
     '/profile': 'profile',
     '/usage': 'usage',
@@ -148,7 +148,6 @@ export default function MainLayout({
       'study-board': '/study-board',
       'study-notebook': '/study-notebook',
       'planner': '/planner',
-      'focus': '/focus',
       'flashcards': '/flashcards',
       'profile': '/profile',
       'usage': '/usage',
@@ -218,6 +217,8 @@ export default function MainLayout({
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto md:p-8  bg-slate-50 dark:bg-slate-950">
           {children}
+          {/* Global Focus widget (fixed bottom-right, only when authenticated) */}
+          <FocusWidget />
         </main>
       </div>
     </div>

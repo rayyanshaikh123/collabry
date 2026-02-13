@@ -4,10 +4,13 @@ Retrieval Service - Orchestrates semantic search (RAG) and full-text retrieval.
 
 import logging
 import httpx
+import json
+import hashlib
 import re
 from typing import List, Optional, Dict, Any
 from rag.vectorstore import similarity_search
 from config import CONFIG
+from core.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +102,31 @@ async def get_hybrid_context(
         logger.error(f"🚨 Security: Invalid source_ids provided: {e}")
         return ""  # Fail safe - return empty context instead of risking data exposure
 
-    context_parts = []
+    context_parts: List[str] = []
+
+    # PHASE 4 — RETRIEVAL CACHE
+    # Cache RAG retrieval results keyed by normalized query and selected sources.
+    cache_key = None
+    redis = None
+    try:
+        redis = await get_redis()
+        if redis is not None:
+            cache_payload = {
+                "q": query,
+                "policy": policy,
+                "mode": mode,
+                "notebook_id": notebook_id,
+                "source_ids": sorted(validated_source_ids),
+            }
+            digest = hashlib.sha256(json.dumps(cache_payload, sort_keys=True).encode("utf-8")).hexdigest()
+            cache_key = f"rag:{digest}"
+            cached = await redis.get(cache_key)
+            if isinstance(cached, str) and cached:
+                logger.debug(f"✅ Retrieval cache hit for key={cache_key}")
+                return cached
+    except Exception as e:
+        logger.warning(f"Redis retrieval cache error (read): {e}")
+        redis = None
 
     # 1. Handle FULL_DOCUMENT (High fidelity recap/summary)
     if mode == "FULL_DOCUMENT" or mode == "MULTI_DOC_SYNTHESIS":
@@ -131,8 +158,17 @@ async def get_hybrid_context(
         for doc in docs:
             source_name = doc.metadata.get("source", "Unknown")
             context_parts.append(f"[{source_name}]: {doc.page_content}")
+    
+    context = "\n\n".join(context_parts)
 
-    return "\n\n".join(context_parts)
+    # Best-effort cache write with 6-hour TTL
+    if redis is not None and cache_key and context:
+        try:
+            await redis.set(cache_key, context, ex=6 * 60 * 60)
+        except Exception as e:
+            logger.warning(f"Redis retrieval cache error (write): {e}")
+
+    return context
 
 async def fetch_full_sources(
     notebook_id: str, 

@@ -14,6 +14,9 @@ from pymongo import MongoClient, DESCENDING
 from bson import ObjectId
 from config import CONFIG
 from core.agent import run_agent
+from core.session_state import delete_session_state
+from core.artifact_prompts import build_artifact_prompt
+from core.redis_client import get_redis
 import logging
 import json
 
@@ -373,6 +376,13 @@ async def delete_session(
         
         # Delete all messages in this session
         messages_collection.delete_many({"session_id": session_id})
+
+        # Best-effort: clear any cached SessionTaskState for this session
+        try:
+            composite_id = f"{user_id}:{session_id}"
+            await delete_session_state(composite_id)
+        except Exception as e:
+            logger.warning(f"Failed to delete Redis session state for {session_id}: {e}")
         
         logger.info(f"Deleted session {session_id} for user {user_id}")
         
@@ -487,6 +497,49 @@ async def session_chat_stream(
         notebook_id = session.get("notebook_id")
         
         logger.info(f"Streaming chat request for session={session_id}, user={user_id}, notebook={notebook_id}")
+
+        # PHASE 6 — STREAM BUFFER (optional safety)
+        # Generate a request-scoped stream ID and best-effort Redis client.
+        from uuid import uuid4
+        stream_id = str(uuid4())
+        redis = None
+        try:
+            redis = await get_redis()
+        except Exception as e:
+            logger.warning(f"Redis stream buffer: failed to acquire client: {e}")
+            redis = None
+
+        # Resolve how this request should be interpreted by the agent.
+        # For normal chat: agent_message == user_message, role == 'user'.
+        # For artifact_request: agent_message is the internal prompt built on the server,
+        # while user_message is a short, user-facing system message.
+        is_artifact = (request.type or "").lower() == "artifact_request"
+        artifact_type = (request.artifact or "").lower() if is_artifact else None
+        topic = (request.topic or "").strip() if is_artifact else None
+
+        if is_artifact:
+            if not artifact_type or not topic:
+                raise HTTPException(status_code=400, detail="Artifact request requires 'artifact' and 'topic'")
+            internal_prompt = build_artifact_prompt(
+                artifact_type,
+                topic,
+                (request.artifact_params or {}) if isinstance(request.artifact_params, dict) else {}
+            )
+            # Short, user-visible system messages mapped per artifact type.
+            artifact_labels = {
+                "quiz": "Quiz generation requested",
+                "flashcards": "Preparing flashcards",
+                "mindmap": "Creating concept map",
+                "summary": "Generating summary",
+            }
+            user_message = artifact_labels.get(artifact_type, "Generating study artifact")
+            user_role = "system"
+        else:
+            if not request.message or not request.message.strip():
+                raise HTTPException(status_code=400, detail="message is required for chat requests")
+            internal_prompt = request.message
+            user_message = request.message
+            user_role = "user"
         
         async def event_generator():
             """Generate SSE events that stream in real-time from agent."""
@@ -498,7 +551,7 @@ async def session_chat_stream(
                 async for event in run_agent(
                     user_id=user_id,
                     session_id=session_id,
-                    message=request.message,
+                    message=internal_prompt,
                     notebook_id=notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
@@ -518,6 +571,17 @@ async def session_chat_stream(
                             {"type": "token", "content": content},
                             ensure_ascii=False,
                         )
+
+                        # Optional: append token to Redis buffer for potential resume.
+                        if redis is not None:
+                            try:
+                                stream_key = f"stream:{stream_id}"
+                                await redis.append(stream_key, content)
+                                # Ensure a short TTL so buffers don't accumulate
+                                await redis.expire(stream_key, 5 * 60)
+                            except Exception as e:
+                                logger.warning(f"Redis stream buffer error: {e}")
+
                         yield f"data: {payload}\n\n"
                     
                     # Handle tool execution events
@@ -563,12 +627,12 @@ async def session_chat_stream(
                 
                 # Save messages after streaming completes
                 try:
-                    # Save user message
+                    # Save user-visible message (never the internal artifact prompt)
                     user_msg = {
                         "session_id": session_id,
                         "user_id": user_id,
-                        "role": "user",
-                        "content": request.message,
+                        "role": user_role,
+                        "content": user_message,
                         "timestamp": datetime.utcnow().isoformat(),
                         "created_at": datetime.utcnow()
                     }
@@ -610,6 +674,7 @@ async def session_chat_stream(
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
+                "X-Stream-Id": stream_id,
             }
         )
         

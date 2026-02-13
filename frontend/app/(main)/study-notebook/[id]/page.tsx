@@ -222,6 +222,7 @@ export default function StudyNotebookPage() {
   // Custom logic hooks
   const {
     handleSendMessage,
+    handleArtifactRequest,
     handleRegeneratePrompt,
     handleEditPrompt,
     handleClearChat,
@@ -253,6 +254,7 @@ export default function StudyNotebookPage() {
     editDifficulty,
     setIsGenerating,
     handleSendMessage,
+    handleArtifactRequest,
     showWarning,
     showError,
     showInfo,

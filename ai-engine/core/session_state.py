@@ -1,11 +1,17 @@
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
+import os
 import threading
 from contextlib import contextmanager
 import logging
 
+from core.redis_client import get_redis
+
 logger = logging.getLogger(__name__)
+
+SESSION_STATE_TTL_SECONDS = int(os.getenv("SESSION_STATE_TTL", "3600"))
+
 
 class SessionTaskState:
     """
@@ -27,6 +33,8 @@ class SessionTaskState:
         self.artifacts: Dict[str, Any] = {}  # Store generated content for follow-up questions
         self.artifact_history: List[Dict[str, Any]] = []  # Timeline of artifacts
         self._lock = threading.RLock()  # Thread safety for concurrent requests
+        # Track the user's preferred language for this session (auto-detected).
+        self.session_language: Optional[str] = None
     
     def register_user(self, user_id: str):
         """Track a user as active in this session."""
@@ -103,6 +111,46 @@ class SessionTaskState:
             self.artifacts.clear()
             logger.info(f"🧹 Cleared session state for {self.session_id}")
 
+    # --------- (De)serialization helpers for Redis-backed persistence ---------
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialize the minimal state needed for follow-up mutations.
+        """
+        with self._lock:
+            return {
+                "session_id": self.session_id,
+                "notebook_id": self.notebook_id,
+                "active_task": self.active_task,
+                "last_tool": self.last_tool,
+                "task_params": self.task_params,
+                "artifacts": self.artifacts,
+                "session_language": self.session_language,
+                "last_update": self.last_update.isoformat(),
+            }
+
+    def apply_dict(self, data: Dict[str, Any]) -> None:
+        """
+        Hydrate this instance from a previously serialized dict.
+        """
+        if not data:
+            return
+        with self._lock:
+            self.session_id = data.get("session_id", self.session_id)
+            self.notebook_id = data.get("notebook_id", self.notebook_id)
+            self.active_task = data.get("active_task", self.active_task)
+            self.last_tool = data.get("last_tool", self.last_tool)
+            self.task_params = data.get("task_params", self.task_params) or {}
+            self.artifacts = data.get("artifacts", self.artifacts) or {}
+            self.session_language = data.get("session_language", self.session_language)
+            try:
+                ts = data.get("last_update")
+                if ts:
+                    self.last_update = datetime.fromisoformat(ts)
+            except Exception:
+                # Fallback to "now" if parsing fails
+                self.last_update = datetime.now()
+
 # SECURITY FIX - Phase 2: Enhanced global state management with proper isolation
 _session_states: Dict[str, SessionTaskState] = {}
 _session_locks: Dict[str, threading.RLock] = {}
@@ -132,3 +180,75 @@ def get_session_state(session_id: str, user_id: str = None) -> SessionTaskState:
             _session_states[composite_key] = SessionTaskState(session_id)
             logger.info(f"🆕 Created new session state for {composite_key}")
         return _session_states[composite_key]
+
+
+# --------- Redis-backed persistence helpers (with in-memory fallback) ---------
+
+def _session_state_key(composite_id: str) -> str:
+    """
+    Build the Redis key for a session task state.
+
+    We deliberately accept a composite identifier (e.g. "user_id:session_id")
+    to maintain the same isolation semantics as the in-memory store.
+    """
+    return f"session:{composite_id}"
+
+
+async def save_session_state(session_composite_id: str, state_dict: Dict[str, Any], ttl_seconds: Optional[int] = None) -> None:
+    """
+    Persist SessionTaskState into Redis as JSON.
+
+    Failure-safe: if Redis is unavailable, this is a no-op and the system
+    continues using the in-memory state.
+    """
+    try:
+        redis = await get_redis()
+        if not redis:
+            return
+        key = _session_state_key(session_composite_id)
+        ttl = ttl_seconds or SESSION_STATE_TTL_SECONDS
+        payload = json.dumps(state_dict, ensure_ascii=False, default=str)
+        await redis.set(key, payload, ex=ttl)
+    except Exception as e:
+        logger.warning(f"Redis save_session_state failed for {session_composite_id}: {e}")
+
+
+async def load_session_state(session_composite_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Load SessionTaskState from Redis.
+
+    Returns the decoded dict or None if not present or on error.
+    Also refreshes TTL on access.
+    """
+    try:
+        redis = await get_redis()
+        if not redis:
+            return None
+        key = _session_state_key(session_composite_id)
+        raw = await redis.get(key)
+        if not raw:
+            return None
+        try:
+            await redis.expire(key, SESSION_STATE_TTL_SECONDS)
+        except Exception:
+            # TTL refresh is best-effort
+            pass
+        return json.loads(raw)
+    except Exception as e:
+        logger.warning(f"Redis load_session_state failed for {session_composite_id}: {e}")
+        return None
+
+
+async def delete_session_state(session_composite_id: str) -> None:
+    """
+    Delete a SessionTaskState from Redis.
+    """
+    try:
+        redis = await get_redis()
+        if not redis:
+            return
+        key = _session_state_key(session_composite_id)
+        await redis.delete(key)
+    except Exception as e:
+        logger.warning(f"Redis delete_session_state failed for {session_composite_id}: {e}")
+

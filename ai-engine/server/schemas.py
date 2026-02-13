@@ -12,12 +12,33 @@ from datetime import datetime
 
 class ChatRequest(BaseModel):
     """Request for chat endpoint."""
-    message: str = Field(..., description="User message", min_length=1)
+    # High-level request type. Defaults to a standard chat message.
+    # For artifact buttons, this is set to "artifact_request".
+    type: Optional[str] = Field(default="message", description="Request type: 'message' or 'artifact_request'")
+    # For normal chat this is the user's message. For artifact_request this is an optional
+    # lightweight display string (the full internal prompt is constructed server-side).
+    message: Optional[str] = Field(
+        default=None,
+        description="User message (omitted for structured artifact_request)"
+    )
     session_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
     notebook_id: Optional[str] = Field(None, description="Notebook ID for RAG context")
     stream: bool = Field(False, description="Enable streaming response")
     use_rag: bool = Field(False, description="Whether to use RAG retrieval from sources")
     source_ids: Optional[List[str]] = Field(None, description="Filter RAG by specific source IDs (when multiple sources in notebook)")
+    # Structured artifact payload used by notebook Studio actions.
+    artifact: Optional[str] = Field(
+        default=None,
+        description="Artifact type when type='artifact_request' (quiz|flashcards|mindmap|summary)"
+    )
+    topic: Optional[str] = Field(
+        default=None,
+        description="Topic or subject for artifact generation (derived from selected sources)"
+    )
+    artifact_params: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Artifact-specific parameters (e.g. quiz count/difficulty/custom prompt)"
+    )
 
 
 class ChatResponse(BaseModel):

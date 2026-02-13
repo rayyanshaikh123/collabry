@@ -1,7 +1,5 @@
 import { useCallback } from 'react';
 
-const DEFAULT_QUIZ_PROMPT = 'Create a practice quiz with exactly 5 multiple choice questions about:';
-
 type ArtifactType = 'quiz' | 'mindmap' | 'flashcards' | 'reports' | 'infographic' | 'course-finder';
 
 interface UseArtifactGeneratorProps {
@@ -14,6 +12,11 @@ interface UseArtifactGeneratorProps {
   editDifficulty: string;
   setIsGenerating: (value: boolean) => void;
   handleSendMessage: (message: string) => Promise<void>;
+  handleArtifactRequest?: (payload: {
+    artifact: 'quiz' | 'flashcards' | 'mindmap' | 'summary';
+    topic: string;
+    params?: Record<string, any>;
+  }) => Promise<void>;
   showWarning: (message: string) => void;
   showError: (message: string) => void;
   showInfo: (message: string) => void;
@@ -29,6 +32,7 @@ export function useArtifactGenerator({
   editDifficulty,
   setIsGenerating,
   handleSendMessage,
+  handleArtifactRequest,
   showWarning,
   showError,
   showInfo,
@@ -51,6 +55,7 @@ export function useArtifactGenerator({
           .join(', ');
 
         if (type === 'course-finder') {
+        // Legacy behavior for course finder (no structured artifact request yet)
           const lines: string[] = [];
           lines.push('[COURSE_FINDER_REQUEST]');
           lines.push('');
@@ -69,16 +74,23 @@ export function useArtifactGenerator({
           lines.push('- If rating/price missing, write "Not provided"');
           lines.push('- No extra commentary; JSON only');
 
-          const message = lines.join('\n');
+        const message = lines.join('\n');
 
-          handleSendMessage(message);
+        handleSendMessage(message);
           setIsGenerating(false);
           return;
         }
 
         if (type === 'flashcards') {
+        if (handleArtifactRequest) {
+          await handleArtifactRequest({
+            artifact: 'flashcards',
+            topic: topics,
+          });
+        } else {
+          // Fallback to legacy prompt-based behavior if structured routing is not wired
           const message = `Create flashcards for: ${topics}
-
+          
 Return ONLY valid JSON (no markdown, no code fences):
 {
   "title": "Flashcards: ${topics}",
@@ -95,7 +107,8 @@ Rules:
 - Use only info implied by the selected sources
 - JSON only (no extra text)`;
 
-          handleSendMessage(message);
+          await handleSendMessage(message);
+        }
           setIsGenerating(false);
           return;
         }
@@ -109,12 +122,27 @@ Rules:
           const actionEdits = { ...persistedEdits, ...liveEdits };
           const numQuestions = actionEdits.numberOfQuestions ?? 5;
           const difficulty = actionEdits.difficulty || 'medium';
-          const original =
-            actionEdits.prompt && actionEdits.prompt.trim().length > 0 ? actionEdits.prompt : DEFAULT_QUIZ_PROMPT;
+          const originalPrompt = (actionEdits.prompt || '').trim();
 
-          const message = `###QUIZ_GENERATION_REQUEST###
+          if (handleArtifactRequest) {
+            await handleArtifactRequest({
+              artifact: 'quiz',
+              topic: topics,
+              params: {
+                prompt: originalPrompt,
+                numberOfQuestions: numQuestions,
+                difficulty,
+              },
+            });
+          } else {
+            // Fallback to legacy prompt-based behavior if structured routing is not wired
+            const DEFAULT_QUIZ_PROMPT = 'Create a practice quiz with exactly 5 multiple choice questions about:';
+            const effectivePrompt =
+              originalPrompt.length > 0 ? originalPrompt : DEFAULT_QUIZ_PROMPT;
 
-${original} ${topics}
+            const message = `###QUIZ_GENERATION_REQUEST###
+
+${effectivePrompt} ${topics}
 
 Return ONLY valid JSON (no markdown, no code fences):
 [
@@ -134,13 +162,20 @@ Rules:
 - Explanations must be 1-2 sentences
 - JSON only`;
 
-          handleSendMessage(message);
+            await handleSendMessage(message);
+          }
           setIsGenerating(false);
           return;
         }
 
         if (type === 'mindmap') {
-          const message = `Create a mind map for: ${topics}
+          if (handleArtifactRequest) {
+            await handleArtifactRequest({
+              artifact: 'mindmap',
+              topic: topics,
+            });
+          } else {
+            const message = `Create a mind map for: ${topics}
 
 Return ONLY valid JSON (no markdown, no code fences):
 {
@@ -160,13 +195,20 @@ Rules:
 - Short labels (2-6 words)
 - JSON only`;
 
-          handleSendMessage(message);
+            await handleSendMessage(message);
+          }
           setIsGenerating(false);
           return;
         }
 
         if (type === 'reports') {
-          const message = `Generate a comprehensive study report for: ${topics}
+          if (handleArtifactRequest) {
+            await handleArtifactRequest({
+              artifact: 'summary',
+              topic: topics,
+            });
+          } else {
+            const message = `Generate a comprehensive study report for: ${topics}
 
 Analyze the selected source materials and create a structured report with the following sections:
 
@@ -183,7 +225,8 @@ Format in clear markdown with headers and bullet points.
 Do not include JSON.
 No preamble; output the report only.`;
 
-          handleSendMessage(message);
+            await handleSendMessage(message);
+          }
           setIsGenerating(false);
           return;
         }

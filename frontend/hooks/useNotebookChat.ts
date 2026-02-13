@@ -57,7 +57,17 @@ export function useNotebookChat({
    * Stream AI response using SSE with optimized rendering
    */
   const runAssistantStream = useCallback(
-    async ({ userText, includeUserMessage }: { userText: string; includeUserMessage: boolean }) => {
+    async ({
+      userText,
+      includeUserMessage,
+      extraPayload,
+      userRole = 'user',
+    }: {
+      userText: string;
+      includeUserMessage: boolean;
+      extraPayload?: Record<string, any>;
+      userRole?: 'user' | 'system';
+    }) => {
       if (chatAbortRef.current) {
         chatAbortRef.current.abort();
         chatAbortRef.current = null;
@@ -72,7 +82,7 @@ export function useNotebookChat({
       if (includeUserMessage && userMsgId) {
         const newMessage: ChatMessage = {
           id: userMsgId,
-          role: 'user',
+          role: userRole,
           content: userText,
           timestamp: new Date().toISOString(),
           senderName
@@ -124,6 +134,7 @@ export function useNotebookChat({
             is_collaborative: isCollaborative,
             // Best-effort: enable retrieval when available; backend can ignore if unsupported.
             use_rag: true,
+            ...(extraPayload || {}),
           }),
           signal: abortController.signal,
         });
@@ -274,6 +285,43 @@ export function useNotebookChat({
     [runAssistantStream]
   );
 
+  /**
+   * Structured artifact request:
+   * Sends a lightweight descriptor to the backend while the full prompt
+   * is constructed and executed server-side.
+   */
+  const handleArtifactRequest = useCallback(
+    async (payload: {
+      artifact: 'quiz' | 'flashcards' | 'mindmap' | 'summary';
+      topic: string;
+      params?: Record<string, any>;
+    }) => {
+      const { artifact, topic, params } = payload;
+
+      const artifactLabels: Record<typeof artifact, string> = {
+        quiz: 'Quiz generation requested',
+        flashcards: 'Preparing flashcards',
+        mindmap: 'Creating concept map',
+        summary: 'Generating summary',
+      };
+
+      const displayText = artifactLabels[artifact] || 'Generating study artifact';
+
+      await runAssistantStream({
+        userText: displayText,
+        includeUserMessage: true,
+        userRole: 'system',
+        extraPayload: {
+          type: 'artifact_request',
+          artifact,
+          topic,
+          artifact_params: params || {},
+        },
+      });
+    },
+    [runAssistantStream]
+  );
+
   const handleRegeneratePrompt = useCallback(
     async (messageId: string) => {
       const idx = localMessages.findIndex((m) => m.id === messageId);
@@ -343,6 +391,7 @@ export function useNotebookChat({
 
   return {
     handleSendMessage,
+    handleArtifactRequest,
     handleRegeneratePrompt,
     handleEditPrompt,
     handleClearChat,

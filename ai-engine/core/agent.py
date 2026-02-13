@@ -9,12 +9,18 @@ SessionTaskState is used to manage conversational context and mutations.
 from typing import AsyncGenerator, Optional, Dict, Any, List, Tuple
 from core.llm import get_langchain_llm, get_llm_config, chat_completion
 from core.conversation import get_conversation_manager
-from core.session_state import get_session_state, SessionTaskState
+from core.session_state import (
+    get_session_state,
+    SessionTaskState,
+    save_session_state,
+    load_session_state,
+)
 from core.router import route_message
 from core.validator import validate_retrieval_plan
 from core.retrieval_service import get_hybrid_context, fetch_source_metadata
 from core.tool_registry import registry
 from core.response_manager import ResponseManager
+from core.language import detect_session_language, build_language_instructions, normalize_query_with_cache
 from tools import ALL_TOOLS
 import json
 import re
@@ -108,7 +114,13 @@ def _is_artifact_related_question(message: str, artifact_context: Dict[str, Any]
         
     return False
 
-async def _handle_artifact_question(message: str, artifact_context: Dict[str, Any], history: List) -> str:
+async def _handle_artifact_question(
+    message: str,
+    artifact_context: Dict[str, Any],
+    history: List,
+    session_language: Optional[str] = None,
+    is_mixed_language: bool = False,
+) -> str:
     """
     SECURITY FIX - Phase 2: Handle questions about previously generated artifacts.
     """
@@ -131,6 +143,10 @@ async def _handle_artifact_question(message: str, artifact_context: Dict[str, An
     Be precise and refer to the exact content when possible.
     If asked about a specific item (like "question 3"), identify it clearly.
     """
+
+    # Multilingual behavior for artifact follow-up as well.
+    if session_language:
+        system_prompt += "\n\n" + build_language_instructions(session_language, is_mixed_language)
     
     messages = [{"role": "system", "content": system_prompt}]
     
@@ -231,8 +247,30 @@ async def run_agent(
     """
     # 1. Initialize State with proper user isolation
     session_state = get_session_state(session_id, user_id)
+
+    # PHASE 2 — SESSION STATE STORAGE (Redis-backed with in-memory fallback)
+    # Use a composite identifier to preserve user isolation semantics.
+    composite_id = f"{user_id}:{session_id}"
+    try:
+        cached_state = await load_session_state(composite_id)
+        if cached_state:
+            session_state.apply_dict(cached_state)
+    except Exception as e:
+        logger.warning(f"Failed to hydrate session state from Redis for {composite_id}: {e}")
     conv_manager = get_conversation_manager()
     history = conv_manager.get_history(user_id, session_id, limit=10)
+
+    # Detect and store the session_language based on the latest user message.
+    # This is done once per turn and reused across planner/tool/formatter steps.
+    prev_lang = session_state.session_language or "en"
+    session_lang, lang_conf, is_mixed_lang = detect_session_language(message, previous_language=prev_lang)
+    session_state.session_language = session_lang
+    logger.info(f"🌐 Session {session_id}: language={session_lang} (conf={lang_conf:.2f}, mixed={is_mixed_lang})")
+
+    # PHASE 3 — QUERY NORMALIZATION CACHE
+    # Use a cached, normalized form of the query for retrieval-only logic.
+    # The planner and conversation continue to see the raw user message.
+    normalized_query = await normalize_query_with_cache(message)
     
     # SECURITY FIX - Phase 2: Check for artifact context BEFORE retrieval planning
     artifact_context = session_state.get_artifact_context()
@@ -241,7 +279,13 @@ async def run_agent(
         yield {"type": "thinking", "content": f"💭 Referring to previous {artifact_context['type']}..."}
         
         # Handle artifact-specific questions without retrieval
-        response = await _handle_artifact_question(message, artifact_context, history)
+        response = await _handle_artifact_question(
+            message,
+            artifact_context,
+            history,
+            session_language=session_lang,
+            is_mixed_language=is_mixed_lang,
+        )
         
         # Stream response tokens
         for token_chunk in re.split(r"(\s+)", response):
@@ -251,6 +295,12 @@ async def run_agent(
         yield {"type": "complete", "message": response}
         conv_manager.save_turn(user_id, session_id, message, response, notebook_id,
                                sender_id=user_id, sender_name=sender_name)
+
+        # Refresh Redis TTL for this session state
+        try:
+            await save_session_state(composite_id, session_state.to_dict(), ttl_seconds=None)
+        except Exception as e:
+            logger.warning(f"Failed to persist session state to Redis for {composite_id}: {e}")
         return
     
     # Pre-fetch source metadata for the Planner
@@ -376,7 +426,7 @@ async def run_agent(
         policy=final_policy,
         mode=final_mode,
         source_ids=source_ids or [],
-        query=message,
+        query=normalized_query,
         token=token
     )
 
@@ -396,6 +446,10 @@ async def run_agent(
             system_prompt += "\n\nIf the provided context doesn't contain the answer but is related, say so. If completely unrelated, you may use your general knowledge but mention it's not in the sources."
     elif final_mode == "NONE" and notebook_id:
         system_prompt += "\n\nYou have access to the notebook but no specific context was retrieved for this turn. If the user is asking about the sources, suggest that they ask for a 'summary' or 'more detail'."
+
+    # Append language-specific instructions so the formatter LLM stays in the user's language.
+    if session_lang:
+        system_prompt += "\n\n" + build_language_instructions(session_lang, is_mixed_lang)
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -422,6 +476,12 @@ async def run_agent(
         yield {"type": "complete", "message": full_text}
         conv_manager.save_turn(user_id, session_id, message, full_text, notebook_id,
                                sender_id=user_id, sender_name=sender_name)
+
+        # Refresh Redis TTL for this session state at the end of the turn
+        try:
+            await save_session_state(composite_id, session_state.to_dict(), ttl_seconds=None)
+        except Exception as e:
+            logger.warning(f"Failed to persist session state to Redis for {composite_id}: {e}")
         
     except Exception as e:
         print(f"❌ Chat error: {e}")
