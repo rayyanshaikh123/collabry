@@ -74,15 +74,12 @@ async def generate_mindmap(
             # Continue without context if retrieval fails
             context = ""
         
-        # Build context prompt section (fix for f-string backslash issue)
-        context_prompt = ""
-        if context:
-            context_prompt = f"Use this context from the user's documents:\n{context}\n\n"
-        
         # Create prompt for mind map generation
         prompt = f"""Generate a hierarchical mind map for the topic: {topic}
 
-{context_prompt}Create a structured JSON mind map with the following format (hierarchical tree):
+{f"Use this context from the user's documents:\n{context}\n" if context else ""}
+
+Create a structured JSON mind map with the following format (hierarchical tree):
 {{
   "id": "root",
   "label": "Central Concept",

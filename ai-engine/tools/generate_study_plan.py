@@ -117,6 +117,11 @@ async def generate_study_plan(
         # Get OpenAI client
         client = get_async_openai_client()
         
+        # Build context prompt section (fix for f-string backslash issue)
+        context_prompt = ""
+        if context:
+            context_prompt = f"Reference material from student's notes:\n{context}\n\n"
+        
         # Create prompt for study plan
         prompt = f"""Generate a detailed study plan for:
 
@@ -126,9 +131,7 @@ Duration: {duration_days} days
 Daily Study Time: {daily_hours} hours
 Difficulty Level: {difficulty}
 
-{f"Reference material from student's notes:\n{context}\n" if context else ""}
-
-Create a JSON study plan with this structure:
+{context_prompt}Create a JSON study plan with this structure:
 {{
   "title": "Descriptive plan title",
   "subject": "{subject}",
