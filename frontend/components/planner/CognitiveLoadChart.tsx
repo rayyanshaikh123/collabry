@@ -48,13 +48,13 @@ export const CognitiveLoadChart: React.FC<CognitiveLoadChartProps> = ({
       const dateStr = date.toISOString().split('T')[0];
 
       const dayTasks = tasks.filter(
-        (task) => task.scheduledDate.split('T')[0] === dateStr
+        (task) => task.scheduledDate && task.scheduledDate.split('T')[0] === dateStr
       );
 
       const easyTasks = dayTasks.filter((t) => t.difficulty === 'easy').length;
       const mediumTasks = dayTasks.filter((t) => t.difficulty === 'medium').length;
       const hardTasks = dayTasks.filter((t) => t.difficulty === 'hard').length;
-      const totalMinutes = dayTasks.reduce((sum, t) => sum + t.duration, 0);
+      const totalMinutes = dayTasks.reduce((sum, t) => sum + (t.duration || 0), 0);
       const totalTasks = dayTasks.length;
 
       dayLoads.push({

@@ -71,7 +71,7 @@ export const DateDetailModal: React.FC<DateDetailModalProps> = ({
     const sortedTasks = [...tasks].sort((a, b) => {
         const timeA = a.timeSlotStart || a.scheduledTime || a.scheduledDate;
         const timeB = b.timeSlotStart || b.scheduledTime || b.scheduledDate;
-        return new Date(timeA).getTime() - new Date(timeB).getTime();
+        return new Date(timeA || 0).getTime() - new Date(timeB || 0).getTime();
     });
 
     const completedCount = tasks.filter(t => t.status === 'completed').length;

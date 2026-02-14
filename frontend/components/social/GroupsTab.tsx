@@ -153,7 +153,7 @@ export default function GroupsTab() {
 
           <Dialog open={isJoinOpen} onOpenChange={setIsJoinOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" variant="outline" className="flex-1 rounded-lg text-xs font-semibold">
+              <Button size="sm" className="flex-1 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">
                 Join Group
               </Button>
             </DialogTrigger>

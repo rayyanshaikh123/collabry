@@ -171,11 +171,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
                   setMobileOpen={setMobileOpen}
                 />
                 <NavItem
-                  id={AppRoute.SUBSCRIPTION}
-                  label="Subscription"
+                  id={AppRoute.SETTINGS}
+                  label="Settings"
                   icon={ICONS.Settings}
                   currentRoute={currentRoute}
                   isCollapsed={isCollapsed}
+                  onNavigate={onNavigate}
+                  setMobileOpen={setMobileOpen}
+                />
+                <NavItem
+                  id={AppRoute.SUBSCRIPTION}
+                  label="Subscription"
+                  icon={ICONS.TrendingUp}
+                  currentRoute={currentRoute}
+                isCollapsed={isCollapsed}
                   onNavigate={onNavigate}
                   setMobileOpen={setMobileOpen}
                 />

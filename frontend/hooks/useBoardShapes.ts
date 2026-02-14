@@ -160,6 +160,30 @@ export async function buildMindmapShapes(payload: any) {
     const assetId = generateAssetId();
     const svgDataUri = `data:image/svg+xml;base64,${svgBase64}`;
     
+    // Extract SVG dimensions from the SVG content
+    let width = 1600;
+    let height = 1200;
+    
+    try {
+      const svgContent = atob(svgBase64);
+      const viewBoxMatch = svgContent.match(/viewBox=["']([^"']+)["']/);
+      const widthMatch = svgContent.match(/width=["']?(\d+)/);
+      const heightMatch = svgContent.match(/height=["']?(\d+)/);
+      
+      if (viewBoxMatch) {
+        const [, , , vbWidth, vbHeight] = viewBoxMatch[1].split(/\s+/).map(Number);
+        if (vbWidth && vbHeight) {
+          width = Math.min(Math.max(vbWidth, 800), 2400); // Min 800px, max 2400px
+          height = Math.min(Math.max(vbHeight, 600), 1800); // Min 600px, max 1800px
+        }
+      } else if (widthMatch && heightMatch) {
+        width = Math.min(Math.max(Number(widthMatch[1]), 800), 2400);
+        height = Math.min(Math.max(Number(heightMatch[1]), 600), 1800);
+      }
+    } catch (e) {
+      console.warn('Could not extract SVG dimensions, using defaults:', e);
+    }
+    
     assets.push({
       id: assetId,
       type: 'image',
@@ -167,8 +191,8 @@ export async function buildMindmapShapes(payload: any) {
       props: {
         name: `${title}.svg`,
         src: svgDataUri,
-        w: 1600,
-        h: 1200,
+        w: width,
+        h: height,
         mimeType: 'image/svg+xml',
         isAnimated: false,
       },
@@ -192,8 +216,8 @@ export async function buildMindmapShapes(payload: any) {
         title: title,
       },
       props: {
-        w: 1600,
-        h: 1200,
+        w: width,
+        h: height,
         assetId: assetId,
         playing: true,
         url: '',

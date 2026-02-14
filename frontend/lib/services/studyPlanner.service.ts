@@ -653,9 +653,6 @@ class StudyPlannerService {
       if (response?.data?.success === false) {
         throw new Error(response.data?.message || response.data?.error || 'Schedule generation failed');
       }
-      if (response?.status === 401) {
-        throw new Error('Session expired. Please log in again.');
-      }
 
       const v2Data = response?.data?.data?.sessions != null
         ? response.data.data

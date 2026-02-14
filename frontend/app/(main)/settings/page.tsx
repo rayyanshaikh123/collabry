@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
 import { authService } from '@/lib/services/auth.service';
-import type { Session, ThemeType } from '@/types/user.types';
+import type { Session } from '@/types/user.types';
+import type { ThemeType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import {
   User,

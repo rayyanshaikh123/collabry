@@ -151,6 +151,7 @@ export default function MainLayout({
       'flashcards': '/flashcards',
       'profile': '/profile',
       'usage': '/usage',
+      'settings': '/settings?tab=notifications',
       'subscription': '/subscription',
       'pricing': '/pricing',
       'study-buddy': '/study-buddy',

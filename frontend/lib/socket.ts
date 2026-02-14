@@ -4,6 +4,7 @@
  */
 
 import { io, Socket } from 'socket.io-client';
+import { toast } from '@/hooks/use-toast';
 
 // Determine socket URL from env variables
 const getSocketUrl = () => {
@@ -103,7 +104,12 @@ class SocketClient {
         if (settled) return;
         settled = true;
         // Don't destroy the socket — let Socket.IO keep retrying in the background
-        console.error('[Board Socket] Initial connection timeout (15s). Socket will keep retrying.');
+        console.warn('[Board Socket] Initial connection timeout (15s). Socket will keep retrying.');
+        toast({
+          variant: 'warning',
+          title: 'Connection Delayed',
+          description: 'Board connection is taking longer than expected. Continuing to retry in background.',
+        });
         reject(new Error('Board socket connection timeout'));
       }, 15000);
 
@@ -111,21 +117,39 @@ class SocketClient {
         if (!settled) {
           settled = true;
           clearTimeout(timeout);
+          toast({
+            variant: 'success',
+            title: 'Connected',
+            description: 'Board collaboration is now active.',
+          });
           resolve(this.boardSocket!);
         }
       });
 
       this.boardSocket.on('connect_error', (error) => {
-        console.warn('[Board Socket] Connection error (will retry):', error.message, '| Description:', (error as any).description);
+        console.warn('[Board Socket] Connection error (will retry):', error.message);
         // Don't reject or destroy — let Socket.IO reconnection handle it
+        // Only show toast if it persists
       });
 
       this.boardSocket.on('error', (error) => {
         console.error('[Board Socket] Socket error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Connection Error',
+          description: 'Unable to connect to collaboration server. Your changes will sync when reconnected.',
+        });
       });
 
       this.boardSocket.on('disconnect', (reason) => {
         console.warn('[Board Socket] Disconnected:', reason);
+        if (reason === 'io server disconnect' || reason === 'transport close') {
+          toast({
+            variant: 'warning',
+            title: 'Disconnected',
+            description: 'Lost connection to collaboration server. Attempting to reconnect...',
+          });
+        }
       });
     });
   }

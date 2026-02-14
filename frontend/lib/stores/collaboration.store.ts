@@ -160,7 +160,7 @@ export const useCollaborationStore = create<CollaborationState>((set, get) => ({
   // Update presence
   updatePresence: (status: PresenceStatus) => {
     // TODO: Emit presence update via socket
-    const socket = socketClient.getSocket();
+    const socket = socketClient.getBoardSocket();
     socket?.emit('presence:update', { status });
   },
 }));

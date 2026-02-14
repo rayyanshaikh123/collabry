@@ -9,6 +9,7 @@ export enum AppRoute {
   FLASHCARDS = 'flashcards',
   PROFILE = 'profile',
   PROFILE_USAGE = 'usage',
+  SETTINGS = 'settings',
   SUBSCRIPTION = 'subscription',
   PRICING = 'pricing',
   ADMIN = 'admin',

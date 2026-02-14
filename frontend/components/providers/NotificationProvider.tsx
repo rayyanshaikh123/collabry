@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     useNotifications,
     useUnreadCount,
@@ -25,11 +26,50 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated } = useAuthStore();
+    const { isAuthenticated, accessToken } = useAuthStore();
+    const queryClient = useQueryClient();
 
-    // Data Fetching
-    const { data: notificationData, isLoading } = useNotifications({ limit: 20 });
-    const { data: initialUnreadCount } = useUnreadCount();
+    // Always enable queries - they'll return empty if not authenticated
+    // This fixes the timing issue where provider mounts before auth hydrates
+    const { data: notificationData, isLoading, error, refetch: refetchNotifications } = useNotifications({ 
+        limit: 20,
+        enabled: true // Always enabled, backend returns 401 if not auth'd
+    });
+    const { data: initialUnreadCount, refetch: refetchUnreadCount } = useUnreadCount({ 
+        enabled: true // Always enabled
+    });
+
+    // Refetch when auth becomes available
+    useEffect(() => {
+        console.log('[NotificationProvider] Auth state changed:', {
+            isAuthenticated,
+            hasToken: !!accessToken,
+            tokenLength: accessToken?.length || 0
+        });
+        
+        if (isAuthenticated && accessToken) {
+            console.log('[NotificationProvider] ✅ Auth available, invalidating cache and refetching...');
+            // Invalidate queries to clear cached 401 responses
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['unread-count'] });
+            
+            // Then refetch with proper auth
+            refetchNotifications();
+            refetchUnreadCount();
+        } else {
+            console.log('[NotificationProvider] ⏳ Waiting for auth...');
+        }
+    }, [isAuthenticated, accessToken, queryClient]);
+
+    // Debug logging for data
+    useEffect(() => {
+        console.log('[NotificationProvider] Data state:', { 
+            notificationCount: notificationData?.notifications?.length || 0,
+            unreadCount: initialUnreadCount,
+            isLoading,
+            error: error?.message || null
+        });
+    }, [notificationData, initialUnreadCount, isLoading, error]);
 
     // Mutation Hooks
     const markAsReadMutation = useMarkAsRead();
