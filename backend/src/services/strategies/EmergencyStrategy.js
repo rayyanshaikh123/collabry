@@ -259,6 +259,12 @@ class EmergencyStrategy extends AdaptiveStrategy {
         if (shouldPrune) {
           task.status = 'skipped';
           task.rescheduledReason = 'Emergency mode syllabus compression';
+          
+          // Ensure reschedulingHistory exists (for legacy tasks)
+          if (!Array.isArray(task.reschedulingHistory)) {
+            task.reschedulingHistory = [];
+          }
+          
           task.reschedulingHistory.push({
             timestamp: new Date(),
             reason: 'emergency_compression',

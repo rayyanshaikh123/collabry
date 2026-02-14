@@ -8,6 +8,7 @@ import {
   studyPlannerService,
   StudyPlan,
   StudyTask,
+  StudySession,
   CreatePlanData,
   CreateTaskData,
   AIGeneratedPlan,
@@ -26,6 +27,7 @@ export const studyPlannerKeys = {
   tasks: () => [...studyPlannerKeys.all, 'tasks'] as const,
   planTasks: (planId: string) => [...studyPlannerKeys.all, 'plans', planId, 'tasks'] as const,
   todayTasks: () => [...studyPlannerKeys.all, 'tasks', 'today'] as const,
+  todayEvents: () => [...studyPlannerKeys.all, 'events', 'today'] as const,
   upcomingTasks: () => [...studyPlannerKeys.all, 'tasks', 'upcoming'] as const,
   overdueTasks: () => [...studyPlannerKeys.all, 'tasks', 'overdue'] as const,
   task: (id: string) => [...studyPlannerKeys.all, 'tasks', id] as const,
@@ -44,8 +46,25 @@ export function usePlans(filters?: { status?: string; planType?: string }): UseQ
       console.log('📋 Filters used:', filters);
       return plans;
     },
-    staleTime: 0, // Always consider data stale
+    staleTime: 0,
     initialData: [],
+  });
+}
+
+export function useTodayEvents(): UseQueryResult<StudySession[], Error> {
+  return useQuery({
+    queryKey: studyPlannerKeys.todayEvents(),
+    queryFn: () => studyPlannerService.getTodayEvents(),
+    staleTime: 60 * 1000,
+    initialData: [],
+  });
+}
+
+export function useStudyEventsRange(startDate: string, endDate: string): UseQueryResult<StudySession[], Error> {
+  return useQuery({
+    queryKey: [...studyPlannerKeys.all, 'events', startDate, endDate],
+    queryFn: () => studyPlannerService.getEventsRange(startDate, endDate),
+    staleTime: 60 * 1000,
   });
 }
 
@@ -152,7 +171,6 @@ export function useTodayTasks(): UseQueryResult<StudyTask[], Error> {
     queryKey: studyPlannerKeys.todayTasks(),
     queryFn: async () => {
       const tasks = await studyPlannerService.getTodayTasks();
-      console.log('📅 Fetched today tasks:', tasks);
       return tasks;
     },
     refetchInterval: 60000, // Refetch every minute
@@ -252,7 +270,7 @@ export function useUpdateTask(): UseMutationResult<
       // Use the task data if available, otherwise use the taskId from variables
       const taskId = task?.id || variables.taskId;
       const planId = task?.planId || null;
-      
+
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.task(taskId) });
       if (planId) {
         queryClient.invalidateQueries({ queryKey: studyPlannerKeys.planTasks(planId) });
@@ -292,7 +310,7 @@ export function useCompleteTask(): UseMutationResult<
       // Use the task data if available, otherwise use the taskId from variables
       const taskId = task?.id || variables.taskId;
       const planId = task?.planId || null;
-      
+
       queryClient.invalidateQueries({ queryKey: studyPlannerKeys.task(taskId) });
       if (planId) {
         queryClient.invalidateQueries({ queryKey: studyPlannerKeys.planTasks(planId) });
@@ -372,6 +390,87 @@ export function useGeneratePlan(): UseMutationResult<AIGeneratedPlan, Error, Cre
     },
     onError: (error: Error) => {
       showAlert({ message: `Failed to generate plan: ${error.message}`, type: 'error' });
+    },
+  });
+}
+
+export function useRecoverMissed(): UseMutationResult<
+  any,
+  Error,
+  string,
+  unknown
+> {
+  const queryClient = useQueryClient();
+  const { showAlert } = useAlert();
+
+  return useMutation({
+    mutationFn: (planId: string) => studyPlannerService.recoverMissed(planId),
+    onSuccess: (response: any, planId) => {
+      // Handle both wrapped and unwrapped scenarios
+      const data = response?.data || response;
+
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.plan(planId) });
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.planTasks(planId) });
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayTasks() });
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayEvents() });
+
+      const rescheduled = data?.rescheduled || 0;
+      const totalMissed = data?.totalMissed || 0;
+
+      if (rescheduled > 0) {
+        showAlert({ message: `Rescheduled ${rescheduled} missed session(s) to new slots.`, type: 'success' });
+      } else if (totalMissed > 0) {
+        showAlert({ message: 'No free slots to reschedule; missed sessions marked.', type: 'warning' });
+      } else {
+        showAlert({ message: 'No missed sessions found.', type: 'success' });
+      }
+    },
+    onError: (error: Error) => {
+      showAlert({ message: `Recover failed: ${error.message}`, type: 'error' });
+    },
+  });
+}
+
+// ============================================================================
+// EVENT HOOKS (V2)
+// ============================================================================
+
+export function useUpdateEvent(): UseMutationResult<
+  StudySession,
+  Error,
+  { eventId: string; data: any },
+  unknown
+> {
+  const queryClient = useQueryClient();
+  const { showAlert } = useAlert();
+
+  return useMutation({
+    mutationFn: ({ eventId, data }) => studyPlannerService.updateEvent(eventId, data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayEvents() });
+      // Invalidate range queries
+      queryClient.invalidateQueries({ queryKey: [...studyPlannerKeys.all, 'events'] });
+      showAlert({ message: 'Event updated successfully', type: 'success' });
+    },
+    onError: (error: Error) => {
+      showAlert({ message: `Failed to update event: ${error.message}`, type: 'error' });
+    },
+  });
+}
+
+export function useDeleteEvent(): UseMutationResult<void, Error, string, unknown> {
+  const queryClient = useQueryClient();
+  const { showAlert } = useAlert();
+
+  return useMutation({
+    mutationFn: (eventId: string) => studyPlannerService.deleteEvent(eventId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studyPlannerKeys.todayEvents() });
+      queryClient.invalidateQueries({ queryKey: [...studyPlannerKeys.all, 'events'] });
+      showAlert({ message: 'Event deleted', type: 'success' });
+    },
+    onError: (error: Error) => {
+      showAlert({ message: `Failed to delete event: ${error.message}`, type: 'error' });
     },
   });
 }

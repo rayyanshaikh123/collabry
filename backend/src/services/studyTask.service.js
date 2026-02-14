@@ -218,6 +218,23 @@ class StudyTaskService {
       }
       
       await plan.save();
+
+      // Trigger Notifications
+      try {
+        const notificationService = require('./notification.service');
+        
+        // 1. Plan Completion
+        if (plan.completedTasks >= plan.totalTasks && plan.totalTasks > 0) {
+          await notificationService.notifyPlanCompleted(userId, plan);
+        }
+        
+        // 2. Streak Milestone (Every 5 days or specific milestones)
+        if (plan.currentStreak > 0 && (plan.currentStreak % 5 === 0 || [3, 7, 14, 30].includes(plan.currentStreak))) {
+          await notificationService.notifyStreakMilestone(userId, plan.currentStreak);
+        }
+      } catch (e) {
+        console.warn('Failed to send task completion notifications:', e.message);
+      }
     }
 
     return task;

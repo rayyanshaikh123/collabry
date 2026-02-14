@@ -93,6 +93,12 @@ class SchedulingService {
         if (task) {
           task.timeSlotStart = slotInfo.start;
           task.timeSlotEnd = slotInfo.end;
+          
+          // Initialize schedulingMetadata if it doesn't exist (for legacy tasks)
+          if (!task.schedulingMetadata) {
+            task.schedulingMetadata = {};
+          }
+          
           task.schedulingMetadata.isAutoScheduled = true;
           task.schedulingMetadata.lastScheduledAt = new Date();
           
@@ -323,6 +329,14 @@ class SchedulingService {
         
         if (overlap.hasOverlap) {
           // Update conflict flags
+          // Initialize schedulingMetadata if it doesn't exist (for legacy tasks)
+          if (!task1.schedulingMetadata) {
+            task1.schedulingMetadata = {};
+          }
+          if (!task2.schedulingMetadata) {
+            task2.schedulingMetadata = {};
+          }
+          
           task1.schedulingMetadata.conflictFlag = true;
           task1.schedulingMetadata.conflictCount = (task1.schedulingMetadata.conflictCount || 0) + 1;
           await task1.save();
@@ -534,6 +548,12 @@ class SchedulingService {
     task.timeSlotEnd = newEnd;
     task.scheduledDate = newStartTime;
     task.reschedule(newStartTime, reason);
+    
+    // Initialize schedulingMetadata if it doesn't exist (for legacy tasks)
+    if (!task.schedulingMetadata) {
+      task.schedulingMetadata = {};
+    }
+    
     task.schedulingMetadata.conflictFlag = false;
     task.schedulingMetadata.lastScheduledAt = new Date();
     

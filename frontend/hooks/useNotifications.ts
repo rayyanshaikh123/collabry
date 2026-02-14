@@ -6,10 +6,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationService, type Notification } from '@/lib/services/notification.service';
 import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 import { useAuthStore } from '@/lib/stores/auth.store';
-
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://colab-back.onrender.com';
+import { socketClient } from '@/lib/socket';
 
 /**
  * Hook to get all notifications
@@ -90,66 +89,57 @@ export const useRealtimeNotifications = () => {
   useEffect(() => {
     if (!accessToken) return;
 
-    // Connect to notification namespace
-    const notificationSocket = io(`${SOCKET_URL}/notifications`, {
-      auth: { token: accessToken },
-      transports: ['websocket', 'polling'],
-    });
+    let notificationSocket: Socket | null = null;
 
-    notificationSocket.on('connect', () => {
-      console.log('✓ Connected to notification socket');
-    });
+    // Connect via singleton client
+    socketClient.connectNotifications(accessToken)
+      .then((sock: Socket) => {
+        notificationSocket = sock;
+        setSocket(sock);
 
-    notificationSocket.on('disconnect', (reason) => {
-      // Only log meaningful disconnects (not React StrictMode cleanup)
-      if (reason !== 'io client disconnect') {
-        console.log('✗ Disconnected from notification socket:', reason);
-      }
-    });
+        // Remove any existing listeners to prevent duplicates if strict mode double-invokes
+        sock.off('new-notification');
+        sock.off('unread-count');
+        sock.off('error');
 
-    // Listen for new notifications
-    notificationSocket.on('new-notification', (notification: Notification) => {
-      console.log('🔔 New notification:', notification);
-      setLatestNotification(notification);
-      
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['unread-count'] });
-      
-      // Optional: Show browser notification
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(notification.title, {
-          body: notification.message,
-          icon: '/favicon.ico',
-          badge: '/favicon.ico',
+        // Listen for new notifications
+        sock.on('new-notification', (notification: Notification) => {
+          console.log('🔔 New notification:', notification);
+          setLatestNotification(notification);
+
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-count'] });
+
+          // Optional: Show browser notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(notification.title, {
+              body: notification.message,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+            });
+          }
         });
-      }
-    });
 
-    // Listen for unread count updates
-    notificationSocket.on('unread-count', ({ count }: { count: number }) => {
-      queryClient.setQueryData(['unread-count'], count);
-    });
+        // Listen for unread count updates
+        sock.on('unread-count', ({ count }: { count: number }) => {
+          queryClient.setQueryData(['unread-count'], count);
+        });
 
-    notificationSocket.on('error', (error: any) => {
-      console.error('Notification socket error:', error);
-    });
-
-    setSocket(notificationSocket);
+        sock.on('error', (error: any) => {
+          console.error('[Notification Socket] Error:', error);
+        });
+      })
+      .catch((err: any) => {
+        console.error('[Notification Socket] Failed to connect:', err);
+      });
 
     return () => {
-      // Only disconnect if socket is actually connected or connecting
-      // Prevents "WebSocket is closed before connection" errors in React StrictMode
-      // Note: This error is harmless in dev mode and doesn't occur in production
-      if (notificationSocket.connected) {
-        notificationSocket.disconnect();
-      } else if (notificationSocket.active) {
-        // Socket is connecting but not yet connected - just remove listeners
-        notificationSocket.removeAllListeners();
-        notificationSocket.close();
-      } else {
-        // Socket never connected - just close it
-        notificationSocket.close();
+      if (notificationSocket) {
+        // Remove listeners to prevent memory leaks/duplicates.
+        notificationSocket.off('new-notification');
+        notificationSocket.off('unread-count');
+        notificationSocket.off('error');
       }
     };
   }, [accessToken, queryClient]);

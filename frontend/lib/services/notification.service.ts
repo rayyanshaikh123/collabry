@@ -11,14 +11,15 @@ export interface Notification {
   type: string;
   title: string;
   message: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  priority: 'low' | 'medium' | 'high'; // Removed urgent
   isRead: boolean;
   readAt?: string;
   relatedEntity?: {
     entityType: string;
     entityId: string;
   };
-  actionUrl?: string;
+  actionLink?: string; // Preferred
+  actionUrl?: string; // Legacy
   actionText?: string;
   metadata?: any;
   createdAt: string;
@@ -46,14 +47,19 @@ class NotificationService {
   }): Promise<NotificationResponse> {
     try {
       const response = await apiClient.get(this.baseURL, { params: filters });
+      // Safely extract data from standard response { success, data, meta }
+      const data = response.data?.data || [];
+      const meta = response.data?.meta || {};
+
       return {
-        notifications: response.data,
-        total: (response as any).meta?.total || 0,
-        unreadCount: (response as any).meta?.unreadCount || 0,
+        notifications: Array.isArray(data) ? data : [],
+        total: meta.total || 0,
+        unreadCount: meta.unreadCount || 0,
       };
     } catch (error: any) {
       console.error('Failed to fetch notifications:', error);
-      throw error;
+      // Return empty state on error to prevent UI crash
+      return { notifications: [], total: 0, unreadCount: 0 };
     }
   }
 
@@ -63,7 +69,7 @@ class NotificationService {
   async getUnreadCount(): Promise<number> {
     try {
       const response = await apiClient.get(`${this.baseURL}/unread-count`);
-      return response.data.count;
+      return response.data?.data?.count ?? 0;
     } catch (error: any) {
       console.error('Failed to fetch unread count:', error);
       return 0;
@@ -76,7 +82,7 @@ class NotificationService {
   async markAsRead(notificationId: string): Promise<Notification> {
     try {
       const response = await apiClient.patch(`${this.baseURL}/${notificationId}/read`);
-      return response.data;
+      return response.data?.data;
     } catch (error: any) {
       console.error('Failed to mark notification as read:', error);
       throw error;
@@ -125,7 +131,7 @@ class NotificationService {
   async createTestNotification(type?: string): Promise<Notification> {
     try {
       const response = await apiClient.post(`${this.baseURL}/test`, { type });
-      return response.data.data;
+      return response.data?.data;
     } catch (error: any) {
       console.error('Failed to create test notification:', error);
       throw error;

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from server.schemas import HealthResponse, ErrorResponse
-from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan, voice_tutor
+from server.routes import chat, ingest, summarize, qa, mindmap, sessions, usage, studyplan, voice_tutor, planning_strategy
 from server.deps import get_current_user
 from server.middleware import UsageTrackingMiddleware
 from server.limit_middleware import UsageLimitMiddleware
@@ -202,6 +202,7 @@ app.include_router(qa.router)
 app.include_router(mindmap.router)
 app.include_router(usage.router)
 app.include_router(studyplan.router)
+app.include_router(planning_strategy.router)
 app.include_router(voice_tutor.router)
 
 

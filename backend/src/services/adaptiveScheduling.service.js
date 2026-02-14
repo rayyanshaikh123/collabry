@@ -105,6 +105,19 @@ class AdaptiveSchedulingService {
       logger.info(`[AdaptiveScheduling] Allocated ${allocations.length} tasks, skipped ${skipped.length}`);
       
       // Step 8: Batch update MongoDB
+      // First, ensure all tasks have schedulingMetadata initialized (for legacy tasks)
+      const taskIds = allocations.map(a => a.taskId);
+      await StudyTask.updateMany(
+        { 
+          _id: { $in: taskIds },
+          schedulingMetadata: { $exists: false }
+        },
+        {
+          $set: { schedulingMetadata: {} }
+        }
+      );
+      
+      // Now perform the actual updates
       const bulkOps = allocations.map(({ taskId, newSlot, priorityScore }) => {
         const oldTask = missedTasks.find(t => t._id.equals(taskId));
         

@@ -27,13 +27,13 @@ module.exports = (io) => {
       socket.user = { id: decoded.id, email: decoded.email, role: decoded.role };
       next();
     } catch (error) {
-      console.error('Notification namespace auth error:', error.message);
+      console.warn('Socket auth failed:', error.message);
       next(new Error('Invalid token'));
     }
   });
 
   notificationNamespace.on('connection', (socket) => {
-    const userId = socket.user?.id;
+    const userId = socket.userId;
 
     if (!userId) {
       socket.disconnect();
@@ -48,19 +48,19 @@ module.exports = (io) => {
     // Send initial unread count
     notificationService.getUnreadCount(userId).then((count) => {
       socket.emit('unread-count', { count });
-    });
+    }).catch(err => console.error('Failed to get unread count on connect', err));
 
     // Handle disconnect
     socket.on('disconnect', () => {
-      console.log(`✗ User ${userId} disconnected from notifications`);
+      // console.log(`User ${userId} disconnected from notifications`);
     });
 
     // Mark notification as read (real-time sync)
     socket.on('mark-as-read', async (data) => {
       try {
+        if (!data.notificationId) return;
         await notificationService.markAsRead(data.notificationId, userId);
-        const count = await notificationService.getUnreadCount(userId);
-        socket.emit('unread-count', { count });
+        // Service handles emitting the new count
       } catch (error) {
         socket.emit('error', { message: error.message });
       }
@@ -70,7 +70,7 @@ module.exports = (io) => {
     socket.on('mark-all-read', async () => {
       try {
         await notificationService.markAllAsRead(userId);
-        socket.emit('unread-count', { count: 0 });
+        // Service handles emitting the new count
       } catch (error) {
         socket.emit('error', { message: error.message });
       }
@@ -79,19 +79,3 @@ module.exports = (io) => {
 
   return notificationNamespace;
 };
-
-/**
- * Helper function to emit notification to user
- * Call this from other services/controllers
- */
-const emitNotificationToUser = (io, userId, notification) => {
-  const notificationNamespace = io.of('/notifications');
-  notificationNamespace.to(`user:${userId}`).emit('new-notification', notification);
-  
-  // Also emit updated unread count
-  notificationService.getUnreadCount(userId).then((count) => {
-    notificationNamespace.to(`user:${userId}`).emit('unread-count', { count });
-  });
-};
-
-module.exports.emitNotificationToUser = emitNotificationToUser;

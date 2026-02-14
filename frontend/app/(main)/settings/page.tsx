@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,15 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
 import { authService } from '@/lib/services/auth.service';
-import type { Session } from '@/types/user.types';
-import { 
-  User, 
-  Bell, 
-  Lock, 
-  Palette, 
+import type { Session, ThemeType } from '@/types/user.types';
+import { useToast } from '@/hooks/use-toast';
+import {
+  User,
+  Bell,
+  Lock,
+  Palette,
   Globe,
   Shield,
-  Eye,
   Moon,
   Sun,
   Monitor,
@@ -27,49 +28,24 @@ import {
   Smartphone,
   Laptop,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
-type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';
+import NotificationHistory from '@/components/NotificationHistory';
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
-  const { theme } = useUIStore();
-  
+  const { toast } = useToast();
+  const { user, setUser } = useAuthStore();
+  const { theme, setTheme, darkMode, setDarkMode } = useUIStore();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'profile';
+
   // Profile Settings
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    bio: '',
-    location: '',
-  });
-
-  // Notification Settings
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    pushNotifications: true,
-    friendRequests: true,
-    groupInvites: true,
-    communityUpdates: true,
-    studyReminders: true,
-    weeklyDigest: false,
-  });
-
-  // Privacy Settings
-  const [privacy, setPrivacy] = useState({
-    profileVisibility: 'public',
-    showEmail: false,
-    showActivity: true,
-    allowFriendRequests: true,
-    allowGroupInvites: true,
-  });
-
-  // Appearance Settings
-  const [appearance, setAppearance] = useState({
-    theme: theme || 'indigo',
-    darkMode: 'system',
-    fontSize: 'medium',
-    compactMode: false,
   });
 
   // Security Settings
@@ -77,7 +53,11 @@ export default function SettingsPage() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
-    twoFactorEnabled: false,
+  });
+  const [showPassword, setShowPassword] = useState({
+    current: false,
+    new: false,
+    confirm: false
   });
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -106,8 +86,9 @@ export default function SettingsPage() {
     try {
       await authService.revokeSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      toast({ title: 'Success', description: 'Session revoked successfully' });
     } catch (err: any) {
-      setSessionError(err.message || 'Failed to revoke session');
+      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Failed to revoke session' });
     } finally {
       setRevokingSessionId(null);
     }
@@ -146,13 +127,35 @@ export default function SettingsPage() {
     fetchSessions();
   }, []);
 
-  const handleSave = () => {
+  const handleProfileSave = async () => {
     setSaveStatus('saving');
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const updatedUser = await authService.updateProfile({ name: profileData.name });
+      setUser(updatedUser);
       setSaveStatus('saved');
+      toast({ title: 'Success', description: 'Profile updated successfully' });
       setTimeout(() => setSaveStatus('idle'), 2000);
-    }, 1000);
+    } catch (error: any) {
+      setSaveStatus('error');
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to update profile' });
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }
+  };
+
+  const handlePasswordUpdate = async () => {
+    if (security.newPassword !== security.confirmPassword) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Passwords do not match' });
+      return;
+    }
+
+    try {
+      await authService.changePassword(security.currentPassword, security.newPassword);
+      toast({ title: 'Success', description: 'Password updated successfully. Please login again.' });
+      setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      // Ideally redirect to login or logout
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to update password' });
+    }
   };
 
   return (
@@ -166,10 +169,11 @@ export default function SettingsPage() {
               Manage your account preferences and settings
             </p>
           </div>
+          {/* Only show save button on profile tab */}
           <Button
-            onClick={handleSave}
-            disabled={saveStatus === 'saving'}
-            className="bg-linear-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700"
+            onClick={handleProfileSave}
+            disabled={saveStatus === 'saving' || (user?.name === profileData.name)}
+            className={`bg-linear-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black border-b-4 border-indigo-700 ${saveStatus === 'saved' ? 'bg-emerald-500 hover:bg-emerald-600 border-emerald-700' : ''}`}
           >
             {saveStatus === 'saving' ? (
               <>
@@ -184,7 +188,7 @@ export default function SettingsPage() {
             ) : (
               <>
                 <Save size={18} className="mr-2" />
-                Save Changes
+                Save Profile
               </>
             )}
           </Button>
@@ -194,8 +198,8 @@ export default function SettingsPage() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto p-8">
         <div className="max-w-5xl mx-auto">
-          <Tabs defaultValue="profile" className="w-full">
-            <TabsList className="grid grid-cols-5 w-full mb-8">
+          <Tabs defaultValue={initialTab} className="w-full">
+            <TabsList className="grid grid-cols-4 w-full mb-8">
               <TabsTrigger value="profile" className="font-bold">
                 <User size={16} className="mr-2" />
                 Profile
@@ -203,10 +207,6 @@ export default function SettingsPage() {
               <TabsTrigger value="notifications" className="font-bold">
                 <Bell size={16} className="mr-2" />
                 Notifications
-              </TabsTrigger>
-              <TabsTrigger value="privacy" className="font-bold">
-                <Lock size={16} className="mr-2" />
-                Privacy
               </TabsTrigger>
               <TabsTrigger value="appearance" className="font-bold">
                 <Palette size={16} className="mr-2" />
@@ -223,7 +223,7 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="font-black">Profile Information</CardTitle>
-                  <CardDescription>Update your personal information and profile details</CardDescription>
+                  <CardDescription>Update your personal information</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -241,29 +241,10 @@ export default function SettingsPage() {
                       id="email"
                       type="email"
                       value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                      className="font-semibold"
+                      disabled
+                      className="font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bio" className="font-bold">Bio</Label>
-                    <Input
-                      id="bio"
-                      placeholder="Tell us about yourself"
-                      value={profileData.bio}
-                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                      className="font-semibold"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location" className="font-bold">Location</Label>
-                    <Input
-                      id="location"
-                      placeholder="City, Country"
-                      value={profileData.location}
-                      onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
-                      className="font-semibold"
-                    />
+                    <p className="text-xs text-slate-400">Email cannot be changed directly.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -271,151 +252,10 @@ export default function SettingsPage() {
 
             {/* Notifications Tab */}
             <TabsContent value="notifications" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-black">Notification Preferences</CardTitle>
-                  <CardDescription>Choose what notifications you want to receive</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Email Notifications</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Receive notifications via email</p>
-                    </div>
-                    <Switch
-                      checked={notifications.emailNotifications}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, emailNotifications: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Push Notifications</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Receive push notifications in browser</p>
-                    </div>
-                    <Switch
-                      checked={notifications.pushNotifications}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, pushNotifications: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Friend Requests</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Get notified when someone sends a friend request</p>
-                    </div>
-                    <Switch
-                      checked={notifications.friendRequests}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, friendRequests: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Group Invites</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Get notified when invited to a group</p>
-                    </div>
-                    <Switch
-                      checked={notifications.groupInvites}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, groupInvites: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Community Updates</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Get notified about community posts and updates</p>
-                    </div>
-                    <Switch
-                      checked={notifications.communityUpdates}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, communityUpdates: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Study Reminders</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Get reminders for scheduled study sessions</p>
-                    </div>
-                    <Switch
-                      checked={notifications.studyReminders}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, studyReminders: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Weekly Digest</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Receive weekly summary of your activities</p>
-                    </div>
-                    <Switch
-                      checked={notifications.weeklyDigest}
-                      onCheckedChange={(checked) => setNotifications({ ...notifications, weeklyDigest: checked })}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Privacy Tab */}
-            <TabsContent value="privacy" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-black">Privacy Settings</CardTitle>
-                  <CardDescription>Control who can see your information and interact with you</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Profile Visibility</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Who can view your profile</p>
-                    </div>
-                    <select 
-                      value={privacy.profileVisibility}
-                      onChange={(e) => setPrivacy({ ...privacy, profileVisibility: e.target.value })}
-                      className="px-4 py-2 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
-                    >
-                      <option value="public">Everyone</option>
-                      <option value="friends">Friends Only</option>
-                      <option value="private">Only Me</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Show Email</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Display email on your profile</p>
-                    </div>
-                    <Switch
-                      checked={privacy.showEmail}
-                      onCheckedChange={(checked) => setPrivacy({ ...privacy, showEmail: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Show Activity</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Display your study activity to others</p>
-                    </div>
-                    <Switch
-                      checked={privacy.showActivity}
-                      onCheckedChange={(checked) => setPrivacy({ ...privacy, showActivity: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Allow Friend Requests</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Let others send you friend requests</p>
-                    </div>
-                    <Switch
-                      checked={privacy.allowFriendRequests}
-                      onCheckedChange={(checked) => setPrivacy({ ...privacy, allowFriendRequests: checked })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Allow Group Invites</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Let others invite you to groups</p>
-                    </div>
-                    <Switch
-                      checked={privacy.allowGroupInvites}
-                      onCheckedChange={(checked) => setPrivacy({ ...privacy, allowGroupInvites: checked })}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Notification History */}
+              <div className="mt-8">
+                <NotificationHistory />
+              </div>
             </TabsContent>
 
             {/* Appearance Tab */}
@@ -432,63 +272,39 @@ export default function SettingsPage() {
                       {(['indigo', 'blue', 'amber', 'emerald', 'rose'] as const).map(color => (
                         <button
                           key={color}
-                          onClick={() => setAppearance({ ...appearance, theme: color as ThemeType })}
-                          className={`w-16 h-16 rounded-2xl bg-${color}-500 border-4 transition-all ${
-                            appearance.theme === color 
-                              ? 'border-slate-800 dark:border-slate-200 scale-110' 
-                              : 'border-slate-200 dark:border-slate-700 hover:scale-105'
-                          }`}
+                          onClick={() => setTheme(color as ThemeType)}
+                          className={`w-16 h-16 rounded-2xl bg-${color}-500 border-4 transition-all ${theme === color
+                            ? 'border-slate-800 dark:border-slate-200 scale-110'
+                            : 'border-slate-200 dark:border-slate-700 hover:scale-105'
+                            }`}
                         />
                       ))}
                     </div>
                   </div>
                   <div className="space-y-3">
                     <Label className="font-bold">Dark Mode</Label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3 max-w-md">
                       <button
-                        onClick={() => setAppearance({ ...appearance, darkMode: 'light' })}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                          appearance.darkMode === 'light'
-                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
-                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
+                        onClick={() => setDarkMode(false)}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${!darkMode
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
                       >
                         <Sun size={24} />
                         <span className="font-semibold text-sm">Light</span>
                       </button>
                       <button
-                        onClick={() => setAppearance({ ...appearance, darkMode: 'dark' })}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                          appearance.darkMode === 'dark'
-                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
-                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
+                        onClick={() => setDarkMode(true)}
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${darkMode
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
+                          : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
                       >
                         <Moon size={24} />
                         <span className="font-semibold text-sm">Dark</span>
                       </button>
-                      <button
-                        onClick={() => setAppearance({ ...appearance, darkMode: 'system' })}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                          appearance.darkMode === 'system'
-                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20'
-                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <Monitor size={24} />
-                        <span className="font-semibold text-sm">System</span>
-                      </button>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Compact Mode</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Use smaller spacing and elements</p>
-                    </div>
-                    <Switch
-                      checked={appearance.compactMode}
-                      onCheckedChange={(checked) => setAppearance({ ...appearance, compactMode: checked })}
-                    />
                   </div>
                 </CardContent>
               </Card>
@@ -504,35 +320,62 @@ export default function SettingsPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword" className="font-bold">Current Password</Label>
-                    <Input
-                      id="currentPassword"
-                      type="password"
-                      value={security.currentPassword}
-                      onChange={(e) => setSecurityData({ ...security, currentPassword: e.target.value })}
-                      className="font-semibold"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="currentPassword"
+                        type={showPassword.current ? "text" : "password"}
+                        value={security.currentPassword}
+                        onChange={(e) => setSecurityData({ ...security, currentPassword: e.target.value })}
+                        className="font-semibold pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword({ ...showPassword, current: !showPassword.current })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword.current ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword" className="font-bold">New Password</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={security.newPassword}
-                      onChange={(e) => setSecurityData({ ...security, newPassword: e.target.value })}
-                      className="font-semibold"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showPassword.new ? "text" : "password"}
+                        value={security.newPassword}
+                        onChange={(e) => setSecurityData({ ...security, newPassword: e.target.value })}
+                        className="font-semibold pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword({ ...showPassword, new: !showPassword.new })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword" className="font-bold">Confirm New Password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={security.confirmPassword}
-                      onChange={(e) => setSecurityData({ ...security, confirmPassword: e.target.value })}
-                      className="font-semibold"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showPassword.confirm ? "text" : "password"}
+                        value={security.confirmPassword}
+                        onChange={(e) => setSecurityData({ ...security, confirmPassword: e.target.value })}
+                        className="font-semibold pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword({ ...showPassword, confirm: !showPassword.confirm })}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
-                  <Button variant="outline" className="w-full font-bold">
+                  <Button onClick={handlePasswordUpdate} variant="outline" className="w-full font-bold">
                     Update Password
                   </Button>
                 </CardContent>
@@ -612,38 +455,6 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-black">Two-Factor Authentication</CardTitle>
-                  <CardDescription>Add an extra layer of security to your account</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="font-bold">Enable 2FA</Label>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Require a code in addition to your password</p>
-                    </div>
-                    <Switch
-                      checked={security.twoFactorEnabled}
-                      onCheckedChange={(checked) => setSecurityData({ ...security, twoFactorEnabled: checked })}
-                    />
-                  </div>
-                  {security.twoFactorEnabled && (
-                    <div className="mt-4 p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="text-indigo-600 dark:text-indigo-400 mt-0.5" size={20} />
-                        <div>
-                          <p className="font-bold text-indigo-900 dark:text-indigo-100">2FA is enabled</p>
-                          <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
-                            You'll need to use your authenticator app to log in
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               <Card className="border-rose-200 dark:border-rose-800">
                 <CardHeader>
                   <CardTitle className="font-black text-rose-600 dark:text-rose-400">Danger Zone</CardTitle>
@@ -662,4 +473,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

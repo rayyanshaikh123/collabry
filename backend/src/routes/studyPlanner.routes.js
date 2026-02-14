@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect } = require('../middlewares/auth.middleware');
 const studyPlanController = require('../controllers/studyPlan.controller');
 const studyTaskController = require('../controllers/studyTask.controller');
+const plannerController = require('../controllers/planner.controller');
 
 // ============================================================================
 // STUDY PLANS ROUTES
@@ -82,6 +83,29 @@ router.post('/plans/:id/auto-strategy', protect, studyPlanController.autoExecute
 
 // Time-block auto-scheduling (Phase 1)
 router.post('/plans/:id/auto-schedule', protect, studyPlanController.autoSchedulePlan);
+router.post('/plans/:id/recover-missed', protect, studyPlanController.recoverMissed);
+
+// ============================================================================
+// UNIFIED SCHEDULE: Task/Event Adapter Layer
+// ============================================================================
+
+const unifiedScheduleController = require('../controllers/unifiedSchedule.controller');
+
+// Unified schedule access (tasks + events)
+router.get('/plans/:id/schedule', protect, unifiedScheduleController.getUnifiedSchedule);
+router.post('/sync-completion', protect, unifiedScheduleController.syncCompletion);
+router.get('/plans/:id/model-preference', protect, unifiedScheduleController.getModelPreference);
+
+// ============================================================================
+// V2 PLANNER: strategy → scheduler → events (generate-v2, scheduler/*, study-events/*)
+// ============================================================================
+// Explicitly mount study-events/range to avoid router ambiguity
+router.get('/study-events/range', protect, plannerController.getEventsRange);
+router.post('/plans/:planId/events', protect, plannerController.saveEvents);
+router.put('/events/:eventId', protect, plannerController.updateEvent);
+router.delete('/events/:eventId', protect, plannerController.deleteEvent);
+
+router.use(plannerController);
 
 // ============================================================================
 // TIER-3: COLLABORATIVE SESSIONS (Placeholder)

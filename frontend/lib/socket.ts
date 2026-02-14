@@ -5,98 +5,150 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'https://colab-back.onrender.com';
+// Determine socket URL from env variables
+const getSocketUrl = () => {
+  // Prefer explicit socket URL
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
+    return process.env.NEXT_PUBLIC_SOCKET_URL;
+  }
+  // Fallback to API base URL (removing /api)
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL.replace('/api', '');
+  }
+  // Default fallback
+  return 'https://colab-back.onrender.com';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 class SocketClient {
   private socket: Socket | null = null;
   private boardSocket: Socket | null = null;
+  private notificationSocket: Socket | null = null;
+
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
+  /**
+   * Get common socket options
+   */
+  private getSocketOptions(token: string) {
+    return {
+      auth: { token },
+      transports: ['websocket', 'polling'], // Fallback to polling if websocket fails
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: this.maxReconnectAttempts,
+      path: '/socket.io/', // Standard Socket.IO path
+      withCredentials: true,
+    };
+  }
+
+  /**
+   * Connect to default namespace
+   */
   connect(token: string) {
     if (this.socket?.connected) {
       return this.socket;
     }
 
-    this.socket = io(SOCKET_URL, {
-      auth: {
-        token,
-      },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: this.maxReconnectAttempts,
-    });
+    // Cleanup existing if any
+    this.disconnect();
+
+    console.log('[Socket] Connecting to:', SOCKET_URL);
+
+    this.socket = io(SOCKET_URL, this.getSocketOptions(token));
 
     this.setupEventHandlers();
     return this.socket;
   }
 
+  /**
+   * Connect to Boards namespace
+   */
   connectBoards(token: string): Promise<Socket> {
     return new Promise((resolve, reject) => {
       // If already connected, resolve immediately
       if (this.boardSocket?.connected) {
-        console.log('[Board Socket] Already connected:', this.boardSocket.id);
         resolve(this.boardSocket);
         return;
       }
 
-      // If socket exists but not connected, disconnect and recreate
+      // Cleanup existing
       if (this.boardSocket) {
-        console.log('[Board Socket] Cleaning up existing disconnected socket');
         this.boardSocket.removeAllListeners();
-        this.boardSocket.close();
+        this.boardSocket.disconnect();
         this.boardSocket = null;
       }
 
-      console.log('[Board Socket] Creating new connection to:', `${SOCKET_URL}/boards`);
-      console.log('[Board Socket] Token length:', token?.length);
-      
-      this.boardSocket = io(`${SOCKET_URL}/boards`, {
-        auth: {
-          token,
-        },
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: this.maxReconnectAttempts,
-      });
+      this.boardSocket = io(`${SOCKET_URL}/board`, this.getSocketOptions(token));
 
       const timeout = setTimeout(() => {
-        console.error('[Board Socket] Connection timeout after 5s');
-        if (this.boardSocket) {
-          this.boardSocket.removeAllListeners();
-          this.boardSocket.close();
-          this.boardSocket = null;
+        if (!this.boardSocket?.connected) {
+          reject(new Error('Board socket connection timeout'));
         }
-        reject(new Error('Board socket connection timeout'));
       }, 5000);
 
       this.boardSocket.on('connect', () => {
-        console.log('[Board Socket] Connection established:', this.boardSocket?.id);
         clearTimeout(timeout);
+        console.log('[Board Socket] Connected');
         resolve(this.boardSocket!);
       });
 
-      this.boardSocket.on('connect_error', (error) => {
-        console.error('[Board Socket] Connection error:', error.message);
-        console.error('[Board Socket] Error details:', error);
+      this.boardSocket.on('connect_error', (err) => {
         clearTimeout(timeout);
-        if (this.boardSocket) {
-          this.boardSocket.removeAllListeners();
-          this.boardSocket.close();
-          this.boardSocket = null;
-        }
-        reject(error);
-      });
-
-      this.boardSocket.on('error', (error) => {
-        console.error('[Board Socket] Socket error:', error);
+        console.error('[Board Socket] Connection error:', err.message);
+        reject(err);
       });
 
       this.setupBoardEventHandlers();
+    });
+  }
+
+  /**
+   * Connect to Notifications namespace
+   */
+  connectNotifications(token: string): Promise<Socket> {
+    return new Promise((resolve, reject) => {
+      if (this.notificationSocket?.connected) {
+        resolve(this.notificationSocket);
+        return;
+      }
+
+      // Cleanup existing
+      if (this.notificationSocket) {
+        this.notificationSocket.removeAllListeners();
+        this.notificationSocket.disconnect();
+        this.notificationSocket = null;
+      }
+
+      console.log('[Notification Socket] Connecting...');
+
+      // Note: Namespace in backend is '/notifications'
+      this.notificationSocket = io(`${SOCKET_URL}/notifications`, this.getSocketOptions(token));
+
+      const timeout = setTimeout(() => {
+        if (!this.notificationSocket?.connected) {
+          console.warn('[Notification Socket] Connection timeout - checking status');
+          // Don't reject purely on timeout, let it keep retrying, but warn
+        }
+      }, 5000);
+
+      this.notificationSocket.on('connect', () => {
+        clearTimeout(timeout);
+        console.log('[Notification Socket] Connected');
+        resolve(this.notificationSocket!);
+      });
+
+      this.notificationSocket.on('connect_error', (err) => {
+        // Don't reject immediately, allowing reconnect logic to work
+        console.error('[Notification Socket] Connection error:', err.message);
+      });
+
+      this.notificationSocket.on('error', (err) => {
+        console.error('[Notification Socket] Error:', err);
+      });
     });
   }
 
@@ -113,33 +165,16 @@ class SocketClient {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error);
+      console.error('[Socket] Connection error:', error.message);
       this.reconnectAttempts++;
-      
-      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        console.error('[Socket] Max reconnection attempts reached');
-        this.disconnect();
-      }
-    });
-
-    this.socket.on('reconnect', (attemptNumber) => {
-      console.log('[Socket] Reconnected after', attemptNumber, 'attempts');
     });
   }
 
   private setupBoardEventHandlers() {
     if (!this.boardSocket) return;
 
-    this.boardSocket.on('connect', () => {
-      console.log('[Board Socket] Connected:', this.boardSocket?.id);
-    });
-
     this.boardSocket.on('disconnect', (reason) => {
       console.log('[Board Socket] Disconnected:', reason);
-    });
-
-    this.boardSocket.on('connect_error', (error) => {
-      console.error('[Board Socket] Connection error:', error);
     });
   }
 
@@ -149,11 +184,8 @@ class SocketClient {
       this.socket.disconnect();
       this.socket = null;
     }
-    if (this.boardSocket) {
-      this.boardSocket.removeAllListeners();
-      this.boardSocket.disconnect();
-      this.boardSocket = null;
-    }
+    this.disconnectBoards();
+    this.disconnectNotifications();
   }
 
   disconnectBoards() {
@@ -161,24 +193,22 @@ class SocketClient {
       this.boardSocket.removeAllListeners();
       this.boardSocket.disconnect();
       this.boardSocket = null;
-      console.log('[Board Socket] Disconnected and cleaned up');
+    }
+  }
+
+  disconnectNotifications() {
+    if (this.notificationSocket) {
+      this.notificationSocket.removeAllListeners();
+      this.notificationSocket.disconnect();
+      this.notificationSocket = null;
     }
   }
 
   // Board collaboration events
   joinBoard(boardId: string, callback?: (response: any) => void) {
-    if (!this.boardSocket) {
-      console.error('[Board Socket] Cannot join board - socket not initialized');
-      callback?.({ error: 'Socket not connected' });
-      return;
+    if (this.boardSocket?.connected) {
+      this.boardSocket.emit('board:join', { boardId }, callback);
     }
-    if (!this.boardSocket.connected) {
-      console.error('[Board Socket] Cannot join board - socket not connected');
-      callback?.({ error: 'Socket not connected' });
-      return;
-    }
-    console.log('[Board Socket] Emitting board:join for:', boardId);
-    this.boardSocket.emit('board:join', { boardId }, callback);
   }
 
   leaveBoard(boardId: string) {
@@ -229,10 +259,12 @@ class SocketClient {
   onCursorMove(callback: (data: any) => void) {
     this.boardSocket?.on('cursor:moved', callback);
   }
-  // Remove event listeners from sockets
+
+  // Note: 'off' needs to know which socket. Defaulting to boardSocket as it seems to be the main use case for dynamic listeners
   off(event: string, callback?: any) {
-    this.socket?.off(event, callback);
     this.boardSocket?.off(event, callback);
+    this.notificationSocket?.off(event, callback);
+    this.socket?.off(event, callback);
   }
 
   // Listen for full board updates
@@ -240,22 +272,17 @@ class SocketClient {
     this.boardSocket?.on('board:update', callback);
   }
 
-  // Check connection status
+  // Notification methods
+  getNotificationSocket(): Socket | null {
+    return this.notificationSocket;
+  }
+
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
 
   isBoardConnected(): boolean {
     return this.boardSocket?.connected ?? false;
-  }
-
-  // Get socket instance for advanced usage
-  getSocket(): Socket | null {
-    return this.socket;
-  }
-
-  getBoardSocket(): Socket | null {
-    return this.boardSocket;
   }
 }
 

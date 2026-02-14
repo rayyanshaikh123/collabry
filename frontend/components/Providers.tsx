@@ -11,6 +11,7 @@ import { queryClient } from '@/lib/queryClient';
 import { ThemeProvider } from './ThemeProvider';
 import { DarkModeInit } from './DarkModeInit';
 import AlertModal from '@/components/AlertModal';
+import { NotificationProvider } from './providers/NotificationProvider';
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -21,8 +22,10 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <DarkModeInit />
       <ThemeProvider>
-        {children}
-        <AlertModal />
+        <NotificationProvider>
+          {children}
+          <AlertModal />
+        </NotificationProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
