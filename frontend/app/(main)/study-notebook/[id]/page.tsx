@@ -85,7 +85,7 @@ export default function StudyNotebookPage() {
   const createQuiz = useCreateQuiz();
 
   // Chat state
-  const { data: sessionMessagesData } = useSessionMessages(notebook?.aiSessionId || '');
+  const { data: sessionMessagesData, isLoading: sessionMessagesLoading, error: sessionMessagesError } = useSessionMessages(notebook?.aiSessionId || '');
   const clearSessionMessages = useClearSessionMessages();
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
@@ -97,6 +97,14 @@ export default function StudyNotebookPage() {
 
   useEffect(() => {
     const currentSessionId = notebook?.aiSessionId;
+    console.log('[PERSISTENCE DEBUG] useEffect triggered:', { 
+      hasAiSessionId: !!currentSessionId,
+      aiSessionId: currentSessionId,
+      loading: sessionMessagesLoading,
+      error: sessionMessagesError,
+      dataLength: sessionMessagesData?.length 
+    });
+
     if (!currentSessionId) {
       setLocalMessages([]);
       hasLoadedMessagesRef.current = false;
@@ -109,7 +117,8 @@ export default function StudyNotebookPage() {
       lastSessionIdRef.current = currentSessionId;
     }
 
-    if (sessionMessagesData && Array.isArray(sessionMessagesData)) {
+    // Only load if we have actual messages data (not empty array from initial load)
+    if (sessionMessagesData && Array.isArray(sessionMessagesData) && sessionMessagesData.length > 0) {
       const formattedMessages: ChatMessage[] = sessionMessagesData.map((msg: any) => {
         // Resolve sender attribution
         let senderName = undefined;
@@ -149,9 +158,14 @@ export default function StudyNotebookPage() {
 
       // Load history only once per session or when explicitly requested
       if (!hasLoadedMessagesRef.current) {
+        console.log('[Notebook] Loading chat history:', formattedMessages.length, 'messages');
         setLocalMessages(formattedMessages);
         hasLoadedMessagesRef.current = true;
       }
+    } else if (sessionMessagesData && sessionMessagesData.length === 0 && !hasLoadedMessagesRef.current) {
+      // Empty session - mark as loaded so we don't keep checking
+      console.log('[Notebook] No chat history found for session');
+      hasLoadedMessagesRef.current = true;
     }
   }, [sessionMessagesData, notebook?.aiSessionId, notebook]);
 

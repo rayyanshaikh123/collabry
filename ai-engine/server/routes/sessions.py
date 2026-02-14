@@ -272,6 +272,7 @@ async def get_session_messages(
         session = verify_session_access(session_id, user_id)
         
         # Fetch messages
+        logger.info(f"[PERSISTENCE DEBUG] Fetching messages for session_id: {session_id}")
         messages_cursor = messages_collection.find(
             {"session_id": session_id}
         ).sort("timestamp", 1)
@@ -285,6 +286,7 @@ async def get_session_messages(
                 user_id=msg_doc.get("user_id")
             ))
         
+        logger.info(f"[PERSISTENCE DEBUG] Found {len(messages)} messages for session {session_id}")
         return messages
         
     except HTTPException:
@@ -628,6 +630,7 @@ async def session_chat_stream(
                 # Save messages after streaming completes
                 try:
                     # Save user-visible message (never the internal artifact prompt)
+                    logger.info(f"[PERSISTENCE DEBUG] Saving messages for session_id: {session_id}")
                     user_msg = {
                         "session_id": session_id,
                         "user_id": user_id,
@@ -637,6 +640,7 @@ async def session_chat_stream(
                         "created_at": datetime.utcnow()
                     }
                     messages_collection.insert_one(user_msg)
+                    logger.info(f"[PERSISTENCE DEBUG] Saved user message: {user_message[:50]}...")
                     
                     # Save assistant response
                     assistant_msg = {
@@ -647,6 +651,7 @@ async def session_chat_stream(
                         "created_at": datetime.utcnow()
                     }
                     messages_collection.insert_one(assistant_msg)
+                    logger.info(f"[PERSISTENCE DEBUG] Saved assistant response ({len(full_response)} chars)")
                     
                     # Update session's last message
                     sessions_collection.update_one(

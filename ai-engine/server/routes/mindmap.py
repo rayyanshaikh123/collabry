@@ -11,7 +11,7 @@ import logging
 from fastapi import Body, Query
 from fastapi.responses import JSONResponse
 from typing import Optional
-from tools.tool_loader import load_tools
+from tools.mindmap_generator import TOOL as mindmap_tool
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["mindmap"])
@@ -32,18 +32,17 @@ async def render_mindmap(
     try:
         logger.info(f"Mindmap render request from user={user_id}, format={format}")
 
-        # Load tools and locate mindmap_generator
-        tools_registry = load_tools()
-        mg_tool = tools_registry.get('mindmap_generator')
-        if not mg_tool:
+        # Get the mindmap generator function from tool registry
+        generate_mindmap = mindmap_tool.get('func')
+        if not generate_mindmap or not callable(generate_mindmap):
             return JSONResponse({"error": "mindmap_generator tool not available"}, status_code=500)
 
-        func = mg_tool.get('func')
-        if not callable(func):
-            return JSONResponse({"error": "mindmap_generator tool invalid"}, status_code=500)
-
-        # Call the tool - it returns mermaid and svg_base64 when possible
-        result = func(mindmap)
+        # Call the mindmap generator function
+        result = generate_mindmap(mindmap, render_svg=(format in ('svg', 'both')))
+        
+        # Check for errors
+        if 'error' in result:
+            return JSONResponse({"error": result['error']}, status_code=500)
 
         # Prepare response based on requested format
         out: dict = {"mermaid": result.get('mermaid'), "json": result.get('json')}

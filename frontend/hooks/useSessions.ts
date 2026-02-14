@@ -7,12 +7,12 @@ import { sessionsService, type Message, type ChatSession } from '@/lib/services/
 import { useAuthStore } from '@/lib/stores/auth.store';
 
 export function useSessions() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, accessToken } = useAuthStore();
   
   return useQuery({
     queryKey: ['sessions', user?.id],
     queryFn: () => sessionsService.getSessions(),
-    enabled: !!user && isAuthenticated,
+    enabled: !!user && isAuthenticated && !!accessToken,
     staleTime: 30000, // 30 seconds
     retry: (failureCount, error: any) => {
       // Don't retry on authentication errors
@@ -35,15 +35,29 @@ export function useCreateSession() {
 }
 
 export function useSessionMessages(sessionId: string) {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, accessToken } = useAuthStore();
+  const enabled = !!user && isAuthenticated && !!accessToken && !!sessionId;
+
+  console.log('[PERSISTENCE DEBUG] useSessionMessages:', { 
+    sessionId, 
+    enabled, 
+    hasUser: !!user, 
+    isAuthenticated, 
+    hasAccessToken: !!accessToken 
+  });
   
   return useQuery({
     queryKey: ['session-messages', sessionId],
-    queryFn: () => sessionsService.getSessionMessages(sessionId),
-    enabled: !!user && isAuthenticated && !!sessionId,
+    queryFn: () => {
+      console.log('[PERSISTENCE DEBUG] Fetching messages for session:', sessionId);
+      return sessionsService.getSessionMessages(sessionId);
+    },
+    enabled,
     staleTime: 60000, // Consider data fresh for 60 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes (renamed from cacheTime)
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
-    refetchOnMount: true, // Fetch on mount to restore messages after page reload
+    refetchOnMount: 'always', // Always fetch on mount to restore messages after page reload
+    retry: 1, // Retry once on failure
   });
 }
 

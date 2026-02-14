@@ -14,9 +14,12 @@ import { socketClient } from '@/lib/socket';
  * Hook to get all notifications
  */
 export const useNotifications = (filters?: { isRead?: boolean; limit?: number }) => {
+  const { isAuthenticated, accessToken } = useAuthStore();
+  
   return useQuery({
     queryKey: ['notifications', filters],
     queryFn: () => notificationService.getNotifications(filters),
+    enabled: isAuthenticated && !!accessToken, // Only fetch when authenticated AND have token
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 };
@@ -25,9 +28,12 @@ export const useNotifications = (filters?: { isRead?: boolean; limit?: number })
  * Hook to get unread count
  */
 export const useUnreadCount = () => {
+  const { isAuthenticated, accessToken } = useAuthStore();
+  
   return useQuery({
     queryKey: ['unread-count'],
     queryFn: () => notificationService.getUnreadCount(),
+    enabled: isAuthenticated && !!accessToken, // Only fetch when authenticated AND have token
     refetchInterval: 15000, // Refetch every 15 seconds
   });
 };

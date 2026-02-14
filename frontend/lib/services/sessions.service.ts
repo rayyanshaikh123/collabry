@@ -41,11 +41,16 @@ class SessionsService {
    * Get all sessions for the current user
    */
   async getSessions(): Promise<SessionsListResponse> {
-    // Use absolute URL to call AI engine while still benefiting
-    // from the centralized token handling in apiClient.
-    const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
-    const response = await apiClient.getClient().get<{ success: boolean; data: SessionsListResponse }>(url);
-    return response.data.data;
+    try {
+      // Use absolute URL to call AI engine while still benefiting
+      // from the centralized token handling in apiClient.
+      const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions`;
+      const response = await apiClient.getClient().get<{ success: boolean; data: SessionsListResponse }>(url);
+      return response.data.data || { sessions: [], total: 0, limit_reached: false, max_sessions: 50 };
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error);
+      return { sessions: [], total: 0, limit_reached: false, max_sessions: 50 };
+    }
   }
 
   /**
@@ -62,8 +67,10 @@ class SessionsService {
    */
   async getSessionMessages(sessionId: string): Promise<Message[]> {
     const url = `${AI_ENGINE_URL.replace(/\/+$/, '')}/ai/sessions/${sessionId}/messages`;
-    const response = await apiClient.getClient().get<{ success: boolean; data: Message[] }>(url);
-    return response.data.data;
+    const response = await apiClient.getClient().get<Message[]>(url);
+    console.log('[PERSISTENCE DEBUG] API response:', response.data);
+    // Backend returns array directly, not wrapped in { success, data }
+    return Array.isArray(response.data) ? response.data : [];
   }
 
   /**

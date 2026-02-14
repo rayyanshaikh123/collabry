@@ -301,6 +301,11 @@ class SocketClient {
     return this.notificationSocket;
   }
 
+  // Board socket getter
+  getBoardSocket(): Socket | null {
+    return this.boardSocket;
+  }
+
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }

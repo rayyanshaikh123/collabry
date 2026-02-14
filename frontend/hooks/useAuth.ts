@@ -89,12 +89,12 @@ export const useLogout = () => {
  * Hook to fetch current user
  */
 export const useCurrentUser = () => {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, accessToken } = useAuthStore();
   
   return useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => authService.getCurrentUser(),
-    enabled: isAuthenticated && !user,
+    enabled: isAuthenticated && !!accessToken && !user,
     staleTime: Infinity, // User data rarely changes
   });
 };

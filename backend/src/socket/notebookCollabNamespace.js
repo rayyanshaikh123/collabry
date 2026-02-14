@@ -1,5 +1,7 @@
 const NotebookSession = require('../models/NotebookSession');
 const Notebook = require('../models/Notebook');
+const jwt = require('jsonwebtoken');
+const config = require('../config/env');
 
 /**
  * Notebook Collaboration Namespace
@@ -8,8 +10,27 @@ const Notebook = require('../models/Notebook');
 module.exports = function (io) {
     const nsp = io.of('/notebook-collab');
 
+    // Authentication middleware
+    nsp.use((socket, next) => {
+        const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
+
+        if (!token) {
+            return next(new Error('Authentication required'));
+        }
+
+        try {
+            const decoded = jwt.verify(token, config.jwt.accessSecret);
+            socket.userId = decoded.id;
+            socket.userEmail = decoded.email;
+            next();
+        } catch (error) {
+            console.warn('[Collab] Auth failed:', error.message);
+            return next(new Error('Invalid token'));
+        }
+    });
+
     nsp.on('connection', (socket) => {
-        console.log(`[Collab] User connected: ${socket.id}`);
+        console.log(`[Collab] User ${socket.userEmail} connected: ${socket.id}`);
 
         // Join notebook room
         socket.on('notebook:join', async ({ notebookId, userId, displayName, avatar }) => {
