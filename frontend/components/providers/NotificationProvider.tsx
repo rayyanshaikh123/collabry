@@ -29,14 +29,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const { isAuthenticated, accessToken } = useAuthStore();
     const queryClient = useQueryClient();
 
-    // Always enable queries - they'll return empty if not authenticated
-    // This fixes the timing issue where provider mounts before auth hydrates
+    // Enable queries only when authenticated AND have access token
+    // This prevents 401 errors before login
+    const shouldFetch = isAuthenticated && !!accessToken;
+    
     const { data: notificationData, isLoading, error, refetch: refetchNotifications } = useNotifications({ 
         limit: 20,
-        enabled: true // Always enabled, backend returns 401 if not auth'd
+        enabled: shouldFetch // Only fetch when authenticated
     });
     const { data: initialUnreadCount, refetch: refetchUnreadCount } = useUnreadCount({ 
-        enabled: true // Always enabled
+        enabled: shouldFetch // Only fetch when authenticated
     });
 
     // Refetch when auth becomes available

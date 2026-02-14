@@ -320,4 +320,9 @@ export interface ApiResponse<T> {
     code?: string;
   };
   message?: string;
+  meta?: {
+    total?: number;
+    unreadCount?: number;
+    [key: string]: any;
+  };
 }

@@ -20,14 +20,15 @@ export const authService = {
    * Login with email and password
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post<{ user: User; accessToken: string }>('/auth/login', credentials);
+    const response = await apiClient.post<{ user: User; accessToken: string; csrfToken: string }>('/auth/login', credentials);
 
     if (response.success && response.data) {
-      // Backend sends accessToken in JSON body, refreshToken via httpOnly cookie
+      // Backend sends accessToken and csrfToken in JSON body, refreshToken via httpOnly cookie
       return {
         user: response.data.user,
         tokens: {
           accessToken: response.data.accessToken,
+          csrfToken: response.data.csrfToken,
           // refreshToken is now an httpOnly cookie — not in JSON
         },
       };
@@ -65,15 +66,18 @@ export const authService = {
   /**
    * Refresh access token
    */
-  async refreshToken(): Promise<string> {
+  async refreshToken(): Promise<{ accessToken: string; csrfToken: string }> {
     // Refresh token is sent automatically via httpOnly cookie (withCredentials: true)
     // Use a short timeout — if the backend is down we shouldn't block the UI for minutes
-    const response = await apiClient.post<{ accessToken: string }>('/auth/refresh', undefined, {
+    const response = await apiClient.post<{ accessToken: string; csrfToken: string }>('/auth/refresh', undefined, {
       timeout: 10000, // 10 seconds
     });
 
     if (response.success && response.data) {
-      return response.data.accessToken;
+      return {
+        accessToken: response.data.accessToken,
+        csrfToken: response.data.csrfToken,
+      };
     }
 
     throw new Error('Token refresh failed');

@@ -75,6 +75,8 @@ app.use(verifyCsrfToken({
   excludePaths: [
     '/api/webhooks', // Razorpay webhooks don't have CSRF cookies
     '/api/auth/refresh', // Refresh uses httpOnly cookie — CSRF not needed
+    '/api/auth/login', // First request — user doesn't have CSRF token yet
+    '/api/auth/register', // First request — user doesn't have CSRF token yet
   ],
 }));
 

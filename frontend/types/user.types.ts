@@ -20,6 +20,7 @@ export interface User {
 export interface AuthTokens {
   accessToken: string;
   refreshToken?: string; // Now httpOnly cookie — not returned in JSON body
+  csrfToken?: string; // Returned in response body for cross-origin setups
   expiresIn?: number;
 }
 

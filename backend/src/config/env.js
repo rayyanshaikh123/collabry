@@ -136,7 +136,8 @@ const config = {
     from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     fromName: process.env.EMAIL_FROM_NAME || 'Collabry',
   },
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  // Remove trailing slashes from frontend URL to ensure CORS works correctly
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, ''),
 };
 
 module.exports = config;

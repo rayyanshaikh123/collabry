@@ -34,18 +34,25 @@ const generateCsrfToken = () => {
  * Middleware: Ensure a CSRF cookie exists (set one if missing)
  */
 const ensureCsrfToken = (req, res, next) => {
-  if (!req.cookies[CSRF_COOKIE_NAME]) {
-    const token = generateCsrfToken();
+  let token = req.cookies[CSRF_COOKIE_NAME];
+  
+  if (!token) {
+    token = generateCsrfToken();
     res.cookie(CSRF_COOKIE_NAME, token, {
       httpOnly: false, // Frontend JS MUST be able to read this
       secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
     });
     // Also set it on the request so verify can use it in the same cycle
     req.cookies[CSRF_COOKIE_NAME] = token;
   }
+  
+  // Expose token via res.locals so controllers can include it in response body
+  // This is needed for cross-origin setups where frontend can't read backend cookies
+  res.locals.csrfToken = token;
+  
   next();
 };
 

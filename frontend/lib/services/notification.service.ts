@@ -81,7 +81,7 @@ class NotificationService {
   async getUnreadCount(): Promise<number> {
     try {
       const response = await apiClient.get(`${this.baseURL}/unread-count`);
-      return response.data?.count ?? response.count ?? 0;
+      return response.data?.count ?? 0;
     } catch (error: any) {
       console.error('Failed to fetch unread count:', error);
       return 0;

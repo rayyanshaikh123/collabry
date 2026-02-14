@@ -18,6 +18,7 @@ interface AuthState {
   // State
   user: User | null;
   accessToken: string | null; // in-memory only — NOT persisted
+  csrfToken: string | null; // in-memory only — needed for cross-origin requests
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -29,6 +30,7 @@ interface AuthState {
   logout: () => Promise<void>;
   setUser: (user: User) => void;
   setAccessToken: (token: string) => void;
+  setCsrfToken: (token: string) => void;
   refreshSession: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => Promise<void>;
@@ -41,6 +43,7 @@ export const useAuthStore = create<AuthState>()(
       // Initial state
       user: null,
       accessToken: null,
+      csrfToken: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -56,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: response.user,
             accessToken: response.tokens.accessToken,
+            csrfToken: response.tokens.csrfToken,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -106,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             accessToken: null,
+            csrfToken: null,
             isAuthenticated: false,
             error: null,
             isLoading: false,
@@ -123,12 +128,20 @@ export const useAuthStore = create<AuthState>()(
         set({ accessToken: token });
       },
 
+      // Set CSRF token (called by api.ts after refresh)
+      setCsrfToken: (token: string) => {
+        set({ csrfToken: token });
+      },
+
       // Refresh session — uses httpOnly cookie automatically
       refreshSession: async () => {
         try {
-          const newAccessToken = await authService.refreshToken();
+          const response = await authService.refreshToken();
 
-          set({ accessToken: newAccessToken });
+          set({ 
+            accessToken: response.accessToken,
+            csrfToken: response.csrfToken,
+          });
         } catch (error) {
           // Refresh failed — clear state directly (don't call logout() which
           // makes another API call that could also fail and loop)
@@ -136,6 +149,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             accessToken: null,
+            csrfToken: null,
             isAuthenticated: false,
             error: null,
             isLoading: false,
@@ -191,6 +205,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: null,
             accessToken: null,
+            csrfToken: null,
             isAuthenticated: false,
             isLoading: false,
           });

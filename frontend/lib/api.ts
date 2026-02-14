@@ -37,7 +37,8 @@ class ApiClient {
           config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // Attach CSRF token from cookie for state-mutating requests
+        // Attach CSRF token from store for state-mutating requests
+        // In cross-origin setups, we can't read the backend's cookie from JS
         const csrfToken = this.getCsrfToken();
         if (csrfToken && config.headers) {
           config.headers['x-csrf-token'] = csrfToken;
@@ -129,13 +130,12 @@ class ApiClient {
   }
 
   /**
-   * Read the CSRF token from the csrfToken cookie.
-   * This cookie is non-httpOnly so JS can read it.
+   * Get the CSRF token from Zustand store.
+   * In cross-origin setups, we can't read the backend's cookie from document.cookie,
+   * so the backend includes it in login/refresh response bodies.
    */
   private getCsrfToken(): string | null {
-    if (typeof document === 'undefined') return null; // SSR safety
-    const match = document.cookie.match(/(?:^|;\s*)csrfToken=([^;]*)/);
-    return match ? decodeURIComponent(match[1]) : null;
+    return useAuthStore.getState().csrfToken;
   }
 
   private async refreshAccessToken(): Promise<string> {
@@ -157,10 +157,13 @@ class ApiClient {
         }
       );
 
-      const { accessToken } = response.data.data;
+      const { accessToken, csrfToken: newCsrfToken } = response.data.data;
 
-      // Update access token in Zustand store (memory only)
+      // Update tokens in Zustand store (memory only)
       useAuthStore.getState().setAccessToken(accessToken);
+      if (newCsrfToken) {
+        useAuthStore.getState().setCsrfToken(newCsrfToken);
+      }
 
       return accessToken;
     } catch (error: any) {

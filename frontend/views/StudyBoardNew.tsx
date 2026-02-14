@@ -363,6 +363,7 @@ const CollaborativeBoard = () => {
             store={store}
             autoFocus
             onMount={handleMount}
+            licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY || 'dev'}
           />
 
           {/* Live Cursors Overlay */}

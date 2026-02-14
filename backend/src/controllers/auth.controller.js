@@ -5,14 +5,14 @@ const authService = require('../services/auth.service');
  * Cookie options for the httpOnly refresh token cookie.
  * - httpOnly: not accessible via JavaScript (XSS protection)
  * - secure: only sent over HTTPS in production
- * - sameSite: CSRF protection
+ * - sameSite: 'none' for cross-origin (Vercel frontend → Render backend)
  * - path: only sent to auth endpoints that need it
  */
 const REFRESH_COOKIE_NAME = 'refreshToken';
 const getRefreshCookieOptions = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   path: '/api/auth', // only sent to auth routes
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
 });
@@ -33,12 +33,14 @@ const sendAuthResponse = (res, statusCode, message, { user, accessToken, refresh
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
 
   // Only send accessToken in the JSON body (NOT the refresh token)
+  // Also include CSRF token for cross-origin setups (frontend can't read backend cookies)
   res.status(statusCode).json({
     success: true,
     message,
     data: {
       user,
       accessToken,
+      csrfToken: res.locals.csrfToken, // Exposed by ensureCsrfToken middleware
     },
   });
 };
@@ -98,6 +100,7 @@ const refresh = asyncHandler(async (req, res) => {
     message: 'Tokens refreshed successfully',
     data: {
       accessToken: result.accessToken,
+      csrfToken: res.locals.csrfToken, // Include CSRF token for cross-origin setups
     },
   });
 });
@@ -117,7 +120,7 @@ const logout = asyncHandler(async (req, res) => {
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/api/auth',
   });
 
@@ -139,7 +142,7 @@ const logoutAll = asyncHandler(async (req, res) => {
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/api/auth',
   });
 
@@ -179,7 +182,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     path: '/api/auth',
   });
 
