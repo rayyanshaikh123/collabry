@@ -17,16 +17,25 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     PHASE 5 — RATE LIMITING
 
     Simple per-user rate limiting using Redis:
-    - 30 requests per minute per user_id
+    - Configurable requests per window per user_id
     - Counter key: rate:{user_id}
-    - TTL: 60 seconds
+    - TTL: configurable window seconds
     - Atomic increment
     """
 
-    MAX_REQUESTS = 30
-    WINDOW_SECONDS = 60
+    def __init__(self, app):
+        super().__init__(app)
+        # Use config values for rate limiting
+        self.MAX_REQUESTS = CONFIG.get("RATE_LIMIT_REQUESTS", 100)
+        self.WINDOW_SECONDS = CONFIG.get("RATE_LIMIT_WINDOW", 60)
+        self.ENABLED = CONFIG.get("RATE_LIMIT_ENABLED", True)
+        logger.info(f"Rate limiting: {self.MAX_REQUESTS} requests per {self.WINDOW_SECONDS}s (enabled: {self.ENABLED})")
 
     async def dispatch(self, request: Request, call_next):
+        # Skip if rate limiting is disabled
+        if not self.ENABLED:
+            return await call_next(request)
+        
         # Only limit AI engine endpoints; health/docs/etc. remain unrestricted.
         if not request.url.path.startswith("/ai/"):
             return await call_next(request)
