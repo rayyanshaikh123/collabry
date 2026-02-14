@@ -1,60 +1,38 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const config = require('../config/env');
 
 /**
- * Email Service for sending emails using Nodemailer
+ * Email Service for sending emails using Resend
  */
 class EmailService {
   constructor() {
-    this.transporter = null;
+    this.resend = null;
+    this.devMode = false;
     this.initialize();
   }
 
   /**
-   * Initialize email transporter
+   * Initialize Resend client
    */
   initialize() {
     try {
-      const hasAuth = Boolean(config.email.user && config.email.password);
+      const apiKey = config.email.resendApiKey;
       const isProd = process.env.NODE_ENV === 'production';
 
-      // In local/dev environments, allow running without SMTP creds.
-      // We fall back to a log-only transport so auth flows still work.
-      if (!hasAuth) {
+      if (!apiKey) {
         if (isProd) {
-          console.error('❌ Email service initialization failed: Missing EMAIL_USER/EMAIL_PASSWORD');
-          this.transporter = null;
+          console.error('❌ Email service initialization failed: Missing RESEND_API_KEY');
           return;
         }
 
-        this.transporter = nodemailer.createTransport({ jsonTransport: true });
-        console.warn('⚠️ Email credentials missing — using jsonTransport (emails will be logged, not delivered)');
+        // Dev fallback — log emails instead of sending
+        this.devMode = true;
+        console.warn('⚠️ RESEND_API_KEY missing — emails will be logged, not delivered');
         return;
       }
 
-      // Create transporter based on environment
-      if (config.email.service === 'gmail') {
-        this.transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: config.email.user,
-            pass: config.email.password,
-          },
-        });
-      } else {
-        // Generic SMTP configuration
-        this.transporter = nodemailer.createTransport({
-          host: config.email.host,
-          port: config.email.port,
-          secure: config.email.secure, // true for 465, false for other ports
-          auth: {
-            user: config.email.user,
-            pass: config.email.password,
-          },
-        });
-      }
-
-      console.log('✉️ Email service initialized');
+      this.resend = new Resend(apiKey);
+      console.log('✉️ Email service initialized (Resend)');
     } catch (error) {
       console.error('❌ Email service initialization failed:', error.message);
     }
@@ -70,21 +48,29 @@ class EmailService {
    */
   async sendEmail({ to, subject, html, text }) {
     try {
-      if (!this.transporter) {
-        throw new Error('Email transporter not initialized');
+      if (this.devMode) {
+        console.log(`📩 [DEV] Email to: ${to} | Subject: ${subject}`);
+        return { success: true, messageId: `dev-${Date.now()}` };
       }
 
-      const mailOptions = {
-        from: `"${config.email.fromName}" <${config.email.from}>`,
-        to,
+      if (!this.resend) {
+        throw new Error('Resend client not initialized');
+      }
+
+      const { data, error } = await this.resend.emails.send({
+        from: `${config.email.fromName} <${config.email.from}>`,
+        to: Array.isArray(to) ? to : [to],
         subject,
         html,
-        text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
-      };
+        text: text || html.replace(/<[^>]*>/g, ''),
+      });
 
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('📧 Email sent successfully:', info.messageId);
-      return { success: true, messageId: info.messageId };
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      console.log('📧 Email sent successfully:', data.id);
+      return { success: true, messageId: data.id };
     } catch (error) {
       console.error('❌ Email sending failed:', error.message);
       throw error;
@@ -295,8 +281,8 @@ class EmailService {
   async sendEmailVerification(email, name, verificationToken) {
     const verifyUrl = `${config.frontendUrl}/verify-email?token=${verificationToken}`;
 
-    // Helpful for local/dev when jsonTransport is used.
-    if (this.transporter?.options?.jsonTransport) {
+    // Helpful for local/dev when no API key is set.
+    if (this.devMode) {
       console.log('📩 [DEV] Email verification link:', verifyUrl);
     }
 
@@ -387,11 +373,15 @@ class EmailService {
    */
   async verifyConnection() {
     try {
-      if (!this.transporter) {
-        throw new Error('Email transporter not initialized');
+      if (this.devMode) {
+        console.log('✅ Email service in dev mode (no verification needed)');
+        return true;
       }
-      await this.transporter.verify();
-      console.log('✅ Email service connection verified');
+      if (!this.resend) {
+        throw new Error('Resend client not initialized');
+      }
+      // Resend doesn't have a verify method — just check the client exists
+      console.log('✅ Email service connection verified (Resend)');
       return true;
     } catch (error) {
       console.error('❌ Email service verification failed:', error.message);

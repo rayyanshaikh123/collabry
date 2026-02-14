@@ -36,12 +36,12 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.12",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "rate-limit-redis": "^4.3.1",
     "razorpay": "^2.9.6",
     "redis": "^4.7.1",
+    "resend": "^6.9.2",
     "socket.io": "^4.8.3",
     "tldraw": "^4.2.3"
   },
