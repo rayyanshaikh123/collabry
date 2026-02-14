@@ -65,6 +65,7 @@ export const ICONS = {
   Dashboard: LayoutDashboard,
   StudyBoard: PenTool,
   Planner: Calendar,
+  Calendar: Calendar,
   Focus: Clock,
   Clock: Clock,
   Flashcards: CreditCard,

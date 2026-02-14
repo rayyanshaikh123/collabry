@@ -438,6 +438,13 @@ const verifyEmail = async (token) => {
 
   logAuthEvent('email_verification', { userId: user._id, email: user.email });
 
+  try {
+    const notificationService = require('./notification.service');
+    await notificationService.notifyWelcome(user._id, user.name);
+  } catch (error) {
+    console.warn('Failed to send welcome notification:', error.message);
+  }
+
   return {
     message: 'Email verified successfully. You can now login.',
   };

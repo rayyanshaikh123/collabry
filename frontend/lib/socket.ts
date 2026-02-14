@@ -5,14 +5,49 @@
 
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace('/api', '') || 'https://colab-back.onrender.com';
+// Determine socket URL from env variables
+const getSocketUrl = () => {
+  // Prefer explicit socket URL
+  if (process.env.NEXT_PUBLIC_SOCKET_URL) {
+    return process.env.NEXT_PUBLIC_SOCKET_URL;
+  }
+  // Fallback to API base URL (removing /api)
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL.replace('/api', '');
+  }
+  // Default fallback
+  return 'https://colab-back.onrender.com';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 class SocketClient {
   private socket: Socket | null = null;
   private boardSocket: Socket | null = null;
+  private notificationSocket: Socket | null = null;
+
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
 
+  /**
+   * Get common socket options
+   */
+  private getSocketOptions(token: string) {
+    return {
+      auth: { token },
+      transports: ['websocket', 'polling'], // Fallback to polling if websocket fails
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: this.maxReconnectAttempts,
+      path: '/socket.io/', // Standard Socket.IO path
+      withCredentials: true,
+    };
+  }
+
+  /**
+   * Connect to default namespace
+   */
   connect(token: string) {
     if (this.socket?.connected) {
       return this.socket;
@@ -33,6 +68,9 @@ class SocketClient {
     return this.socket;
   }
 
+  /**
+   * Connect to Boards namespace
+   */
   connectBoards(token: string): Promise<Socket> {
     return new Promise((resolve, reject) => {
       // If already connected, resolve immediately
@@ -41,10 +79,10 @@ class SocketClient {
         return;
       }
 
-      // If socket exists but not connected, disconnect and recreate
+      // Cleanup existing
       if (this.boardSocket) {
         this.boardSocket.removeAllListeners();
-        this.boardSocket.close();
+        this.boardSocket.disconnect();
         this.boardSocket = null;
       }
 
@@ -92,6 +130,52 @@ class SocketClient {
     });
   }
 
+  /**
+   * Connect to Notifications namespace
+   */
+  connectNotifications(token: string): Promise<Socket> {
+    return new Promise((resolve, reject) => {
+      if (this.notificationSocket?.connected) {
+        resolve(this.notificationSocket);
+        return;
+      }
+
+      // Cleanup existing
+      if (this.notificationSocket) {
+        this.notificationSocket.removeAllListeners();
+        this.notificationSocket.disconnect();
+        this.notificationSocket = null;
+      }
+
+      console.log('[Notification Socket] Connecting...');
+
+      // Note: Namespace in backend is '/notifications'
+      this.notificationSocket = io(`${SOCKET_URL}/notifications`, this.getSocketOptions(token));
+
+      const timeout = setTimeout(() => {
+        if (!this.notificationSocket?.connected) {
+          console.warn('[Notification Socket] Connection timeout - checking status');
+          // Don't reject purely on timeout, let it keep retrying, but warn
+        }
+      }, 5000);
+
+      this.notificationSocket.on('connect', () => {
+        clearTimeout(timeout);
+        console.log('[Notification Socket] Connected');
+        resolve(this.notificationSocket!);
+      });
+
+      this.notificationSocket.on('connect_error', (err) => {
+        // Don't reject immediately, allowing reconnect logic to work
+        console.error('[Notification Socket] Connection error:', err.message);
+      });
+
+      this.notificationSocket.on('error', (err) => {
+        console.error('[Notification Socket] Error:', err);
+      });
+    });
+  }
+
   private setupEventHandlers() {
     if (!this.socket) return;
 
@@ -123,11 +207,8 @@ class SocketClient {
       this.socket.disconnect();
       this.socket = null;
     }
-    if (this.boardSocket) {
-      this.boardSocket.removeAllListeners();
-      this.boardSocket.disconnect();
-      this.boardSocket = null;
-    }
+    this.disconnectBoards();
+    
   }
 
   disconnectBoards() {
@@ -202,10 +283,12 @@ class SocketClient {
   onCursorMove(callback: (data: any) => void) {
     this.boardSocket?.on('cursor:moved', callback);
   }
-  // Remove event listeners from sockets
+
+  // Note: 'off' needs to know which socket. Defaulting to boardSocket as it seems to be the main use case for dynamic listeners
   off(event: string, callback?: any) {
-    this.socket?.off(event, callback);
     this.boardSocket?.off(event, callback);
+    this.notificationSocket?.off(event, callback);
+    this.socket?.off(event, callback);
   }
 
   // Listen for full board updates
@@ -213,22 +296,17 @@ class SocketClient {
     this.boardSocket?.on('board:update', callback);
   }
 
-  // Check connection status
+  // Notification methods
+  getNotificationSocket(): Socket | null {
+    return this.notificationSocket;
+  }
+
   isConnected(): boolean {
     return this.socket?.connected ?? false;
   }
 
   isBoardConnected(): boolean {
     return this.boardSocket?.connected ?? false;
-  }
-
-  // Get socket instance for advanced usage
-  getSocket(): Socket | null {
-    return this.socket;
-  }
-
-  getBoardSocket(): Socket | null {
-    return this.boardSocket;
   }
 }
 

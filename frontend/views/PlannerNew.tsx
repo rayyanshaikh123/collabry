@@ -5,11 +5,13 @@ import { Card, Button, Badge, Input } from '../components/UIElements';
 import Calendar from '../components/Calendar';
 import { ICONS } from '../constants';
 import { PlannerSidebar } from '../components/planner/PlannerSidebar';
+import { EditSessionModal } from '../components/modals/EditSessionModal';
 import { TasksList } from '../components/planner/TasksList';
 import { StrategyPanel } from '../components/planner/StrategyPanel';
 import {
   usePlans,
   useTodayTasks,
+  useTodayEvents,
   useUpcomingTasks,
   useOverdueTasks,
   usePlanTasks,
@@ -20,10 +22,16 @@ import {
   useGeneratePlan,
   useCreatePlan,
   useCreateBulkTasks,
+  useRecoverMissed,
+  useStudyEventsRange,
+  useUpdateEvent,
+  useDeleteEvent,
+  useTasks,
 } from '@/hooks/useStudyPlanner';
 import { StudyPlan, StudyTask, CreatePlanData, AIGeneratedPlan, studyPlannerService } from '@/lib/services/studyPlanner.service';
 import AlertModal from '../components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
+import { useAuthStore } from '@/lib/stores/auth.store';
 
 // Helper: format date
 const formatDate = (dateStr: string) => {
@@ -46,9 +54,11 @@ const priorityColors = {
 
 const Planner: React.FC = () => {
   const { alertState, showAlert, hideAlert } = useAlert();
+  const { isAuthenticated, user } = useAuthStore();
   const [selectedView, setSelectedView] = useState<'today' | 'upcoming' | 'calendar' | 'plans' | 'strategy'>('today');
   const [selectedPlan, setSelectedPlan] = useState<string[]>([]);
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [editingSession, setEditingSession] = useState<StudyTask | null>(null); // For Calendar/Modal editing
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
@@ -60,6 +70,7 @@ const Planner: React.FC = () => {
   // Fetch data
   const { data: plans = [], isLoading: loadingPlans } = usePlans({ status: 'active' });
   const { data: todayTasks = [], isLoading: loadingToday } = useTodayTasks();
+  const { data: todayEvents = [] } = useTodayEvents();
   const { data: upcomingTasks = [], isLoading: loadingUpcoming } = useUpcomingTasks(7);
   const { data: overdueTasks = [] } = useOverdueTasks();
 
@@ -71,7 +82,37 @@ const Planner: React.FC = () => {
   const generatePlan = useGeneratePlan();
   const createPlan = useCreatePlan();
   const createBulkTasks = useCreateBulkTasks();
-  
+  const recoverMissed = useRecoverMissed();
+  const deleteEvent = useDeleteEvent();
+  const updateEvent = useUpdateEvent();
+
+  // Calendar State
+  const [calendarDate, setCalendarDate] = useState(new Date());
+
+  // Fetch Calendar Events
+  const calendarStart = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), 1).toISOString().split('T')[0];
+  const calendarEnd = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).toISOString().split('T')[0];
+  const { data: monthEvents = [] } = useStudyEventsRange(calendarStart, calendarEnd);
+  const { data: monthTasks = [] } = useTasks({ startDate: calendarStart, endDate: calendarEnd });
+
+  // Unified Delete Handler
+  const handleDeleteSession = async (task: StudyTask) => {
+    if (!confirm('Are you sure you want to delete this session?')) return;
+
+    // Heuristic for event vs legacy task
+    const isEvent = (task as any).type === 'MANUAL' || !!(task as any).startTime;
+
+    try {
+      if (isEvent && task.id) {
+        await deleteEvent.mutateAsync(task.id);
+      } else if (task.id) {
+        await deleteTask.mutateAsync(task.id);
+      }
+    } catch (e) {
+      console.error('Delete failed', e);
+    }
+  };
+
   // Editing state (already declared above, no need to redeclare)
   const [editForm, setEditForm] = useState<Partial<StudyTask>>({});
 
@@ -85,9 +126,10 @@ const Planner: React.FC = () => {
     dailyStudyHours: 2,
     difficulty: 'intermediate' as const,
     planType: 'custom' as const,
+    weeklyTimetableBlocks: [],
   });
   const [topicInput, setTopicInput] = useState('');
-  
+
   // Manual Plan Form State
   const [manualForm, setManualForm] = useState({
     title: '',
@@ -100,7 +142,8 @@ const Planner: React.FC = () => {
       title: string;
       description: string;
       scheduledDate: string;
-      duration: number;
+      startTime: string;
+      endTime: string;
       priority: 'low' | 'medium' | 'high' | 'urgent';
       topic: string;
     }>
@@ -109,12 +152,26 @@ const Planner: React.FC = () => {
     title: '',
     description: '',
     scheduledDate: new Date().toISOString().split('T')[0],
-    duration: 60,
+    startTime: '09:00',
+    endTime: '10:00',
     priority: 'medium' as const,
     topic: '',
   });
 
   const handleGenerateAIPlan = async () => {
+    // CRITICAL: Check authentication first
+    if (!isAuthenticated || !user) {
+      showAlert({
+        message: '🔒 Please log in to generate AI study plans',
+        type: 'error'
+      });
+      // Optionally redirect to login
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return;
+    }
+
     if (!aiForm.subject || aiForm.topics.length === 0) {
       showAlert({ message: 'Please enter subject and topics', type: 'error' });
       return;
@@ -172,10 +229,17 @@ const Planner: React.FC = () => {
         description: editableAIPlan.description,
       });
 
-      console.log('Plan created successfully:', plan);
+      console.log('✅ Plan created successfully:', plan);
 
-      if (!plan || !plan.id) {
-        throw new Error('Plan created but no ID returned');
+      // CRITICAL: Defensive guard against undefined plan
+      if (!plan) {
+        console.error('❌ CRITICAL: createPlan returned null/undefined');
+        throw new Error('Backend failed to create plan - no data returned');
+      }
+
+      if (!plan.id) {
+        console.error('❌ CRITICAL: Plan has no ID:', plan);
+        throw new Error('Plan created but no ID returned - invalid backend response');
       }
 
       // Create all tasks in bulk
@@ -201,8 +265,29 @@ const Planner: React.FC = () => {
 
       console.log('Tasks created successfully:', createdTasks.length);
 
+      if (editableAIPlan.tasks.some((t: any) => t.timeSlotStart && t.timeSlotEnd)) {
+        try {
+          const sessions = editableAIPlan.tasks
+            .filter((t: any) => t.timeSlotStart && t.timeSlotEnd)
+            .map((t: any) => ({
+              title: t.title,
+              description: t.description,
+              topic: t.topic,
+              startTime: t.timeSlotStart,
+              endTime: t.timeSlotEnd,
+              type: 'deep_work',
+              difficulty: t.difficulty,
+              priority: t.priority,
+              deepWork: true,
+            }));
+          await studyPlannerService.saveStudyEvents(plan.id, sessions);
+        } catch (e) {
+          console.warn('Could not save calendar events:', e);
+        }
+      }
+
       showAlert({ message: `✅ Plan "${plan.title}" created with ${createdTasks.length} tasks!`, type: 'success' });
-      
+
       // Close modal and reset form
       setShowAIModal(false);
       setAiGenerated(null);
@@ -216,8 +301,9 @@ const Planner: React.FC = () => {
         dailyStudyHours: 2,
         difficulty: 'intermediate',
         planType: 'custom',
+        weeklyTimetableBlocks: [],
       });
-      
+
       // Force reload to ensure all data is fresh
       setTimeout(() => window.location.reload(), 1000);
     } catch (error: any) {
@@ -227,6 +313,18 @@ const Planner: React.FC = () => {
   };
 
   const handleSaveManualPlan = async () => {
+    // CRITICAL: Check authentication first
+    if (!isAuthenticated || !user) {
+      showAlert({
+        message: '🔒 Please log in to create study plans',
+        type: 'error'
+      });
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return;
+    }
+
     if (!manualForm.title || !manualForm.subject) {
       showAlert({ message: 'Please enter plan title and subject', type: 'error' });
       return;
@@ -250,24 +348,40 @@ const Planner: React.FC = () => {
         dailyStudyHours: 2,
       });
 
-      if (!plan || !plan.id) {
-        throw new Error('Plan created but no ID returned');
+      console.log('✅ Manual plan created:', plan);
+
+      // CRITICAL: Defensive guard against undefined plan
+      if (!plan) {
+        console.error('❌ CRITICAL: createPlan returned null/undefined');
+        throw new Error('Backend failed to create plan - no data returned');
       }
 
-      const tasksToCreate = manualForm.tasks.map(task => ({
-        planId: plan.id,
-        ...task,
-        difficulty: manualForm.difficulty,
-        resources: [],
-      }));
+      if (!plan.id) {
+        console.error('❌ CRITICAL: Plan has no ID:', plan);
+        throw new Error('Plan created but no ID returned - invalid backend response');
+      }
 
-      const createdTasks = await createBulkTasks.mutateAsync({
-        planId: plan.id,
-        tasks: tasksToCreate as any,
+      // Create StudyEvents instead of Tasks
+      const eventsToCreate = manualForm.tasks.map(task => {
+        const start = new Date(`${task.scheduledDate}T${task.startTime}`);
+        const end = new Date(`${task.scheduledDate}T${task.endTime}`);
+        return {
+          title: task.title,
+          description: task.description,
+          topic: task.topic,
+          startTime: start.toISOString(),
+          endTime: end.toISOString(),
+          priority: task.priority,
+          difficulty: manualForm.difficulty,
+          type: 'MANUAL',
+        };
       });
 
-      showAlert({ message: `✅ Plan "${plan.title}" created with ${createdTasks.length} tasks!`, type: 'success' });
-      
+      console.log(`[ManualPlan] Saving ${eventsToCreate.length} events...`);
+      const createdEvents = await studyPlannerService.saveStudyEvents(plan.id, eventsToCreate);
+
+      showAlert({ message: `✅ Plan "${plan.title}" created with ${createdEvents.length} events!`, type: 'success' });
+
       setShowManualModal(false);
       setManualForm({
         title: '',
@@ -278,7 +392,16 @@ const Planner: React.FC = () => {
         difficulty: 'intermediate',
         tasks: [],
       });
-      
+      setTaskInput({
+        title: '',
+        description: '',
+        scheduledDate: new Date().toISOString().split('T')[0],
+        startTime: '09:00',
+        endTime: '10:00',
+        priority: 'medium',
+        topic: '',
+      });
+
       setTimeout(() => window.location.reload(), 1000);
     } catch (error: any) {
       console.error('Failed to save manual plan:', error);
@@ -316,22 +439,22 @@ const Planner: React.FC = () => {
     if (selectedView === 'today') {
       const filtered = selectedPlan.length > 0
         ? todayTasks.filter(t => {
-            const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
-            const match = selectedPlan.includes(taskPlanId);
-            if (!match) console.log('Task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
-            return match;
-          })
+          const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
+          const match = selectedPlan.includes(taskPlanId);
+          if (!match) console.log('Task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
+          return match;
+        })
         : todayTasks;
       console.log('📅 Today tasks filtered:', filtered.length);
       return filtered;
     } else if (selectedView === 'upcoming') {
       const filtered = selectedPlan.length > 0
         ? upcomingTasks.filter(t => {
-            const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
-            const match = selectedPlan.includes(taskPlanId);
-            if (!match) console.log('Task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
-            return match;
-          })
+          const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
+          const match = selectedPlan.includes(taskPlanId);
+          if (!match) console.log('Task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
+          return match;
+        })
         : upcomingTasks;
       console.log('🔜 Upcoming tasks filtered:', filtered.length);
       return filtered;
@@ -339,11 +462,11 @@ const Planner: React.FC = () => {
       // Calendar view: filter upcoming tasks by selected plans (if any)
       const filtered = selectedPlan.length > 0
         ? upcomingTasks.filter(t => {
-            const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
-            const match = selectedPlan.includes(taskPlanId);
-            if (!match) console.log('Calendar task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
-            return match;
-          })
+          const taskPlanId = typeof t.planId === 'object' ? (t.planId as any)?._id || (t.planId as any)?.id : t.planId;
+          const match = selectedPlan.includes(taskPlanId);
+          if (!match) console.log('Calendar task filtered out:', t.title, 'planId:', taskPlanId, 'vs', selectedPlan);
+          return match;
+        })
         : upcomingTasks;
       console.log('📅 Calendar tasks filtered:', filtered.length);
       return filtered;
@@ -375,6 +498,25 @@ const Planner: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Authentication Warning Banner */}
+      {!isAuthenticated && (
+        <Card className="bg-gradient-to-r from-amber-50 to-rose-50 dark:from-amber-900/20 dark:to-rose-900/20 border-2 border-amber-300 dark:border-amber-700">
+          <div className="flex items-center gap-4">
+            <div className="flex-shrink-0 w-12 h-12 bg-amber-500 dark:bg-amber-600 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-300">🔒 Authentication Required</h3>
+              <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">
+                Please <a href="/login" className="underline font-semibold hover:text-amber-600">log in</a> to create study plans and access AI features. Your session may have expired.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -459,16 +601,23 @@ const Planner: React.FC = () => {
             try {
               showAlert({ message: '⏳ Scheduling time blocks...', type: 'info' });
               const result = await studyPlannerService.autoSchedulePlan(plan.id);
-              showAlert({ 
-                message: `✅ ${result.message} (${result.data.tasksScheduled} tasks scheduled)`, 
-                type: 'success' 
+              showAlert({
+                message: `✅ ${result.message} (${result.data.tasksScheduled} tasks scheduled)`,
+                type: 'success'
               });
               setTimeout(() => window.location.reload(), 1000);
             } catch (error: any) {
-              showAlert({ 
-                message: `❌ ${error.response?.data?.message || error.message || 'Failed to schedule plan'}`, 
-                type: 'error' 
+              showAlert({
+                message: `❌ ${error.response?.data?.message || error.message || 'Failed to schedule plan'}`,
+                type: 'error'
               });
+            }
+          }}
+          onRecoverMissed={async (plan) => {
+            try {
+              await recoverMissed.mutateAsync(plan.id);
+            } catch {
+              // Error already shown by hook
             }
           }}
         />
@@ -555,9 +704,11 @@ const Planner: React.FC = () => {
               </Card>
             )
           ) : selectedView === 'calendar' ? (
-            <Calendar 
-              tasks={[...todayTasks, ...upcomingTasks, ...overdueTasks]}
+            <Calendar
+              tasks={[...monthTasks, ...(monthEvents as any[])]} // Merge legacy tasks and new events
               plans={plans}
+              viewDate={calendarDate}
+              onViewDateChange={setCalendarDate}
               onTaskClick={(task) => {
                 setEditingTask(task.id);
                 setEditForm(task);
@@ -572,31 +723,67 @@ const Planner: React.FC = () => {
               onDateClick={(date) => {
                 console.log('Date clicked:', date);
               }}
+              onDeleteTask={handleDeleteSession}
+              onEditTask={(task) => {
+                setEditingSession(task);
+              }}
+              onAddTask={(date) => {
+                setShowManualModal(true);
+                setManualForm(prev => ({ ...prev, startDate: date.toISOString().split('T')[0] }));
+              }}
             />
           ) : (
-            <TasksList
-              tasks={tasksToShow}
-              selectedView={selectedView as any}
-              loading={loadingToday || loadingUpcoming}
-              editingTaskId={editingTask}
-              editForm={editForm}
-              onStartEdit={(task) => {
-                setEditingTask(task.id);
-                setEditForm(task);
-              }}
-              onEditFormChange={(updates) => setEditForm({ ...editForm, ...updates })}
-              onSaveEdit={async (taskId) => {
-                await updateTask.mutateAsync({ taskId, data: editForm });
-                setEditingTask(null);
-                setEditForm({});
-              }}
-              onCancelEdit={() => {
-                setEditingTask(null);
-                setEditForm({});
-              }}
-              onRequestComplete={(taskId) => setTaskToComplete(taskId)}
-              onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
-            />
+            <>
+              {selectedView === 'today' && todayEvents.length > 0 && (
+                <Card className="bg-gradient-to-br from-indigo-50 dark:from-indigo-900/20 to-white dark:to-slate-800 border-indigo-100 dark:border-indigo-800">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Today&apos;s Execution Plan</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Time-slot schedule — follow the order below.</p>
+                  <div className="space-y-2">
+                    {([...todayEvents] as any[])
+                      .filter((e) => e.status !== 'cancelled' && e.status !== 'completed')
+                      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+                      .map((ev) => {
+                        const start = new Date(ev.startTime);
+                        const end = new Date(ev.endTime);
+                        const timeStr = `${start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} – ${end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+                        return (
+                          <div
+                            key={ev.id || ev._id}
+                            className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700"
+                          >
+                            <span className="text-sm font-mono font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 w-24">{timeStr}</span>
+                            <span className="font-medium text-slate-800 dark:text-slate-200">{ev.title}</span>
+                            {ev.topic && <span className="text-xs text-slate-500 dark:text-slate-400">({ev.topic})</span>}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </Card>
+              )}
+              <TasksList
+                tasks={tasksToShow}
+                selectedView={selectedView as any}
+                loading={loadingToday || loadingUpcoming}
+                editingTaskId={editingTask}
+                editForm={editForm}
+                onStartEdit={(task) => {
+                  setEditingTask(task.id);
+                  setEditForm(task);
+                }}
+                onEditFormChange={(updates) => setEditForm({ ...editForm, ...updates })}
+                onSaveEdit={async (taskId) => {
+                  await updateTask.mutateAsync({ taskId, data: editForm });
+                  setEditingTask(null);
+                  setEditForm({});
+                }}
+                onCancelEdit={() => {
+                  setEditingTask(null);
+                  setEditForm({});
+                }}
+                onRequestComplete={(taskId) => setTaskToComplete(taskId)}
+                onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
+              />
+            </>
           )}
         </div>
       </div>
@@ -690,6 +877,81 @@ const Planner: React.FC = () => {
                       value={aiForm.endDate}
                       onChange={(e) => setAiForm({ ...aiForm, endDate: e.target.value })}
                     />
+                  </div>
+                </div>
+
+                {/* Optional: Weekly timetable blocks (e.g. college, labs) - scheduler will avoid these */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Weekly blocks (optional) — e.g. college, labs
+                  </label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Add fixed blocks so the scheduler won&apos;t place study sessions in these times.
+                  </p>
+                  <div className="space-y-2">
+                    {(aiForm.weeklyTimetableBlocks || []).map((block, idx) => (
+                      <div key={idx} className="flex flex-wrap items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                        <select
+                          value={block.dayOfWeek}
+                          onChange={(e) => {
+                            const blocks = [...(aiForm.weeklyTimetableBlocks || [])];
+                            blocks[idx] = { ...block, dayOfWeek: Number(e.target.value) };
+                            setAiForm({ ...aiForm, weeklyTimetableBlocks: blocks });
+                          }}
+                          className="rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-sm"
+                        >
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                            <option key={d} value={i}>{d}</option>
+                          ))}
+                        </select>
+                        <Input
+                          type="time"
+                          value={block.startTime}
+                          onChange={(e) => {
+                            const blocks = [...(aiForm.weeklyTimetableBlocks || [])];
+                            blocks[idx] = { ...block, startTime: e.target.value };
+                            setAiForm({ ...aiForm, weeklyTimetableBlocks: blocks });
+                          }}
+                          className="w-28"
+                        />
+                        <span className="text-slate-400">–</span>
+                        <Input
+                          type="time"
+                          value={block.endTime}
+                          onChange={(e) => {
+                            const blocks = [...(aiForm.weeklyTimetableBlocks || [])];
+                            blocks[idx] = { ...block, endTime: e.target.value };
+                            setAiForm({ ...aiForm, weeklyTimetableBlocks: blocks });
+                          }}
+                          className="w-28"
+                        />
+                        <Input
+                          placeholder="Label (e.g. College)"
+                          value={block.label || ''}
+                          onChange={(e) => {
+                            const blocks = [...(aiForm.weeklyTimetableBlocks || [])];
+                            blocks[idx] = { ...block, label: e.target.value };
+                            setAiForm({ ...aiForm, weeklyTimetableBlocks: blocks });
+                          }}
+                          className="flex-1 min-w-[100px]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setAiForm({ ...aiForm, weeklyTimetableBlocks: (aiForm.weeklyTimetableBlocks || []).filter((_, i) => i !== idx) })}
+                          className="p-1 text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded"
+                        >
+                          <ICONS.Plus size={16} className="rotate-45" />
+                        </button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setAiForm({ ...aiForm, weeklyTimetableBlocks: [...(aiForm.weeklyTimetableBlocks || []), { dayOfWeek: 1, startTime: '09:00', endTime: '11:00', label: 'Block' }] })}
+                    >
+                      + Add block
+                    </Button>
                   </div>
                 </div>
 
@@ -1004,12 +1266,20 @@ const Planner: React.FC = () => {
                       value={taskInput.scheduledDate}
                       onChange={(e) => setTaskInput({ ...taskInput, scheduledDate: e.target.value })}
                     />
-                    <Input
-                      type="number"
-                      value={taskInput.duration}
-                      onChange={(e) => setTaskInput({ ...taskInput, duration: parseInt(e.target.value) })}
-                      placeholder="Duration (min)"
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="time"
+                        value={taskInput.startTime}
+                        onChange={(e) => setTaskInput({ ...taskInput, startTime: e.target.value })}
+                        className="text-xs"
+                      />
+                      <Input
+                        type="time"
+                        value={taskInput.endTime}
+                        onChange={(e) => setTaskInput({ ...taskInput, endTime: e.target.value })}
+                        className="text-xs"
+                      />
+                    </div>
                     <select
                       value={taskInput.priority}
                       onChange={(e) => setTaskInput({ ...taskInput, priority: e.target.value as any })}
@@ -1040,7 +1310,8 @@ const Planner: React.FC = () => {
                           title: '',
                           description: '',
                           scheduledDate: new Date().toISOString().split('T')[0],
-                          duration: 60,
+                          startTime: '09:00',
+                          endTime: '10:00',
                           priority: 'medium',
                           topic: '',
                         });
@@ -1060,7 +1331,7 @@ const Planner: React.FC = () => {
                         <div className="flex-1">
                           <p className="font-bold text-sm text-slate-800">{task.title}</p>
                           <p className="text-xs text-slate-500">
-                            {formatDate(task.scheduledDate)} • {task.duration}min • {task.priority}
+                            {formatDate(task.scheduledDate)} • {task.startTime}-{task.endTime} • {task.priority}
                           </p>
                         </div>
                         <button
@@ -1104,6 +1375,22 @@ const Planner: React.FC = () => {
       )}
 
       <AlertModal {...alertState} onClose={hideAlert} />
+      {/* Edit Session Modal (Calendar) */}
+      {editingSession && (
+        <EditSessionModal
+          session={editingSession}
+          onClose={() => setEditingSession(null)}
+          onSave={async (id, updates, isEvent) => {
+            console.log('Saving session:', id, updates, isEvent);
+            if (isEvent) {
+              await updateEvent.mutateAsync({ eventId: id, data: updates });
+            } else {
+              await updateTask.mutateAsync({ taskId: id, data: updates });
+            }
+            setEditingSession(null);
+          }}
+        />
+      )}
     </div>
   );
 };

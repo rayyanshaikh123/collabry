@@ -67,7 +67,7 @@ const notificationSchema = new mongoose.Schema(
     },
     priority: {
       type: String,
-      enum: ['low', 'medium', 'high', 'urgent'],
+      enum: ['low', 'medium', 'high'],
       default: 'medium',
       index: true,
     },
@@ -79,28 +79,20 @@ const notificationSchema = new mongoose.Schema(
     readAt: {
       type: Date,
     },
-    // Reference to related entity (optional)
-    relatedEntity: {
-      entityType: {
-        type: String,
-        enum: ['Task', 'Board', 'Plan', 'Quiz', 'MindMap', 'Report', 'Notebook', 'User'],
-      },
-      entityId: {
-        type: mongoose.Schema.Types.ObjectId,
-      },
+    // Metadata for any extra info
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
-    // Action button (optional)
+    // Action button
+    actionLink: {
+      type: String,
+      trim: true,
+    },
+    // Keep actionUrl for backward compatibility (optional, but good to have)
     actionUrl: {
       type: String,
       trim: true,
-    },
-    actionText: {
-      type: String,
-      trim: true,
-    },
-    // Metadata
-    metadata: {
-      type: mongoose.Schema.Types.Mixed,
     },
     expiresAt: {
       type: Date,
@@ -111,37 +103,36 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for efficient queries
+// Indexes
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, type: 1, createdAt: -1 });
-notificationSchema.index({ userId: 1, priority: 1, isRead: 1 });
-notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
+notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual for age
 notificationSchema.virtual('age').get(function () {
   return Date.now() - this.createdAt.getTime();
 });
 
-// Method to check if notification is urgent
-notificationSchema.methods.isUrgent = function () {
-  return this.priority === 'urgent' || this.priority === 'high';
-};
-
-// Method to format notification for response
+// Format for response strictly matching contract
 notificationSchema.methods.toJSON = function () {
   const notification = this.toObject();
   notification.id = notification._id.toString();
   delete notification._id;
   delete notification.__v;
+  
+  // Ensure actionLink is populated if actionUrl exists (backwards compat)
+  if (!notification.actionLink && notification.actionUrl) {
+    notification.actionLink = notification.actionUrl;
+  }
+  
   return notification;
 };
 
-// Static method to get unread count for user
+// Static methods
 notificationSchema.statics.getUnreadCount = async function (userId) {
   return this.countDocuments({ userId, isRead: false });
 };
 
-// Static method to mark all as read for user
 notificationSchema.statics.markAllAsRead = async function (userId) {
   return this.updateMany(
     { userId, isRead: false },
@@ -149,7 +140,6 @@ notificationSchema.statics.markAllAsRead = async function (userId) {
   );
 };
 
-// Static method to delete old notifications (older than 30 days)
 notificationSchema.statics.deleteOldNotifications = async function (userId, daysOld = 30) {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysOld);
@@ -161,7 +151,6 @@ notificationSchema.statics.deleteOldNotifications = async function (userId, days
   });
 };
 
-// Prevent model overwrite error in development
 const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
 
 module.exports = Notification;

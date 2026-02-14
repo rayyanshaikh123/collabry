@@ -13,7 +13,18 @@ class StudyPlanController {
       
       const plan = await studyPlanService.createPlan(userId, req.body);
       
-      console.log(`[StudyPlan] Plan created successfully:`, {
+      // CRITICAL: Assert plan was created successfully
+      if (!plan) {
+        console.error('[StudyPlan] ❌ CRITICAL: Plan service returned null/undefined');
+        throw new Error('Plan generation failed before persistence');
+      }
+      
+      if (!plan.id && !plan._id) {
+        console.error('[StudyPlan] ❌ CRITICAL: Plan has no ID:', plan);
+        throw new Error('Plan was created but has no identifier');
+      }
+      
+      console.log(`[StudyPlan] ✅ Plan created successfully:`, {
         id: plan.id || plan._id,
         title: plan.title,
         userId: plan.userId
@@ -33,7 +44,7 @@ class StudyPlanController {
         gamification: gamificationResult,
       });
     } catch (error) {
-      console.error('[StudyPlan] Error creating plan:', error.message);
+      console.error('[StudyPlan] ❌ Error creating plan:', error.message);
       next(error);
     }
   }
@@ -652,6 +663,31 @@ class StudyPlanController {
         });
       }
       
+      
+      next(error);
+    }
+  }
+
+  /**
+   * Reschedule missed sessions
+   * POST /api/study-planner/plans/:id/recover-missed
+   */
+  async recoverMissed(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      
+      console.log(`[StudyPlan] Recovering missed sessions for plan ${id}`);
+      
+      const result = await studyPlanService.recoverMissed(userId, id);
+      
+      res.json({
+        success: true,
+        message: `Found ${result.totalMissed} missed sessions`,
+        data: result
+      });
+    } catch (error) {
+      console.error('[StudyPlan] Recover missed failed:', error);
       next(error);
     }
   }

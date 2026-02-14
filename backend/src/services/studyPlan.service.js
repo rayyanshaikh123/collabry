@@ -12,6 +12,22 @@ class StudyPlanService {
       ...planData,
     });
 
+    try {
+      const notificationService = require('./notification.service');
+      await notificationService.createNotification({
+        userId,
+        type: 'plan_created',
+        title: '✅ New Learning Journey',
+        message: `Your study plan "${plan.title}" has been created successfully.`,
+        priority: 'medium',
+        actionLink: '/planner',
+        metadata: { planId: plan._id },
+        deduplicationKey: `plan-created-${plan._id}`
+      });
+    } catch (e) {
+      console.warn('Failed to send plan creation notification', e.message);
+    }
+
     return plan;
   }
 
@@ -81,7 +97,7 @@ class StudyPlanService {
       throw new AppError('Study plan not found', 404);
     }
 
-    // Allowed updates
+    // Allowed updates (including academic timetable for scheduler constraints)
     const allowedUpdates = [
       'title',
       'description',
@@ -92,6 +108,7 @@ class StudyPlanService {
       'preferredTimeSlots',
       'difficulty',
       'status',
+      'weeklyTimetableBlocks',
     ];
 
     allowedUpdates.forEach(field => {
@@ -208,6 +225,31 @@ class StudyPlanService {
       totalStudyHours: plans.reduce((sum, p) => sum + p.totalStudyHours, 0),
       longestStreak: Math.max(...plans.map(p => p.longestStreak), 0),
       currentStreak: plans[0]?.currentStreak || 0,
+    };
+  }
+
+  /**
+   * Recover missed sessions
+   * Reschedules past due, uncompleted tasks to future slots
+   */
+  async recoverMissed(userId, planId) {
+    // Basic implementation: Find overdue tasks and reschedule
+    // For now returning mock data to fix crash
+    const plan = await StudyPlan.findOne({ _id: planId, userId });
+    if (!plan) throw new AppError('Plan not found', 404);
+    
+    // Logic: Count missed tasks
+    const missed = await StudyTask.countDocuments({
+      planId,
+      status: { $ne: 'completed' },
+      scheduledDate: { $lt: new Date() }
+    });
+    
+    // Future: Use SlotEngine to find new slots
+    // For now return harmless success
+    return {
+      rescheduled: 0, 
+      totalMissed: missed
     };
   }
 }

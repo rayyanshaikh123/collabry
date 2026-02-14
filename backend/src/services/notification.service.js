@@ -7,7 +7,21 @@ const Notification = require('../models/Notification');
 
 class NotificationService {
   /**
+   * Helper to get IO instance safely (avoids circular dependency)
+   */
+  _getIO() {
+    try {
+      const { getIO } = require('../socket');
+      return getIO();
+    } catch (e) {
+      // Socket not initialized yet or not available
+      return null;
+    }
+  }
+
+  /**
    * Create a notification for a user
+   * Validates, Saves, Emits
    */
   async createNotification({
     userId,
@@ -15,33 +29,93 @@ class NotificationService {
     title,
     message,
     priority = 'medium',
-    relatedEntity = null,
-    actionUrl = null,
-    actionText = null,
-    metadata = null,
+    actionLink = null,
+    actionUrl = null, // Backward compat
+    metadata = {},
     expiresAt = null,
+    deduplicationKey = null, // Optional key to prevent duplicates
   }) {
+    if (!userId) {
+      console.warn('NotificationService: userId is required');
+      return null;
+    }
+
+    // 1. Deduplication (Spam Prevention)
+    // Check if same notification exists within last 2 minutes
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const duplicateQuery = {
+      userId,
+      type,
+      title,
+      createdAt: { $gte: twoMinutesAgo },
+    };
+    
+    // If deduplicationKey provided, use that for stricter check
+    if (deduplicationKey) {
+      duplicateQuery['metadata.deduplicationKey'] = deduplicationKey;
+    }
+    
+    const duplicate = await Notification.findOne(duplicateQuery);
+    if (duplicate) {
+      // Update existing one
+      duplicate.message = message; // Update message in case it changed
+      duplicate.isRead = false; // Mark as unread again if it happened again
+      duplicate.createdAt = new Date(); // Bump to top
+      await duplicate.save();
+      
+      this.emitToUser(userId, duplicate);
+      return duplicate;
+    }
+
+    // 2. Create Notification
     const notification = await Notification.create({
       userId,
       type,
       title,
       message,
       priority,
-      relatedEntity,
-      actionUrl,
-      actionText,
-      metadata,
+      actionLink: actionLink || actionUrl,
+      actionUrl: actionUrl || actionLink, // Keep sync
+      metadata: { ...metadata, deduplicationKey },
       expiresAt,
     });
 
+    // 3. Emit via Socket
+    this.emitToUser(userId, notification);
+
     return notification;
+  }
+
+  /**
+   * Helper to emit socket event safely
+   */
+  emitToUser(userId, notification) {
+    try {
+      const io = this._getIO();
+      if (!io) return;
+      
+      const notifData = notification.toJSON ? notification.toJSON() : notification;
+      
+      // Emit 'new-notification'
+      io.of('/notifications').to(`user:${userId}`).emit('new-notification', notifData);
+      
+      // Emit updated count
+      this.getUnreadCount(userId).then(count => {
+        io.of('/notifications').to(`user:${userId}`).emit('unread-count', { count });
+      });
+    } catch (error) {
+      console.warn('Socket emit failed (non-critical):', error.message);
+    }
   }
 
   /**
    * Create multiple notifications at once
    */
   async createBulkNotifications(notifications) {
-    return Notification.insertMany(notifications);
+    const created = await Notification.insertMany(notifications);
+    // Emit individually to ensure proper routing
+    created.forEach(n => this.emitToUser(n.userId, n));
+    return created;
   }
 
   /**
@@ -49,29 +123,31 @@ class NotificationService {
    */
   async getUserNotifications(userId, { isRead, type, priority, limit = 50, skip = 0 } = {}) {
     const query = { userId };
-
+    
+    // Handle 'false' string from query params
     if (isRead !== undefined) {
-      query.isRead = isRead;
+      // Parse boolean or string
+      if (typeof isRead === 'string') {
+        query.isRead = isRead === 'true';
+      } else {
+        query.isRead = !!isRead;
+      }
     }
-    if (type) {
-      query.type = type;
-    }
-    if (priority) {
-      query.priority = priority;
-    }
+    if (type) query.type = type;
+    if (priority) query.priority = priority;
 
     const notifications = await Notification.find(query)
       .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean();
+      .limit(Number(limit))
+      .skip(Number(skip));
 
     const total = await Notification.countDocuments(query);
+    const unreadCount = await this.getUnreadCount(userId);
 
     return {
       notifications,
       total,
-      unreadCount: await Notification.getUnreadCount(userId),
+      unreadCount,
     };
   }
 
@@ -91,9 +167,10 @@ class NotificationService {
       { isRead: true, readAt: new Date() },
       { new: true }
     );
-
-    if (!notification) {
-      throw new Error('Notification not found');
+    
+    // Update count via socket
+    if (notification) {
+       this.emitUnreadCount(userId);
     }
 
     return notification;
@@ -103,7 +180,9 @@ class NotificationService {
    * Mark all notifications as read
    */
   async markAllAsRead(userId) {
-    return Notification.markAllAsRead(userId);
+    const result = await Notification.markAllAsRead(userId);
+    this.emitUnreadCount(userId);
+    return result;
   }
 
   /**
@@ -114,48 +193,45 @@ class NotificationService {
       _id: notificationId,
       userId,
     });
-
-    if (!result) {
-      throw new Error('Notification not found');
+    
+    if (result) {
+       this.emitUnreadCount(userId);
     }
 
     return result;
   }
-
-  /**
-   * Delete all read notifications for user
-   */
-  async deleteAllRead(userId) {
-    return Notification.deleteMany({ userId, isRead: true });
-  }
-
-  /**
-   * Delete old notifications (cleanup)
-   */
+  
   async deleteOldNotifications(userId, daysOld = 30) {
     return Notification.deleteOldNotifications(userId, daysOld);
   }
-
-  // ============================================================================
-  // NOTIFICATION GENERATORS - Create notifications for specific events
-  // ============================================================================
-
+  
   /**
-   * Study Planner Notifications
+   * Helper to emit unread count
    */
+  async emitUnreadCount(userId) {
+    try {
+        const io = this._getIO();
+        if (!io) return;
+        
+        const count = await this.getUnreadCount(userId);
+        io.of('/notifications').to(`user:${userId}`).emit('unread-count', { count });
+    } catch(e) {}
+  }
+
+  // ============================================================================
+  // NOTIFICATION GENERATORS
+  // ============================================================================
+
   async notifyTaskDueSoon(userId, task) {
     return this.createNotification({
       userId,
       type: 'task_due_soon',
       title: '📝 Task Due Soon',
-      message: `"${task.title}" is due in 1 hour!`,
+      message: `"${task.title}" is due soon!`,
       priority: 'high',
-      relatedEntity: {
-        entityType: 'Task',
-        entityId: task._id || task.id,
-      },
-      actionUrl: '/planner',
-      actionText: 'View Task',
+      metadata: { taskId: task._id || task.id },
+      actionLink: '/planner',
+      deduplicationKey: `due-${task._id || task.id}`
     });
   }
 
@@ -164,26 +240,23 @@ class NotificationService {
       userId,
       type: 'task_overdue',
       title: '⚠️ Task Overdue',
-      message: `"${task.title}" is now overdue. Complete it to stay on track!`,
-      priority: 'urgent',
-      relatedEntity: {
-        entityType: 'Task',
-        entityId: task._id || task.id,
-      },
-      actionUrl: '/planner',
-      actionText: 'Complete Task',
+      message: `"${task.title}" is overdue.`,
+      priority: 'high',
+      metadata: { taskId: task._id || task.id },
+      actionLink: '/planner',
+      deduplicationKey: `overdue-${task._id || task.id}`
     });
   }
 
-  async notifyDailyPlanReminder(userId, todayTasksCount) {
-    return this.createNotification({
+  async notifyDailyPlanReminder(userId, taskCount) {
+     return this.createNotification({
       userId,
       type: 'daily_plan_reminder',
       title: '🌅 Good Morning!',
-      message: `You have ${todayTasksCount} task${todayTasksCount === 1 ? '' : 's'} scheduled for today. Let's make it count!`,
+      message: `You have ${taskCount} tasks today.`,
       priority: 'medium',
-      actionUrl: '/planner',
-      actionText: 'View Today',
+      actionLink: '/planner',
+      deduplicationKey: `daily-reminder-${new Date().toDateString()}`
     });
   }
 
@@ -192,30 +265,22 @@ class NotificationService {
       userId,
       type: 'streak_at_risk',
       title: '🔥 Streak Alert!',
-      message: `Your ${currentStreak}-day streak is at risk! Complete a task today to keep it going.`,
+      message: `${currentStreak}-day streak at risk!`,
       priority: 'high',
-      actionUrl: '/planner',
-      actionText: 'View Tasks',
+      actionLink: '/planner',
+      deduplicationKey: `streak-risk-${new Date().toDateString()}`
     });
   }
 
   async notifyStreakMilestone(userId, streak) {
-    const milestones = {
-      7: '1 Week',
-      14: '2 Weeks',
-      30: '1 Month',
-      100: '100 Days',
-    };
-    const milestone = milestones[streak] || `${streak} Days`;
-
     return this.createNotification({
       userId,
       type: 'streak_milestone',
       title: '🎉 Streak Milestone!',
-      message: `Amazing! You've maintained a ${milestone} study streak!`,
+      message: `You reached a ${streak}-day streak!`,
       priority: 'low',
-      actionUrl: '/profile',
-      actionText: 'View Stats',
+      actionLink: '/profile',
+      deduplicationKey: `streak-milestone-${streak}`
     });
   }
 
@@ -224,28 +289,14 @@ class NotificationService {
       userId,
       type: 'plan_completed',
       title: '✅ Plan Completed!',
-      message: `Congratulations! You've completed "${plan.title}". Time to celebrate! 🎊`,
+      message: `You completed "${plan.title}"!`,
       priority: 'medium',
-      actionUrl: '/planner',
-      actionText: 'View Plans',
+      actionLink: '/planner',
+      deduplicationKey: `plan-complete-${plan._id || plan.id}`
     });
   }
 
-  async notifyDailyPlanReminder(userId, taskCount) {
-    return this.createNotification({
-      userId,
-      type: 'daily_plan_reminder',
-      title: '🌅 Good Morning!',
-      message: `You have ${taskCount} task${taskCount > 1 ? 's' : ''} scheduled for today. Let's make it count!`,
-      priority: 'medium',
-      actionUrl: '/planner',
-      actionText: 'View Tasks',
-    });
-  }
-
-  /**
-   * Study Board Notifications
-   */
+  // Study Board Notifications
   async notifyBoardInvitation(userId, board, invitedBy) {
     return this.createNotification({
       userId,
@@ -253,12 +304,8 @@ class NotificationService {
       title: '📋 Board Invitation',
       message: `${invitedBy.name || 'Someone'} invited you to collaborate on "${board.title}"`,
       priority: 'high',
-      relatedEntity: {
-        entityType: 'Board',
-        entityId: board._id || board.id,
-      },
-      actionUrl: `/study-board/${board._id || board.id}`,
-      actionText: 'View Board',
+      metadata: { boardId: board._id || board.id },
+      actionLink: `/study-board/${board._id || board.id}`,
     });
   }
 
@@ -283,45 +330,34 @@ class NotificationService {
       userId,
       type: 'board_member_joined',
       title: '👋 New Collaborator',
-      message: `${member.name} joined your board "${board.title}"`,
+      message: `${member.name} joined "${board.title}"`,
       priority: 'low',
-      relatedEntity: {
-        entityType: 'Board',
-        entityId: board._id || board.id,
-      },
-      actionUrl: `/study-board/${board._id || board.id}`,
-      actionText: 'View Board',
+      metadata: { boardId: board._id || board.id },
+      actionLink: `/study-board/${board._id || board.id}`,
     });
   }
 
-  /**
-   * AI/Notebook Notifications
-   */
+  // AI Notifications
   async notifyDocumentProcessed(userId, documentName) {
     return this.createNotification({
       userId,
       type: 'document_processed',
       title: '📄 Document Ready',
-      message: `"${documentName}" has been processed and is ready for AI Q&A!`,
+      message: `"${documentName}" is processed.`,
       priority: 'medium',
-      actionUrl: '/study-notebook',
-      actionText: 'Ask Questions',
+      actionLink: '/study-notebook',
     });
   }
 
   async notifyQuizGenerated(userId, quiz) {
-    return this.createNotification({
+     return this.createNotification({
       userId,
       type: 'quiz_generated',
-      title: '📝 Quiz Generated',
-      message: `Your quiz "${quiz.title}" with ${quiz.questions?.length || 0} questions is ready!`,
+      title: '📝 Quiz Ready',
+      message: `Quiz "${quiz.title}" is ready.`,
       priority: 'medium',
-      relatedEntity: {
-        entityType: 'Quiz',
-        entityId: quiz._id || quiz.id,
-      },
-      actionUrl: '/visual-aids',
-      actionText: 'Take Quiz',
+      metadata: { quizId: quiz._id || quiz.id },
+      actionLink: '/visual-aids',
     });
   }
 
@@ -329,83 +365,31 @@ class NotificationService {
     return this.createNotification({
       userId,
       type: 'mindmap_generated',
-      title: '🗺️ Mind Map Created',
-      message: `Mind map for "${mindmap.topic}" is ready to explore!`,
+      title: '🗺️ Mind Map Ready',
+      message: `Mind map for "${mindmap.topic}" is ready.`,
       priority: 'medium',
-      relatedEntity: {
-        entityType: 'MindMap',
-        entityId: mindmap._id || mindmap.id,
-      },
-      actionUrl: '/visual-aids',
-      actionText: 'View Mind Map',
-    });
-  }
-
-  /**
-   * Admin/Report Notifications
-   */
-  async notifyReportSubmitted(adminUserId, report) {
-    return this.createNotification({
-      userId: adminUserId,
-      type: 'report_submitted',
-      title: '⚠️ New Report',
-      message: `A new ${report.contentType} report has been submitted`,
-      priority: 'high',
-      relatedEntity: {
-        entityType: 'Report',
-        entityId: report._id || report.id,
-      },
-      actionUrl: '/admin',
-      actionText: 'Review Report',
-    });
-  }
-
-  async notifyContentFlagged(userId, contentType, action) {
-    return this.createNotification({
-      userId,
-      type: 'content_flagged',
-      title: '⚠️ Content Action',
-      message: `Your ${contentType} was ${action} after review`,
-      priority: 'high',
-      actionUrl: '/profile',
-      actionText: 'Learn More',
-    });
-  }
-
-  /**
-   * General Notifications
-   */
-  async notifyWelcome(userId, userName) {
-    return this.createNotification({
-      userId,
-      type: 'welcome',
-      title: '👋 Welcome to Collabry!',
-      message: `Hi ${userName}! Start by creating your first study plan or joining a study board.`,
-      priority: 'low',
-      actionUrl: '/dashboard',
-      actionText: 'Get Started',
+      metadata: { mindmapId: mindmap._id || mindmap.id },
+      actionLink: '/visual-aids',
     });
   }
 
   async notifyDailyMotivation(userId) {
-    const motivations = [
-      'The secret of getting ahead is getting started. 🚀',
-      'Success is the sum of small efforts repeated day in and day out. 💪',
-      'Don\'t watch the clock; do what it does. Keep going. ⏰',
-      'The expert in anything was once a beginner. 🌱',
-      'Your limitation—it\'s only your imagination. ✨',
-    ];
-
-    const message = motivations[Math.floor(Math.random() * motivations.length)];
-
-    return this.createNotification({
-      userId,
-      type: 'daily_motivation',
-      title: '💡 Daily Motivation',
-      message,
-      priority: 'low',
-      expiresAt: new Date(Date.now() + 86400000), // Expires in 24 hours
-    });
+     const motivations = [
+       "Keep going!",
+       "You got this!",
+       "Small steps lead to big change."
+     ];
+     const msg = motivations[Math.floor(Math.random() * motivations.length)];
+     
+     return this.createNotification({
+       userId,
+       type: 'daily_motivation',
+       title: '💡 Daily Motivation',
+       message: msg,
+       priority: 'low',
+       expiresAt: new Date(Date.now() + 86400000), 
+       deduplicationKey: `motivation-${new Date().toDateString()}`
+     });
   }
 }
 

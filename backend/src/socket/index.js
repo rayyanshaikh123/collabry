@@ -11,12 +11,25 @@ let io = null;
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: [
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001',
-      ],
+      origin: (origin, callback) => {
+        // Allow all origins in development or if strict origin check is disabled
+        if (config.env === 'development' || !origin) {
+          callback(null, true);
+        } else {
+          const allowedOrigins = [
+            'http://localhost:3000', 
+            'https://colab-back.onrender.com',
+            process.env.FRONTEND_URL // Add env variable support
+          ].filter(Boolean);
+          
+          if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+            callback(null, true);
+          } else {
+            console.warn('Socket CORS blocked origin:', origin);
+            callback(new Error('Not allowed by CORS'));
+          }
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST']
     },

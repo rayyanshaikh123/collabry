@@ -163,9 +163,18 @@ class ApiClient {
       useAuthStore.getState().setAccessToken(accessToken);
 
       return accessToken;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Token refresh failed:', error);
-      throw new Error('Token refresh failed');
+      
+      // Clear auth state and redirect to login
+      this.handleAuthError();
+      
+      // Throw user-friendly error
+      const errorMessage = error.response?.status === 401 
+        ? '🔒 Your session has expired. Please log in again.'
+        : 'Failed to refresh authentication. Please log in again.';
+      
+      throw new Error(errorMessage);
     }
   }
 
@@ -231,11 +240,50 @@ class ApiClient {
 
   private formatError(error: any): Error {
     if (axios.isAxiosError(error)) {
-      // Extract error message from response
-      const message = error.response?.data?.message 
-        || error.response?.data?.error 
-        || error.message 
-        || 'An unexpected error occurred';
+      // Extract error message from response with proper handling
+      let message = error.response?.data?.message 
+        || error.response?.data?.error;
+      
+      // Handle array of validation errors
+      if (Array.isArray(error.response?.data?.errors)) {
+        message = error.response.data.errors.map((e: any) => {
+          // Handle different error formats
+          if (typeof e === 'string') return e;
+          if (typeof e === 'object') {
+            return e.message || e.msg || e.error || e.detail || JSON.stringify(e);
+          }
+          return String(e);
+        }).join('; ');
+      }
+      
+      // Handle express-validator format: { errors: [{ msg, param, value }] }
+      if (!message && error.response?.data?.errors) {
+        try {
+          const errors = error.response.data.errors;
+          if (Array.isArray(errors)) {
+            message = errors.map((err: any) => 
+              `${err.param || 'field'}: ${err.msg || err.message || 'Invalid value'}`
+            ).join('; ');
+          }
+        } catch {}
+      }
+      
+      // Fallback to stringified data if message not found
+      if (!message && error.response?.data) {
+        try {
+          const data = error.response.data;
+          // If data is object with specific keys, extract them
+          if (typeof data === 'object') {
+            message = data.detail || data.hint || JSON.stringify(data, null, 2);
+          } else {
+            message = String(data);
+          }
+        } catch {
+          message = 'Server returned invalid response';
+        }
+      }
+      
+      message = message || error.message || 'An unexpected error occurred';
       
       const formattedError = new Error(message);
       (formattedError as any).status = error.response?.status;

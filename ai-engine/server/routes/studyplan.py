@@ -165,7 +165,37 @@ def validate_task_duration(duration: int) -> int:
     Validate and clamp task duration to MongoDB limits.
     Backend enforces: min=15 minutes, max=480 minutes (8 hours)
     """
-    return max(15, min(duration, 480))
+    return max(15, min(int(duration) if duration is not None else 60, 480))
+
+
+def validate_and_coerce_tasks(tasks: List[Dict[str, Any]], topics: List[str], difficulty: str) -> List[Dict[str, Any]]:
+    """
+    Schema validation for AI task list. Strips any timestamp fields from AI; scheduling is backend-only.
+    Returns only task metadata: title, description, topic, duration, priority, difficulty, resources.
+    """
+    valid = []
+    for i, t in enumerate(tasks) if isinstance(tasks, list) else []:
+        if not isinstance(t, dict):
+            continue
+        title = (t.get("title") or f"Study {topics[i % len(topics)] if topics else 'Topic'}").strip()[:200]
+        topic = (t.get("topic") or (topics[i % len(topics)] if topics else "General")).strip()[:200]
+        duration = validate_task_duration(t.get("duration", 60))
+        priority = str(t.get("priority") or "medium").lower()
+        if priority not in ("low", "medium", "high", "urgent"):
+            priority = "medium"
+        diff = str(t.get("difficulty") or difficulty).lower()
+        if diff not in ("easy", "medium", "hard"):
+            diff = normalize_difficulty(diff)
+        valid.append({
+            "title": title,
+            "description": (t.get("description") or "")[:1000],
+            "topic": topic,
+            "duration": duration,
+            "priority": priority,
+            "difficulty": diff,
+            "resources": list(t.get("resources") or []) if isinstance(t.get("resources"), list) else [],
+        })
+    return valid
 
 
 def apply_cognitive_load_limits(
@@ -307,7 +337,12 @@ async def generate_study_plan(
     user_id: str = Depends(get_current_user)
 ) -> StudyPlanResponse:
     """
-    Generate an intelligent study plan with task breakdown.
+    ⚠️ DEPRECATED - Use /ai/v2/generate-smart-schedule instead
+    
+    This endpoint generates DATE+DURATION tasks (legacy format).
+    The new V2 endpoint generates TIME-SLOT SESSIONS with startTime/endTime.
+    
+    This will be removed in the next major version.
     
     The AI analyzes:
     - Subject complexity
@@ -320,6 +355,12 @@ async def generate_study_plan(
     
     Returns structured plan with daily tasks.
     """
+    # DEPRECATION WARNING
+    logger.warning(
+        f"⚠️ DEPRECATED ENDPOINT CALLED: /generate-study-plan by user {user_id}. "
+        "Please migrate to /ai/v2/generate-smart-schedule which uses time-slot based scheduling."
+    )
+    
     try:
         logger.info(f"Generating study plan for user={user_id}, subject={request.subject}")
         
@@ -477,6 +518,9 @@ CRITICAL CONSTRAINTS:
 {"- EMERGENCY MODE: Prioritize core concepts, skip low-priority details" if strategy_context and strategy_context.get('recommendedMode') == 'emergency' else ""}
 
 OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
+- Do NOT output scheduledDate, startTime, endTime, or any date/time. Scheduling is done by the backend.
+- Output only: title, description, topic, duration (minutes), priority, difficulty for each task.
+
 {{
   "title": "{request.subject} Study Plan",
   "description": "Complete study plan description",
@@ -617,9 +661,23 @@ Generate the JSON now:"""
         logger.info(f"✓ AI plan has {len(ai_plan.get('tasks', []))} tasks")
         
         # ========================================================================
+        # SCHEMA VALIDATION: strip any AI timestamps; only task metadata is used
+        # ========================================================================
+        raw_tasks = validate_and_coerce_tasks(
+            ai_plan.get("tasks", []),
+            request.topics,
+            request.difficulty,
+        )
+        if not raw_tasks:
+            raw_tasks = [
+                {"title": f"Learn {t}", "description": f"Study {t}", "topic": t, "duration": 60, "priority": "medium", "difficulty": request.difficulty, "resources": []}
+                for t in request.topics
+            ]
+        ai_plan["tasks"] = raw_tasks
+        
+        # ========================================================================
         # PHASE 2: APPLY COGNITIVE LOAD PROTECTION
         # ========================================================================
-        raw_tasks = ai_plan.get("tasks", [])
         
         # Apply cognitive load limits based on strategy context
         if strategy_context or exam_strategy:

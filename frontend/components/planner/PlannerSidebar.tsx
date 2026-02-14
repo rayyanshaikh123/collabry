@@ -12,6 +12,7 @@ interface PlannerSidebarProps {
   onPlanToggle: (planId: string) => void;
   onPlanDelete: (plan: StudyPlan) => void;
   onAutoSchedule?: (plan: StudyPlan) => void;
+  onRecoverMissed?: (plan: StudyPlan) => void;
 }
 
 export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
@@ -20,7 +21,8 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
   selectedPlan,
   onPlanToggle,
   onPlanDelete,
-  onAutoSchedule
+  onAutoSchedule,
+  onRecoverMissed,
 }) => {
   return (
     <div className="md:col-span-4 lg:col-span-3 space-y-4">
@@ -58,6 +60,18 @@ export const PlannerSidebar: React.FC<PlannerSidebarProps> = ({
               </button>
 
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {onRecoverMissed && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRecoverMissed(plan);
+                    }}
+                    className="p-1 bg-amber-100 hover:bg-amber-200 rounded-lg"
+                    title="Recover missed sessions"
+                  >
+                    <ICONS.Focus size={14} className="text-amber-600" />
+                  </button>
+                )}
                 {onAutoSchedule && (
                   <button
                     onClick={(e) => {

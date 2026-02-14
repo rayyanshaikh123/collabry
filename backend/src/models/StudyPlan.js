@@ -157,6 +157,14 @@ const studyPlanSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    // Academic timetable: locked blocks per weekday (scheduler respects these)
+    // Each block: { dayOfWeek: 0-6, startTime: "09:00", endTime: "11:00", label?: "College" }
+    weeklyTimetableBlocks: [{
+      dayOfWeek: { type: Number, min: 0, max: 6 },
+      startTime: { type: String },
+      endTime: { type: String },
+      label: { type: String, default: 'block' },
+    }],
   },
   {
     timestamps: true,

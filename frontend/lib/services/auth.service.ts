@@ -81,7 +81,6 @@ export const authService = {
 
   /**
    * Get current user profile
-   * TODO: Connect to backend /api/auth/me
    */
   async getCurrentUser(): Promise<User> {
     const response = await apiClient.get<{ user: User }>('/users/me');
@@ -95,7 +94,6 @@ export const authService = {
 
   /**
    * Update user profile
-   * TODO: Connect to backend /api/auth/profile
    */
   async updateProfile(data: Partial<User>): Promise<User> {
     const response = await apiClient.patch<{ user: User }>('/users/me', data);
