@@ -240,19 +240,28 @@ async def run_agent(
     sender_name: Optional[str] = None,
     is_collaborative: bool = False,
     token: Optional[str] = None,
-    byok: Optional[Dict] = None
+    verified_mode: bool = False
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Main entry point using the simplified linear flow.
     SECURITY FIX - Phase 2/3: Enhanced with artifact precedence and security fixes.
-    
-    Args:
-        byok: Optional dict with user's API key info: {'api_key': str, 'base_url': str, 'provider': str}
+    VERIFIED MODE: Routes to VerifiedStudyOrchestrator when verified_mode=True.
     """
-    # Store BYOK info in session state for LLM calls
-    if byok:
-        logger.info(f"🔑 [BYOK] Agent using user's {byok.get('provider')} key")
+    # Route to verified mode if enabled
+    if verified_mode:
+        from core.verification.orchestrator import VerifiedStudyOrchestrator
+        orchestrator = VerifiedStudyOrchestrator()
+        async for event in orchestrator.process(
+            message=message,
+            user_id=user_id,
+            notebook_id=notebook_id,
+            source_ids=source_ids,
+            session_id=session_id
+        ):
+            yield event
+        return
     
+    # Normal mode (existing flow)
     # 1. Initialize State with proper user isolation
     session_state = get_session_state(session_id, user_id)
 
