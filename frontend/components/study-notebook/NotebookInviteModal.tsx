@@ -36,8 +36,9 @@ const NotebookInviteModal: React.FC<NotebookInviteModalProps> = ({ isOpen, onClo
             if (res.success) {
                 setCollaborators(res.data);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to load collaborators:', err);
+            showError(err.message || 'Failed to load collaborators');
         } finally {
             setLoading(false);
         }

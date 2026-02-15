@@ -35,9 +35,9 @@ export default function StudyNotebooksPage() {
       async () => {
         try {
           await deleteNotebook.mutateAsync(id);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Failed to delete notebook:', error);
-          showError('Failed to delete notebook. Please try again.');
+          showError(error.message || 'Failed to delete notebook. Please try again.');
         }
       },
       'Delete Notebook',

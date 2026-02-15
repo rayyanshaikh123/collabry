@@ -130,8 +130,7 @@ const FocusWidget: React.FC = () => {
               <defs>
                 <linearGradient id="ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#6366f1" />
-                  <stop offset="50%" stopColor="#8b5cf6" />
-                  <stop offset="100%" stopColor="#ec4899" />
+                  <stop offset="100%" stopColor="#4f46e5" />
                 </linearGradient>
               </defs>
               <circle
@@ -150,9 +149,9 @@ const FocusWidget: React.FC = () => {
           </div>
 
           {/* Main Timer Button */}
-          <div className="relative w-16 h-16 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-2xl shadow-2xl shadow-indigo-500/50 dark:shadow-indigo-900/50 flex items-center justify-center transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 border-2 border-white/20">
+          <div className="relative w-16 h-16 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl shadow-xl shadow-indigo-200/50 dark:shadow-indigo-900/50 flex items-center justify-center transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 border-2 border-white/20">
             {isActive && (
-              <div className="absolute inset-0 bg-gradient-to-br from-rose-500 to-orange-500 rounded-2xl animate-pulse opacity-75"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl animate-pulse opacity-75"></div>
             )}
             <div className="relative z-10 text-center">
               <div className="text-white font-black text-lg leading-none tracking-tight">
@@ -189,7 +188,7 @@ const FocusWidget: React.FC = () => {
           {/* Modal */}
           <div className="relative z-50 w-[380px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom-4">
             {/* Header with Gradient */}
-            <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-6 pb-20">
+            <div className="relative bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 pb-20">
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAgTSAwIDIwIEwgNDAgMjAgTSAyMCAwIEwgMjAgNDAgTSAwIDMwIEwgNDAgMzAgTSAzMCAwIEwgMzAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30"></div>
               
               <div className="relative flex items-center justify-between">
@@ -234,7 +233,7 @@ const FocusWidget: React.FC = () => {
             <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-slate-200 dark:border-slate-700 relative overflow-hidden">
               {/* Animated Background Glow */}
               {isActive && (
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 animate-pulse"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-indigo-600/10 animate-pulse"></div>
               )}
               
               <div className="relative w-48 h-48 mx-auto">
@@ -243,8 +242,7 @@ const FocusWidget: React.FC = () => {
                   <defs>
                     <linearGradient id="timer-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor="#6366f1" />
-                      <stop offset="50%" stopColor="#8b5cf6" />
-                      <stop offset="100%" stopColor="#ec4899" />
+                      <stop offset="100%" stopColor="#4f46e5" />
                     </linearGradient>
                     <filter id="glow">
                       <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
@@ -262,7 +260,7 @@ const FocusWidget: React.FC = () => {
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="8"
-                    className="text-slate-200 dark:text-slate-700"
+                    className="text-slate-10 dark:text-slate-700"
                   />
                   {/* Progress */}
                   <circle
@@ -282,7 +280,7 @@ const FocusWidget: React.FC = () => {
 
                 {/* Timer Display */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className={`text-6xl font-black bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-tight transition-all ${
+                  <div className={`text-6xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight transition-all ${
                     isActive ? 'scale-100' : 'scale-95 opacity-80'
                   }`}>
                     {formatTime(timeLeft)}
@@ -310,7 +308,7 @@ const FocusWidget: React.FC = () => {
                 
                 <button
                   onClick={() => setIsActive(v => !v)}
-                  className="relative w-20 h-20 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/50 transition-all hover:scale-110 active:scale-95 border-4 border-white dark:border-slate-800 group overflow-hidden"
+                  className="relative w-20 h-20 bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200 dark:shadow-indigo-900/50 transition-all hover:scale-110 active:scale-95 border-4 border-white dark:border-slate-800 group overflow-hidden"
                   aria-label={isActive ? 'Pause' : 'Start'}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
@@ -329,7 +327,7 @@ const FocusWidget: React.FC = () => {
                   onClick={() => setShowSettings(s => !s)}
                   className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 group ${
                     showSettings 
-                      ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/30' 
+                      ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50' 
                       : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300'
                   }`}
                   aria-label="Settings"
@@ -345,7 +343,7 @@ const FocusWidget: React.FC = () => {
           {/* Settings Panel */}
           {showSettings && (
             <div className="px-6 pt-4 pb-2 animate-in slide-in-from-top-2">
-              <div className="bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-800/50 dark:via-indigo-950/20 dark:to-purple-950/20 rounded-2xl p-5 border border-indigo-100/50 dark:border-indigo-900/30">
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border-2 border-slate-200 dark:border-slate-700">
                 {/* Quick Presets */}
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-3">
@@ -361,7 +359,7 @@ const FocusWidget: React.FC = () => {
                         onClick={() => applyPreset(mins)}
                         className={`py-3 px-3 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 relative overflow-hidden ${
                           duration === mins * 60
-                            ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/40'
+                            ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50'
                             : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 border-2 border-slate-200 dark:border-slate-600'
                         }`}
                       >
@@ -400,7 +398,7 @@ const FocusWidget: React.FC = () => {
                     <button
                       onClick={applyCustomDuration}
                       disabled={!customMinutes || parseInt(customMinutes) <= 0 || parseInt(customMinutes) > 180}
-                      className="px-6 py-3 bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-600 text-white font-bold rounded-xl transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-indigo-500/30 disabled:shadow-none"
+                      className="px-6 py-3 bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:from-slate-300 disabled:to-slate-400 dark:disabled:from-slate-700 dark:disabled:to-slate-600 text-white font-bold rounded-xl transition-all hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50 disabled:shadow-none"
                     >
                       Set
                     </button>
@@ -424,7 +422,7 @@ const FocusWidget: React.FC = () => {
                   <button
                     onClick={() => setMuted(m => !m)}
                     className={`relative w-14 h-8 rounded-full transition-all ${
-                      muted ? 'bg-slate-300 dark:bg-slate-600' : 'bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/30'
+                      muted ? 'bg-slate-300 dark:bg-slate-600' : 'bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50'
                     }`}
                   >
                     <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform flex items-center justify-center ${
@@ -441,24 +439,24 @@ const FocusWidget: React.FC = () => {
           {/* Stats Grid */}
           <div className="px-6 py-6">
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 rounded-2xl p-4 text-center border border-indigo-100 dark:border-indigo-900">
-                <div className="text-3xl font-black bg-gradient-to-br from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl p-4 text-center border-2 border-indigo-100 dark:border-indigo-900">
+                <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">
                   {sessionsCompleted}
                 </div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-1 tracking-wider">
                   Sessions
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 rounded-2xl p-4 text-center border border-purple-100 dark:border-purple-900">
-                <div className="text-3xl font-black bg-gradient-to-br from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl p-4 text-center border-2 border-emerald-100 dark:border-emerald-900">
+                <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
                   {Math.floor(sessionsCompleted * 25)}
                 </div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-1 tracking-wider">
                   Minutes
                 </div>
               </div>
-              <div className="bg-gradient-to-br from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 rounded-2xl p-4 text-center border border-pink-100 dark:border-pink-900">
-                <div className="text-3xl font-black bg-gradient-to-br from-pink-600 to-rose-600 bg-clip-text text-transparent">
+              <div className="bg-blue-50 dark:bg-blue-950/30 rounded-2xl p-4 text-center border-2 border-blue-100 dark:border-blue-900">
+                <div className="text-3xl font-black text-blue-600 dark:text-blue-400">
                   {sessionsCompleted > 0 ? Math.floor(sessionsCompleted / 4) : 0}
                 </div>
                 <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mt-1 tracking-wider">

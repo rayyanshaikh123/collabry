@@ -226,7 +226,7 @@ export const useNotebookContext = (id: string | undefined) => {
 export const useLinkArtifact = (notebookId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic'; referenceId: string; title: string; data?: any }) => 
+    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic' | 'course-finder'; referenceId: string; title: string; data?: any }) => 
       notebookService.linkArtifact(notebookId, data),
     onSuccess: (response: any) => {
       const added = response?.data as Artifact | undefined;

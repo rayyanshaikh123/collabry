@@ -239,12 +239,20 @@ async def run_agent(
     stream: bool = True,
     sender_name: Optional[str] = None,
     is_collaborative: bool = False,
-    token: Optional[str] = None
+    token: Optional[str] = None,
+    byok: Optional[Dict] = None
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Main entry point using the simplified linear flow.
     SECURITY FIX - Phase 2/3: Enhanced with artifact precedence and security fixes.
+    
+    Args:
+        byok: Optional dict with user's API key info: {'api_key': str, 'base_url': str, 'provider': str}
     """
+    # Store BYOK info in session state for LLM calls
+    if byok:
+        logger.info(f"🔑 [BYOK] Agent using user's {byok.get('provider')} key")
+    
     # 1. Initialize State with proper user isolation
     session_state = get_session_state(session_id, user_id)
 
@@ -560,10 +568,11 @@ async def chat(
     message: str,
     notebook_id: Optional[str] = None,
     source_ids: Optional[List[str]] = None,
+    byok: Optional[Dict] = None
 ) -> str:
     """Non-streaming wrapper."""
     response = ""
-    async for event in run_agent(user_id, session_id, message, notebook_id=notebook_id, source_ids=source_ids):
+    async for event in run_agent(user_id, session_id, message, notebook_id=notebook_id, source_ids=source_ids, byok=byok):
         if event["type"] == "token":
             response += event["content"]
         elif event["type"] == "complete":

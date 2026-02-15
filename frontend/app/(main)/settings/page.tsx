@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
 import { authService } from '@/lib/services/auth.service';
+import { apiClient } from '@/lib/api';
 import type { Session } from '@/types/user.types';
 import type { ThemeType } from '@/types';
 import { useToast } from '@/hooks/use-toast';
@@ -31,10 +32,12 @@ import {
   Trash2,
   RefreshCw,
   Eye,
-  EyeOff
+  EyeOff,
+  Key
 } from 'lucide-react';
 
 import NotificationHistory from '@/components/NotificationHistory';
+import ApiKeyCard from '@/components/settings/ApiKeyCard';
 
 export default function SettingsPage() {
   const { toast } = useToast();
@@ -48,6 +51,15 @@ export default function SettingsPage() {
     name: user?.name || '',
     email: user?.email || '',
   });
+
+  // BYOK (Bring Your Own Key) State
+  const [apiKeys, setApiKeys] = useState<Record<string, any>>({});
+  const [byokSettings, setByokSettings] = useState({
+    enabled: false,
+    activeProvider: null,
+    fallbackToSystem: true
+  });
+  const [byokLoading, setByokLoading] = useState(false);
 
   // Security Settings
   const [security, setSecurityData] = useState({
@@ -126,7 +138,103 @@ export default function SettingsPage() {
   // Fetch sessions when Security tab loads
   useEffect(() => {
     fetchSessions();
+    fetchApiKeys();
   }, []);
+
+  // Fetch API keys
+  const fetchApiKeys = async () => {
+    try {
+      const response = await apiClient.get('/apikeys');
+      
+      if (response.success) {
+        const keysMap: Record<string, any> = {};
+        response.data.keys.forEach((key: any) => {
+          keysMap[key.provider] = key;
+        });
+        setApiKeys(keysMap);
+        setByokSettings(response.data.settings);
+      }
+    } catch (error) {
+      console.error('Failed to fetch API keys:', error);
+    }
+  };
+
+  const handleAddKey = async (provider: string, apiKey: string) => {
+    try {
+      const response = await apiClient.post('/apikeys', { provider, apiKey });
+      
+      if (response.success) {
+        toast({ title: 'Success', description: `${provider} API key added successfully` });
+        fetchApiKeys();
+      } else {
+        throw new Error(response.message || 'Failed to add API key');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+      throw error;
+    }
+  };
+
+  const handleActivateKey = async (provider: string) => {
+    try {
+      const response = await apiClient.put(`/apikeys/${provider}`, { isActive: true });
+      
+      if (response.success) {
+        toast({ title: 'Success', description: `${provider} is now active` });
+        fetchApiKeys();
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+  };
+
+  const handleDeleteKey = async (provider: string) => {
+    try {
+      const response = await apiClient.delete(`/apikeys/${provider}`);
+      
+      if (response.success) {
+        toast({ title: 'Success', description: 'API key deleted' });
+        fetchApiKeys();
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+  };
+
+  const handleValidateKey = async (provider: string) => {
+    try {
+      const response = await apiClient.post(`/apikeys/${provider}/validate`);
+      
+      if (response.success) {
+        if (response.data.isValid) {
+          toast({ title: 'Valid', description: 'API key is working correctly' });
+        } else {
+          toast({ variant: 'destructive', title: 'Invalid', description: 'API key validation failed' });
+        }
+        fetchApiKeys();
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+  };
+
+  const handleToggleByok = async (enabled: boolean) => {
+    try {
+      const response = await apiClient.post('/apikeys/settings', { enabled });
+      
+      if (response.success) {
+        setByokSettings(response.data);
+        toast({ 
+          title: enabled ? 'BYOK Enabled' : 'BYOK Disabled',
+          description: enabled 
+            ? 'You are now using your own API keys'
+            : 'Switched back to platform limits'
+        });
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
+  };
 
   const handleProfileSave = async () => {
     setSaveStatus('saving');
@@ -200,7 +308,7 @@ export default function SettingsPage() {
       <div className="flex-1 overflow-auto p-8">
         <div className="max-w-5xl mx-auto">
           <Tabs defaultValue={initialTab} className="w-full">
-            <TabsList className="grid grid-cols-4 w-full mb-8">
+            <TabsList className="grid grid-cols-5 w-full mb-8">
               <TabsTrigger value="profile" className="font-bold">
                 <User size={16} className="mr-2" />
                 Profile
@@ -216,6 +324,10 @@ export default function SettingsPage() {
               <TabsTrigger value="security" className="font-bold">
                 <Shield size={16} className="mr-2" />
                 Security
+              </TabsTrigger>
+              <TabsTrigger value="apikeys" className="font-bold">
+                <Key size={16} className="mr-2" />
+                API Keys
               </TabsTrigger>
             </TabsList>
 
@@ -269,8 +381,8 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-3">
                     <Label className="font-bold">Theme Color</Label>
-                    <div className="flex gap-3">
-                      {(['indigo', 'blue', 'amber', 'emerald', 'rose'] as const).map(color => (
+                    <div className="grid grid-cols-6 gap-3">
+                      {(['indigo', 'blue', 'amber', 'emerald', 'rose', 'purple', 'cyan', 'pink', 'teal', 'violet', 'orange', 'yellow'] as const).map(color => (
                         <button
                           key={color}
                           onClick={() => setTheme(color as ThemeType)}
@@ -376,7 +488,7 @@ export default function SettingsPage() {
                       </button>
                     </div>
                   </div>
-                  <Button onClick={handlePasswordUpdate} variant="outline" className="w-full font-bold">
+                  <Button onClick={handlePasswordUpdate} variant="outline" className="w-full font-bold text-slate-50 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
                     Update Password
                   </Button>
                 </CardContent>
@@ -395,7 +507,7 @@ export default function SettingsPage() {
                       size="sm"
                       onClick={fetchSessions}
                       disabled={sessionsLoading}
-                      className="font-semibold"
+                      className="font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
                       <RefreshCw size={14} className={`mr-1.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
                       Refresh
@@ -462,9 +574,67 @@ export default function SettingsPage() {
                   <CardDescription>Irreversible account actions</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Button variant="outline" className="w-full font-bold text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/20">
+                  <Button variant="outline" className="w-full font-bold text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20">
                     Delete Account
                   </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* API Keys Tab */}
+            <TabsContent value="apikeys" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-black">Bring Your Own API Keys</CardTitle>
+                  <CardDescription>
+                    Use your own AI provider API keys to bypass usage limits. Your keys are encrypted and secure.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* BYOK Enable/Disable Toggle */}
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 border-2 border-indigo-200 dark:border-indigo-800">
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">Enable Custom API Keys</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">
+                        Use your own keys instead of platform limits
+                      </p>
+                    </div>
+                    <Switch
+                      checked={byokSettings.enabled}
+                      onCheckedChange={handleToggleByok}
+                    />
+                  </div>
+
+                  {/* Provider Cards */}
+                  <div className="space-y-4">
+                    {(['openai', 'groq', 'gemini'] as const).map(provider => (
+                      <ApiKeyCard
+                        key={provider}
+                        provider={provider}
+                        keyData={apiKeys[provider]}
+                        isActive={byokSettings.activeProvider === provider}
+                        onAdd={handleAddKey}
+                        onActivate={handleActivateKey}
+                        onDelete={handleDeleteKey}
+                        onValidate={handleValidateKey}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Info Alert */}
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800">
+                    <AlertCircle size={20} className="text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <div className="text-sm text-slate-700 dark:text-slate-300">
+                      <p className="font-bold mb-1">How it works:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400">
+                        <li>Your API keys are encrypted with AES-256-GCM</li>
+                        <li>Keys are never stored in plain text</li>
+                        <li>When enabled, all AI features use your key</li>
+                        <li>Your usage won't count against platform limits</li>
+                        <li>You'll be billed directly by the AI provider</li>
+                      </ul>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

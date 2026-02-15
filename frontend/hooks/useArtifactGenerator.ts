@@ -79,7 +79,7 @@ export function useArtifactGenerator({
 
         const message = lines.join('\n');
 
-        handleSendMessage(message);
+        await handleSendMessage(message);
           setIsGenerating(false);
           if (setGeneratingType) setGeneratingType(null);
           return;
@@ -264,7 +264,7 @@ Rules:
 - stats: 0-3 items per section (only if supported by sources)
 - JSON only`;
 
-          handleSendMessage(message);
+          await handleSendMessage(message);
           setIsGenerating(false);
           if (setGeneratingType) setGeneratingType(null);
           return;

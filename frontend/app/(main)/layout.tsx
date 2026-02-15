@@ -18,7 +18,7 @@ import { AppRoute } from '../../types';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
 
-const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose'];
+const THEMES = ['indigo', 'blue', 'amber', 'emerald', 'rose', 'purple', 'cyan', 'pink', 'teal', 'violet', 'orange', 'yellow'];
 
 // Map pathnames to AppRoute enum values
 const getAppRouteFromPath = (path: string): string => {
@@ -30,6 +30,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/flashcards': 'flashcards',
     '/profile': 'profile',
     '/usage': 'usage',
+    '/settings': 'settings',
     '/subscription': 'subscription',
     '/pricing': 'pricing',
     '/study-buddy': 'study-buddy',
@@ -40,7 +41,7 @@ const getAppRouteFromPath = (path: string): string => {
   // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
   if (path.startsWith('/study-board')) return 'study-board';
-  if (path.startsWith('/study-board')) return 'study-board';
+  if (path.startsWith('/settings')) return 'settings';
   return routeMap[path] || 'dashboard';
 };
 
@@ -127,7 +128,7 @@ export default function MainLayout({
 
   const cycleTheme = () => {
     const nextIndex = (THEMES.indexOf(theme) + 1) % THEMES.length;
-    setTheme(THEMES[nextIndex] as 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose');
+    setTheme(THEMES[nextIndex] as ThemeType);
   };
 
   const handleLogout = async () => {

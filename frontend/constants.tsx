@@ -49,6 +49,7 @@ import {
   X,
   AlertCircle,
   Eye,
+  EyeOff,
   Copy,
   Link,
   Lock,
@@ -56,7 +57,8 @@ import {
   TrendingUp,
   TrendingDown,
   UserPlus,
-  Heart
+  Heart,
+  Key
 } from 'lucide-react';
 import { StudyBoard, Activity, Task } from './types';
 
@@ -134,6 +136,8 @@ export const ICONS = {
   Send: Send,
   Heart: Heart,
   Bell: Bell,
+  EyeOff: EyeOff,
+  Key: Key,
 };
 
 // ⚠️ REMOVED MOCK DATA - Fetch from backend API instead

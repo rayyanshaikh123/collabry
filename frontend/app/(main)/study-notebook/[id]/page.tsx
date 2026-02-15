@@ -284,7 +284,8 @@ export default function StudyNotebookPage() {
     handleSaveQuizToStudio,
     handleSaveMindMapToStudio,
     handleSaveInfographicToStudio,
-    handleSaveFlashcardsToStudio
+    handleSaveFlashcardsToStudio,
+    handleSaveCourseFinderToStudio,
   } = useStudioSave({
     notebook,
     artifactEdits,
@@ -366,7 +367,9 @@ export default function StudyNotebookPage() {
       try {
         await removeSource.mutateAsync(sourceId);
         broadcastSourceUpdate('removed', { _id: sourceId });
-      } catch (e) { showError('Failed to remove source'); }
+      } catch (e: any) {
+        showError(e.message || 'Failed to remove source');
+      }
     }, 'Remove Source');
   };
 
@@ -462,6 +465,7 @@ export default function StudyNotebookPage() {
         onToggleSource={handleToggleSource}
         onAddSource={handleAddSource}
         onRemoveSource={handleRemoveSource}
+        notebookId={notebookId}
         messages={localMessages}
         onSendMessage={handleSendMessage}
         onRegeneratePrompt={handleRegeneratePrompt}
@@ -473,6 +477,7 @@ export default function StudyNotebookPage() {
         onSaveMindMapToStudio={handleSaveMindMapToStudio}
         onSaveInfographicToStudio={handleSaveInfographicToStudio}
         onSaveFlashcardsToStudio={handleSaveFlashcardsToStudio}
+        onSaveCourseFinderToStudio={handleSaveCourseFinderToStudio}
         artifacts={notebook.artifacts.map(a => {
           const edits = artifactEdits[a._id] || {};
           return ({

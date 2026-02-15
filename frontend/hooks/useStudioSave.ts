@@ -224,10 +224,32 @@ export function useStudioSave({
     [notebook, linkArtifact, showSuccess, showError]
   );
 
+  const handleSaveCourseFinderToStudio = useCallback(
+    async (courses: any[]) => {
+      if (!notebook || !('title' in notebook)) return;
+
+      try {
+        await linkArtifact.mutateAsync({
+          type: 'course-finder',
+          referenceId: `courses-${Date.now()}`,
+          title: `Course Recommendations - ${notebook.title}`,
+          data: { courses },
+        });
+
+        showSuccess('Courses saved to Studio successfully!');
+      } catch (error) {
+        console.error('Failed to save courses:', error);
+        showError('Failed to save courses to Studio');
+      }
+    },
+    [notebook, linkArtifact, showSuccess, showError]
+  );
+
   return {
     handleSaveQuizToStudio,
     handleSaveMindMapToStudio,
     handleSaveInfographicToStudio,
     handleSaveFlashcardsToStudio,
+    handleSaveCourseFinderToStudio,
   };
 }

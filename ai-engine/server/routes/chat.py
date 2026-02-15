@@ -35,7 +35,7 @@ router = APIRouter(prefix="/ai", tags=["chat"])
 )
 async def chat(
     request: ChatRequest,
-    user_id: str = Depends(get_current_user)
+    user_info: dict = Depends(get_current_user)
 ) -> ChatResponse:
     """
     Chat endpoint with user-isolated conversation memory.
@@ -43,8 +43,12 @@ async def chat(
     - Extracts user_id from JWT token
     - Maintains conversation context via session_id
     - Supports tool invocation (web search, document generation, etc.)
+    - Supports BYOK (Bring Your Own Key) if user provides API key
     """
     try:
+        user_id = user_info["user_id"]
+        byok = user_info.get("byok")
+        
         # Generate session_id if not provided
         session_id = request.session_id or str(uuid4())
         
@@ -68,13 +72,14 @@ async def chat(
                 raise HTTPException(status_code=400, detail="message is required for chat requests")
             agent_message = request.message
         
-        # Use new agent architecture
+        # Use new agent architecture with BYOK support
         response = await agent_chat(
             user_id=user_id,
             session_id=session_id,
             message=agent_message,
             notebook_id=request.notebook_id,
-            source_ids=request.source_ids
+            source_ids=request.source_ids,
+            byok=byok
         )
         
         logger.info(f"Chat response generated: {len(response)} chars")
@@ -106,19 +111,23 @@ async def chat(
 )
 async def chat_stream(
     request: ChatRequest,
-    user_id: str = Depends(get_current_user)
+    user_info: dict = Depends(get_current_user)
 ):
     """
     Streaming chat endpoint using SSE.
+    Supports BYOK (Bring Your Own Key) if user provides API key.
     
     Returns:
         StreamingResponse with Server-Sent Events
     """
     try:
+        user_id = user_info["user_id"]
+        byok = user_info.get("byok")
+        
         session_id = request.session_id or str(uuid4())
         
         logger.info(f"Streaming chat request from user={user_id}, session={session_id}")
-        
+
         async def event_generator():
             """Generate SSE events that stream tool calls and responses from ReAct agent."""
             has_data = False
@@ -132,7 +141,8 @@ async def chat_stream(
                     notebook_id=request.notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
-                    stream=True
+                    stream=True,
+                    byok=byok
                 ):
                     if event:
                         has_data = True

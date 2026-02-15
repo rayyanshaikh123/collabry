@@ -33,6 +33,20 @@ const checkAIUsageLimit = async (req, res, next) => {
       });
     }
     
+    // Check if user has BYOK (Bring Your Own Key) enabled
+    const User = require('../models/User');
+    const user = await User.findById(userId).select('byokSettings apiKeys');
+    
+    if (user && user.hasByokEnabled()) {
+      // User is using their own API key - bypass limits
+      console.log(`[BYOK] User ${userId} using own ${user.byokSettings.activeProvider} key - bypassing limits`);
+      req.byokEnabled = true;
+      req.byokProvider = user.byokSettings.activeProvider;
+      return next();
+    }
+    
+    req.byokEnabled = false;
+    
     const { plan, limits } = await getPlanLimits(userId);
     
     // Unlimited plans can proceed
@@ -294,6 +308,16 @@ const checkNotebookLimit = async (req, res, next) => {
  */
 const trackAIUsage = async (userId, tokens = 0, model = 'basic', questionType = 'chat') => {
   try {
+    // Check if user has BYOK enabled - don't track against platform limits
+    const User = require('../models/User');
+    const user = await User.findById(userId).select('byokSettings');
+    
+    if (user && user.byokSettings.enabled && user.byokSettings.activeProvider) {
+      console.log(`[BYOK] Skipping usage tracking for user ${userId} (using own ${user.byokSettings.activeProvider} key)`);
+      // Optionally: track separately for analytics but don't count against limits
+      return;
+    }
+    
     await Usage.incrementAIUsage(userId, tokens, model, questionType);
   } catch (error) {
     console.error('Error tracking AI usage:', error);
@@ -342,8 +366,27 @@ const getUsageSummary = async (userId) => {
     const storageUsed = user?.storageUsed || 0;
     const storageLimit = limits.storageGB * 1024 * 1024 * 1024;
     
+    // Get BYOK status
+    const byokStatus = {
+      enabled: user?.byokSettings?.enabled || false,
+      activeProvider: user?.byokSettings?.activeProvider || null,
+      hasKeys: user?.apiKeys && user.apiKeys.size > 0,
+      providers: []
+    };
+
+    if (user?.apiKeys) {
+      for (const [provider, data] of user.apiKeys) {
+        byokStatus.providers.push({
+          provider,
+          isActive: data.isActive,
+          isValid: data.isValid
+        });
+      }
+    }
+    
     return {
       plan,
+      byok: byokStatus,
       today: {
         aiQuestions: {
           used: todayUsage.aiQuestions,

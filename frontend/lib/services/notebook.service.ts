@@ -21,7 +21,7 @@ export interface Source {
 
 export interface Artifact {
   _id: string;
-  type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic';
+  type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic' | 'course-finder';
   referenceId: string;
   title: string;
   data?: any; // Inline data for flashcards and infographics
@@ -102,7 +102,7 @@ class NotebookService {
   }
 
   async linkArtifact(notebookId: string, data: {
-    type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic';
+    type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic' | 'course-finder';
     referenceId: string;
     title: string;
     data?: any;

@@ -33,7 +33,7 @@ export enum AppRoute {
   RECYCLE_BIN = 'recycle-bin'
 }
 
-export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose';
+export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose' | 'purple' | 'cyan' | 'pink' | 'teal' | 'violet' | 'orange' | 'yellow';
 
 export * from './user.types';
 export * from './planner.types';
