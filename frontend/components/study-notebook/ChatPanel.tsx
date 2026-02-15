@@ -18,6 +18,10 @@ import { extractInfographicFromMarkdown, containsInfographicData } from '../../l
 import { extractFlashcardsFromMarkdown, containsFlashcardData } from '../../lib/flashcardParser';
 import FlashcardViewer from './FlashcardViewer';
 import BoardPickerModal from '../study-board/BoardPickerModal';
+import VerifiedResponseView from './VerifiedResponseView';
+import VerifiedModeToggle from './VerifiedModeToggle';
+import CitationDisplay from './CitationDisplay';
+import ArtifactLoadingSkeleton from './ArtifactLoadingSkeleton';
 
 export interface ChatMessage {
   id: string;
@@ -28,6 +32,15 @@ export interface ChatMessage {
   senderId?: string;
   senderName?: string;
   senderAvatar?: string;
+  verifiedData?: any; // Verified mode response data
+  citations?: Array<{
+    id: number;
+    source_id: string;
+    source_name: string;
+    excerpt: string;
+    page?: number;
+    type?: string;
+  }>;
 }
 
 interface ChatPanelProps {
@@ -46,6 +59,8 @@ interface ChatPanelProps {
   onSaveCourseFinderToStudio?: (courses: any[]) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
+  verifiedMode?: boolean;
+  onVerifiedModeChange?: (enabled: boolean) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -64,6 +79,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onSaveCourseFinderToStudio,
   typingUsers = [],
   onTyping,
+  verifiedMode = false,
+  onVerifiedModeChange,
 }) => {
   const router = useRouter();
   const [inputText, setInputText] = useState('');
@@ -100,6 +117,82 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     setIsBoardPickerOpen(false);
     setPendingBoardInsert(null);
     router.push(`/study-board/${boardId}`);
+  };
+
+  // PHASE 1: Helper functions for artifact detection
+  const detectArtifactType = (content: string): 'mindmap' | 'flashcards' | 'infographic' | 'quiz' | 'general' => {
+    if (content.includes('[MINDMAP_GENERATION_REQUEST]') ||
+      (content.includes('"nodes"') && content.includes('"edges"'))) {
+      return 'mindmap';
+    }
+    if (content.includes('[FLASHCARDS_GENERATION_REQUEST]') || content.includes('"cards"')) {
+      return 'flashcards';
+    }
+    if (content.includes('[INFOGRAPHIC_GENERATION_REQUEST]') || content.includes('"sections"')) {
+      return 'infographic';
+    }
+    if (content.includes('"questions"') && content.includes('"options"')) {
+      return 'quiz';
+    }
+    return 'general';
+  };
+
+  const isArtifactGeneration = (content: string) => {
+    return content.includes('[MINDMAP_GENERATION_REQUEST]') ||
+      content.includes('[FLASHCARDS_GENERATION_REQUEST]') ||
+      content.includes('[INFOGRAPHIC_GENERATION_REQUEST]') ||
+      (content.includes('"nodes"') && content.includes('"edges"')) ||
+      (content.includes('"cards"') && content.includes('"front"')) ||
+      (content.includes('"sections"') && content.length > 100);
+  };
+
+  // PHASE 2: Comprehensive cleanup function to remove ALL artifact JSON/markdown
+  const cleanMarkdownFromArtifacts = (markdown: string): string => {
+    if (!markdown) return '';
+    let cleaned = markdown;
+
+    // Remove JSON code blocks Specifically
+    cleaned = cleaned.replace(/```json[\s\S]*?```/g, '');
+
+    // Remove standalone JSON objects that contain artifact-specific keys
+    // This regex looks for blocks starting with { and ending with } that contain one of our keywords
+    // We use a more aggressive approach to catch nested structures
+    const artifactKeys = ['"nodes"', '"edges"', '"cards"', '"front"', '"back"', '"sections"', '"title"', '"questions"', '"options"'];
+
+    // First pass: Remove large JSON structures that are obviously artifacts
+    // Using greedy match to capture full nested objects if they contain artifact keys
+    cleaned = cleaned.replace(/\{[\s\S]+\}/g, (match) => {
+      const artifactKeys = ['"nodes"', '"edges"', '"cards"', '"front"', '"back"', '"sections"', '"title"', '"questions"', '"options"'];
+      if (artifactKeys.some(key => match.includes(key))) {
+        return '';
+      }
+      return match;
+    });
+
+    // Second pass: Remove request markers like [MINDMAP_GENERATION_REQUEST]
+    cleaned = cleaned.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '');
+
+    // Third pass: Remove stray fragments (stray braces, trailing quotes, "conclusion" fields)
+    cleaned = cleaned.replace(/"[a-zA-Z0-9_-]+":\s*"[\s\S]*?"\s*\}*/g, '');
+    cleaned = cleaned.replace(/\s*[}\]]+\s*$/gm, ''); // Trailing closing braces/brackets
+
+    // Remove extra whitespace and blank lines
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    cleaned = cleaned.trim();
+
+    // Final sanity check: if the remaining text looks like JSON trash, clear it
+    // Check for mostly being symbols, quotes, and braces
+    const symbolCount = (cleaned.match(/[{}\[\]",:]/g) || []).length;
+    if (cleaned.length > 0 && symbolCount / cleaned.length > 0.3) {
+      return '';
+    }
+
+    // If nothing meaningful left (very short or just whitespace), clear it
+    if (cleaned.length < 15 || cleaned.match(/^[{}\[\]",:\s]*$/)) {
+      return '';
+    }
+
+    return cleaned;
   };
 
   const copyToClipboard = async (text: string) => {
@@ -152,6 +245,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         checkScrollButtons(messageId);
       }
     });
+  }, [messages]);
+
+  // PHASE 3: Auto-scroll when artifacts render
+  React.useLayoutEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      // Scroll when assistant message completes (not loading)
+      if (lastMessage.role === 'assistant' && !lastMessage.isLoading) {
+        // Small delay to ensure artifacts are rendered
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+          });
+        }, 100);
+      }
+    }
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -299,7 +409,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 )}
 
                 <div
-                  className={`max-w-[80%] ${message.role === 'user'
+                  className={`max-w-[80%] break-words overflow-hidden ${message.role === 'user'
                     ? 'bg-indigo-600 dark:bg-indigo-700 text-white rounded-2xl rounded-tr-sm'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-2xl rounded-tl-sm'
                     } px-5 py-3 shadow-sm`}
@@ -348,14 +458,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   </div>
 
                   {message.isLoading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    // PHASE 1: Show artifact-specific skeleton if generating an artifact
+                    isArtifactGeneration(message.content) ? (
+                      <ArtifactLoadingSkeleton type={detectArtifactType(message.content)} />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Thinking...</span>
                       </div>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Thinking...</span>
-                    </div>
+                    )
                   ) : message.role === 'user' ? (
                     editingMessageId === message.id ? (
                       <div className="space-y-2">
@@ -484,12 +599,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         let cleanMarkdown = markdownAfterQuiz;
 
                         // Parse mindmap only when BOTH: explicit request AND response has mindmap JSON structure
-                        if (hasMindmapData && isExplicitMindmapRequest) {
+                        // Be more lenient for assistant messages
+                        if (hasMindmapData && (isExplicitMindmapRequest || message.role === 'assistant')) {
                           const result = extractMindMapFromMarkdown(contentToParse);
                           mindmap = result.mindmap;
                           cleanMarkdown = result.cleanMarkdown;
-                          // Remove explicit intent markers
-                          cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
+                          // PHASE 2: Apply comprehensive cleanup
+                          cleanMarkdown = cleanMarkdownFromArtifacts(cleanMarkdown);
                         }
 
                         // Check for infographic JSON
@@ -498,50 +614,51 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         const hasInfographicData = containsInfographicData(message.content);
 
                         let infographic = null;
-                        if (hasInfographicData && isExplicitInfographicRequest) {
+                        if (hasInfographicData && (isExplicitInfographicRequest || message.role === 'assistant')) {
                           const result = extractInfographicFromMarkdown(message.content);
                           if (result.success && result.data) {
                             infographic = result.data;
                             console.log('✅ Infographic parsed successfully');
 
-                            // Remove JSON from markdown display
-                            cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"title"[\s\S]*"sections"[\s\S]*\}/g, '').trim();
-                            // Remove explicit intent markers
-                            cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
-
-                            // If the assistant responded with JSON only, don't show it as markdown
-                            if (cleanMarkdown.trim().startsWith('{')) {
-                              cleanMarkdown = '';
-                            }
+                            // PHASE 2: Apply comprehensive cleanup
+                            cleanMarkdown = cleanMarkdownFromArtifacts(cleanMarkdown);
                           }
                         }
 
                         // Check for flashcard data
                         const isExplicitFlashcardRequest = message.content.includes('[FLASHCARDS_GENERATION_REQUEST]') ||
-                          priorUserMessages.some((m) => m.content.toLowerCase().includes('flashcard'));
+                          priorUserMessages.some((m) => {
+                            const low = m.content.toLowerCase();
+                            return low.includes('flashcard') ||
+                              low.includes('study cards') ||
+                              low.includes('revision cards') ||
+                              low.includes('practice cards');
+                          });
                         const hasFlashcardData = containsFlashcardData(message.content);
 
                         let flashcardSet = null;
-                        if (hasFlashcardData && isExplicitFlashcardRequest) {
+                        // Be more lenient: if it has high-confidence flashcard data, try parsing anyway
+                        // especially for assistant messages where markers might be lost during streaming
+                        if (hasFlashcardData && (isExplicitFlashcardRequest || message.role === 'assistant')) {
                           const result = extractFlashcardsFromMarkdown(message.content);
                           if (result.success && result.data) {
                             flashcardSet = result.data;
                             console.log('✅ Flashcards parsed successfully:', flashcardSet.cards.length, 'cards');
 
-                            // Remove JSON from markdown display
-                            cleanMarkdown = cleanMarkdown.replace(/\{[\s\S]*"cards"[\s\S]*"front"[\s\S]*\}/g, '').trim();
-                            // Remove explicit intent markers
-                            cleanMarkdown = cleanMarkdown.replace(/\[[A-Z_]+_REQUEST\]\s*/gi, '').trim();
-
-                            // If the assistant responded with JSON only, don't show it as markdown
-                            if (cleanMarkdown.trim().startsWith('{')) {
-                              cleanMarkdown = '';
-                            }
+                            // PHASE 2: Apply comprehensive cleanup
+                            cleanMarkdown = cleanMarkdownFromArtifacts(cleanMarkdown);
                           }
                         }
 
                         return (
                           <>
+                            {/* Verified Mode Response */}
+                            {message.role === 'assistant' && message.verifiedData && (
+                              <div className="mb-4">
+                                <VerifiedResponseView data={message.verifiedData} />
+                              </div>
+                            )}
+
                             {/* Render mindmap */}
                             {mindmap && mindmap.nodes && mindmap.nodes.length > 0 && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-emerald-50 dark:from-emerald-900/30 via-teal-50 dark:via-teal-900/30 to-cyan-50 dark:to-cyan-900/30 rounded-xl">
@@ -775,6 +892,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       })()}
                     </>
                   )}
+
+                  {/* Citations Display - Phase 4 */}
+                  {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
+                    <CitationDisplay citations={message.citations} />
+                  )}
+
                   <div className={`text-[10px] font-bold mt-2 ${message.role === 'user' ? 'text-indigo-200 dark:text-indigo-300' : 'text-slate-400 dark:text-slate-500'} flex items-center gap-1`}>
                     <ICONS.Clock className="w-3 h-3 opacity-60" />
                     {new Date(message.timestamp).toLocaleTimeString('en-US', {
@@ -856,6 +979,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
           </Button>
         </form>
+
+        {/* Verified Mode Toggle */}
+        {hasSelectedSources && onVerifiedModeChange && (
+          <div className="mt-3">
+            <VerifiedModeToggle
+              enabled={verifiedMode}
+              onChange={onVerifiedModeChange}
+            />
+          </div>
+        )}
+
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
           Press Enter to send • Shift + Enter for new line
         </p>

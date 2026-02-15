@@ -77,6 +77,14 @@ class BoardService {
       throw new AppError('Board not found', 404);
     }
 
+    // Debug logging
+    console.log('🔍 Board Access Check:');
+    console.log('  userId:', userId, typeof userId);
+    console.log('  board.owner:', board.owner, typeof board.owner);
+    console.log('  board.owner._id:', board.owner._id, typeof board.owner._id);
+    console.log('  board.isPublic:', board.isPublic);
+    console.log('  board.members:', board.members.map(m => ({ userId: m.userId._id || m.userId, role: m.role })));
+
     // Check access
     if (!board.hasAccess(userId)) {
       throw new AppError('Access denied', 403);

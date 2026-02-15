@@ -9,7 +9,7 @@ Handles:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from server.schemas import SummarizeRequest, SummarizeResponse, ErrorResponse
 from core.agent import run_agent, chat
 from config import CONFIG
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/ai", tags=["summarize"])
 )
 async def summarize_text(
     request: SummarizeRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> SummarizeResponse:
     """
     Summarize text content.
@@ -109,7 +109,7 @@ Summary:"""
 )
 async def summarize_stream(
     request: SummarizeRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Streaming summarization endpoint using SSE.

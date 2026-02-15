@@ -21,7 +21,7 @@ import {
   useCreateNotebook
 } from '@/hooks/useNotebook';
 import { useSessionMessages, useSaveMessage, useClearSessionMessages } from '@/hooks/useSessions';
-import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz } from '@/hooks/useVisualAids';
+import { useGenerateQuiz, useGenerateMindMap, useCreateQuiz, useCreateMindMap } from '@/hooks/useVisualAids';
 import { useNotebookChat } from '@/hooks/useNotebookChat';
 import { useArtifactGenerator } from '@/hooks/useArtifactGenerator';
 import { useStudioSave } from '@/hooks/useStudioSave';
@@ -82,6 +82,7 @@ export default function StudyNotebookPage() {
   // AI operations
   const generateQuiz = useGenerateQuiz();
   const generateMindMap = useGenerateMindMap();
+  const createMindMap = useCreateMindMap();
   const createQuiz = useCreateQuiz();
 
   // Chat state
@@ -97,12 +98,12 @@ export default function StudyNotebookPage() {
 
   useEffect(() => {
     const currentSessionId = notebook?.aiSessionId;
-    console.log('[PERSISTENCE DEBUG] useEffect triggered:', { 
+    console.log('[PERSISTENCE DEBUG] useEffect triggered:', {
       hasAiSessionId: !!currentSessionId,
       aiSessionId: currentSessionId,
       loading: sessionMessagesLoading,
       error: sessionMessagesError,
-      dataLength: sessionMessagesData?.length 
+      dataLength: sessionMessagesData?.length
     });
 
     if (!currentSessionId) {
@@ -186,9 +187,6 @@ export default function StudyNotebookPage() {
   const [addTextModalOpen, setAddTextModalOpen] = useState(false);
   const [textContent, setTextContent] = useState('');
   const [textTitle, setTextTitle] = useState('');
-  const [addNotesModalOpen, setAddNotesModalOpen] = useState(false);
-  const [notesContent, setNotesContent] = useState('');
-  const [notesTitle, setNotesTitle] = useState('New Note');
   const [addWebsiteModalOpen, setAddWebsiteModalOpen] = useState(false);
   const [websiteUrl, setWebsiteUrl] = useState('');
 
@@ -245,7 +243,9 @@ export default function StudyNotebookPage() {
     handleRegeneratePrompt,
     handleEditPrompt,
     handleClearChat,
-    handleRegenerateResponse
+    handleRegenerateResponse,
+    verifiedMode,
+    setVerifiedMode,
   } = useNotebookChat({
     notebookId,
     sessionId: notebook?.aiSessionId || '',
@@ -293,6 +293,7 @@ export default function StudyNotebookPage() {
     linkArtifact,
     createQuiz,
     generateMindMap,
+    createMindMap,
     showSuccess,
     showError,
     showWarning,
@@ -307,14 +308,13 @@ export default function StudyNotebookPage() {
     catch (e) { showError('Failed to toggle source'); }
   };
 
-  const handleAddSource = (type: 'pdf' | 'text' | 'website' | 'notes') => {
+  const handleAddSource = (type: 'pdf' | 'text' | 'website' | 'audio') => {
     if (type === 'text') setAddTextModalOpen(true);
-    else if (type === 'notes') setAddNotesModalOpen(true);
     else if (type === 'website') setAddWebsiteModalOpen(true);
-    else if (type === 'pdf') {
+    else if (type === 'pdf' || type === 'audio') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.pdf';
+      input.accept = type === 'pdf' ? '.pdf' : 'audio/*';
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (file && !addSourceInFlightRef.current) {
@@ -322,12 +322,15 @@ export default function StudyNotebookPage() {
           try {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('type', 'pdf');
+            formData.append('type', type);
             formData.append('name', file.name);
             const res = await addSource.mutateAsync(formData as any);
             broadcastSourceUpdate('added', res.data);
-            showSuccess('PDF uploaded successfully');
-          } catch (e) { showError('Failed to upload PDF'); }
+            showSuccess(`${type.toUpperCase()} uploaded successfully`);
+            if (type === 'audio') {
+              showInfo('Transcription is processing. Chat will be updated once finished.');
+            }
+          } catch (e) { showError(`Failed to upload ${type}`); }
           finally { addSourceInFlightRef.current = false; }
         }
       };
@@ -342,15 +345,6 @@ export default function StudyNotebookPage() {
       broadcastSourceUpdate('added', res.data);
       setAddTextModalOpen(false); setTextContent(''); setTextTitle('');
     } catch (e) { showError('Failed to add text source'); }
-  };
-
-  const handleSubmitNotes = async () => {
-    if (!notesContent.trim()) { showWarning('Please enter some notes'); return; }
-    try {
-      const res = await addSource.mutateAsync({ type: 'notes', name: notesTitle || 'New Note', content: notesContent } as any);
-      broadcastSourceUpdate('added', res.data);
-      setAddNotesModalOpen(false); setNotesContent(''); setNotesTitle('New Note');
-    } catch (e) { showError('Failed to add note'); }
   };
 
   const handleSubmitWebsite = async () => {
@@ -499,6 +493,8 @@ export default function StudyNotebookPage() {
         typingUsers={typingUsers}
         onTyping={sendTyping}
         onInvite={() => setInviteModalOpen(true)}
+        verifiedMode={verifiedMode}
+        onVerifiedModeChange={setVerifiedMode}
       />
 
       <NotebookInviteModal
@@ -511,9 +507,6 @@ export default function StudyNotebookPage() {
         addTextModalOpen={addTextModalOpen} textTitle={textTitle} textContent={textContent}
         setTextTitle={setTextTitle} setTextContent={setTextContent} onSubmitText={handleSubmitText}
         onCloseTextModal={() => { setAddTextModalOpen(false); setTextContent(''); setTextTitle(''); }}
-        addNotesModalOpen={addNotesModalOpen} notesTitle={notesTitle} notesContent={notesContent}
-        setNotesTitle={setNotesTitle} setNotesContent={setNotesContent} onSubmitNotes={handleSubmitNotes}
-        onCloseNotesModal={() => { setAddNotesModalOpen(false); setNotesContent(''); setNotesTitle('New Note'); }}
         addWebsiteModalOpen={addWebsiteModalOpen} websiteUrl={websiteUrl} setWebsiteUrl={setWebsiteUrl}
         onSubmitWebsite={handleSubmitWebsite} onCloseWebsiteModal={() => { setAddWebsiteModalOpen(false); setWebsiteUrl(''); }}
       />

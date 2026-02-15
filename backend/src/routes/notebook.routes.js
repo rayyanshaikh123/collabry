@@ -29,6 +29,7 @@ router.post('/notebooks/:id/sources', protect, checkFileUploadLimit, checkStorag
 router.delete('/notebooks/:id/sources/:sourceId', protect, notebookController.removeSource);
 router.patch('/notebooks/:id/sources/:sourceId', protect, notebookController.toggleSource);
 router.get('/notebooks/:id/sources/:sourceId/content', protect, notebookController.getSourceContent);
+router.get('/notebooks/:id/sources/:sourceId/audio', protect, notebookController.streamAudioSource);
 
 // ============================================================================
 // ARTIFACT LINKING

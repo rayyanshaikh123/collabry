@@ -99,34 +99,17 @@ def get_llm_config() -> LLMConfig:
     return _config
 
 
-def get_openai_client(user_api_key: Optional[str] = None, user_base_url: Optional[str] = None) -> OpenAI:
+def get_openai_client() -> OpenAI:
     """
     Get OpenAI client for synchronous operations.
-    Supports BYOK (Bring Your Own Key) by accepting user-provided API key.
-    
-    Args:
-        user_api_key: Optional user's own API key (BYOK)
-        user_base_url: Optional user's custom base URL
     
     Returns:
-        OpenAI client configured with user key or system defaults
+        OpenAI client configured with environment variables
         
     Example:
-        >>> # System key (shared)
         >>> client = get_openai_client()
-        >>> # User's own key (BYOK)
-        >>> client = get_openai_client(user_api_key="sk-...", user_base_url="https://...")
+        >>> response = client.chat.completions.create(...)
     """
-    # If user provided their own key, create a dedicated client
-    if user_api_key:
-        print(f"[BYOK] Creating client with user-provided key")
-        config = get_llm_config()
-        return OpenAI(
-            api_key=user_api_key,
-            base_url=user_base_url or config.base_url
-        )
-    
-    # Otherwise use cached system client
     global _client
     if _client is None:
         config = get_llm_config()

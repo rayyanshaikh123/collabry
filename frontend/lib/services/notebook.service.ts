@@ -9,7 +9,7 @@ export interface ApiResponse<T> {
 
 export interface Source {
   _id: string;
-  type: 'pdf' | 'text' | 'website' | 'notes';
+  type: 'pdf' | 'text' | 'website' | 'audio';
   name: string;
   filePath?: string;
   url?: string;
@@ -17,6 +17,13 @@ export interface Source {
   size?: number;
   selected: boolean;
   dateAdded: string;
+
+  // Audio specific fields
+  audioUrl?: string;
+  duration?: number;
+  transcription?: string;
+  transcriptionStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+  transcriptionError?: string;
 }
 
 export interface Artifact {
@@ -175,6 +182,12 @@ class NotebookService {
   async getFriendsToInvite(notebookId: string) {
     const response = await api.get(`/notebook/notebooks/${notebookId}/friends`);
     return response;
+  }
+
+  getAudioUrl(notebookId: string, sourceId: string) {
+    // Construct full URL including base API path
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    return `${baseURL}/notebook/notebooks/${notebookId}/sources/${sourceId}/audio`;
   }
 }
 

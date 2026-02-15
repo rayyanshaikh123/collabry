@@ -118,7 +118,7 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
       return {
         currentBoard: {
           ...state.currentBoard,
-          elements: [...state.currentBoard.elements, element],
+          elements: [...(state.currentBoard.elements || []), element],
         },
       };
     });
@@ -132,7 +132,7 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
       return {
         currentBoard: {
           ...state.currentBoard,
-          elements: state.currentBoard.elements.map((el) =>
+          elements: (state.currentBoard.elements || []).map((el) =>
             el.id === elementId ? { ...el, ...updates } : el
           ),
         },
@@ -148,7 +148,7 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
       return {
         currentBoard: {
           ...state.currentBoard,
-          elements: state.currentBoard.elements.filter((el) => el.id !== elementId),
+          elements: (state.currentBoard.elements || []).filter((el) => el.id !== elementId),
         },
         selectedElements: state.selectedElements.filter((id) => id !== elementId),
       };

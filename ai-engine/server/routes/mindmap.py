@@ -6,7 +6,7 @@ provider behavior (OpenAI vs OpenAI-compatible) and consistent JSON output.
 """
 
 from fastapi import APIRouter, Depends
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 import logging
 from fastapi import Body, Query
 from fastapi.responses import JSONResponse
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/ai", tags=["mindmap"])
 async def render_mindmap(
     mindmap: dict = Body(..., description="Mind map JSON structure"),
     format: Optional[str] = Query('svg', description="Output format: 'svg' or 'mermaid' or 'both'"),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> JSONResponse:
     """Render a provided mindmap JSON into Mermaid and/or Graphviz SVG using the internal tool.
 

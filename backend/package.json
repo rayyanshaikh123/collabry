@@ -36,6 +36,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "openai": "^6.22.0",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "rate-limit-redis": "^4.3.1",

@@ -11,7 +11,7 @@ Handles:
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from server.schemas import QARequest, QAResponse, QAGenerateRequest, QAGenerateResponse, QuizQuestion, ErrorResponse
 from core.agent import chat, run_agent
 from core.rag_retriever import RAGRetriever
@@ -46,7 +46,7 @@ ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.md', '.doc', '.docx'}
 )
 async def question_answering(
     request: QARequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> QAResponse:
     """
     Answer questions using RAG over user documents.
@@ -146,7 +146,7 @@ Answer:"""
 )
 async def question_answering_stream(
     request: QARequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Streaming QA endpoint with RAG support.
@@ -264,7 +264,7 @@ async def question_answering_with_file(
     question: str = Form(...),
     file: UploadFile = File(...),
     use_rag: bool = Form(False),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> QAResponse:
     """
     QA with file upload support - Accepts PDF, TXT, MD files up to 10MB.
@@ -367,7 +367,7 @@ async def question_answering_with_file_stream(
     question: str = Form(...),
     file: UploadFile = File(...),
     use_rag: bool = Form(False),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """Streaming QA with file upload."""
     try:
@@ -466,7 +466,7 @@ Answer:"""
 )
 async def generate_qa(
     request: QAGenerateRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> QAGenerateResponse:
     """
     Generate quiz questions from text content.
@@ -649,7 +649,7 @@ Generate exactly {request.num_questions} questions. Return ONLY valid JSON with 
 )
 async def generate_qa_stream(
     request: QAGenerateRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Stream quiz question generation.
@@ -796,7 +796,7 @@ async def generate_qa_from_file(
     num_questions: int = Form(5),
     difficulty: Optional[str] = Form("medium"),
     include_options: bool = Form(False),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Generate quiz questions from uploaded file content.

@@ -9,11 +9,13 @@ import { showError } from '@/lib/alert';
 
 export interface Source {
   id: string;
-  type: 'pdf' | 'text' | 'website' | 'notes';
+  type: 'pdf' | 'text' | 'website' | 'audio';
   name: string;
   size?: string;
   dateAdded: string;
   selected: boolean;
+  transcriptionStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+  ragStatus?: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
 interface SourcesPanelProps {
@@ -44,8 +46,8 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
         return '📝';
       case 'website':
         return '🌐';
-      case 'notes':
-        return '📓';
+      case 'audio':
+        return '🎙️';
       default:
         return '📄';
     }
@@ -59,8 +61,8 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
         return 'blue';
       case 'website':
         return 'indigo';
-      case 'notes':
-        return 'emerald';
+      case 'audio':
+        return 'rose';
       default:
         return 'gray';
     }
@@ -70,15 +72,15 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
     try {
       setPreviewLoading(true);
       setPreviewModalOpen(true);
-      
+
       const response = await notebookService.getSourceContent(notebookId, source.id);
-      
+
       if (response.success && response.data) {
         setPreviewSource({
           id: source.id,
           name: source.name,
           type: source.type,
-          content: response.data.content || response.data.text || 'No content available'
+          content: response.data.content || response.data.text || response.data.transcription || 'No content available'
         });
       } else {
         setPreviewSource({
@@ -117,7 +119,7 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
             {sources.filter(s => s.selected).length}/{sources.length}
           </Badge>
         </div>
-        
+
         {/* Add Source Button */}
         <div className="relative">
           <Button
@@ -148,6 +150,19 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
               </button>
               <button
                 onClick={() => {
+                  onAddSource('audio');
+                  setShowAddMenu(false);
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors border-b border-slate-100 dark:border-slate-700"
+              >
+                <span className="text-xl">🎙️</span>
+                <div>
+                  <div className="font-bold text-sm text-slate-800 dark:text-slate-200">Audio</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Upload & Transcribe</div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
                   onAddSource('text');
                   setShowAddMenu(false);
                 }}
@@ -164,25 +179,12 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   onAddSource('website');
                   setShowAddMenu(false);
                 }}
-                className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors border-b border-slate-100 dark:border-slate-700"
+                className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
               >
                 <span className="text-xl">🌐</span>
                 <div>
                   <div className="font-bold text-sm text-slate-800 dark:text-slate-200">Website</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Add a URL (or ask AI to scrape)</div>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  onAddSource('notes');
-                  setShowAddMenu(false);
-                }}
-                className="w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-3 transition-colors"
-              >
-                <span className="text-xl">📓</span>
-                <div>
-                  <div className="font-bold text-sm text-slate-800 dark:text-slate-200">Notes</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Create notes</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Add a URL</div>
                 </div>
               </button>
             </div>
@@ -202,21 +204,19 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
           sources.map((source) => (
             <div key={source.id} onClick={() => onToggleSource(source.id)}>
               <Card
-                className={`p-3 cursor-pointer transition-all ${
-                  source.selected
-                    ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 shadow-md'
-                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
+                className={`p-3 cursor-pointer transition-all ${source.selected
+                  ? 'border-indigo-500 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 shadow-md'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   {/* Checkbox */}
                   <div className="flex-shrink-0 mt-0.5">
                     <div
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                        source.selected
-                          ? 'bg-indigo-600 dark:bg-indigo-700 border-indigo-600 dark:border-indigo-700'
-                          : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
-                      }`}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${source.selected
+                        ? 'bg-indigo-600 dark:bg-indigo-700 border-indigo-600 dark:border-indigo-700'
+                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                        }`}
                     >
                       {source.selected && (
                         <ICONS.check className="w-3 h-3 text-white" />
@@ -232,6 +232,21 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
                         <span className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
                           {source.name}
                         </span>
+                        {source.transcriptionStatus === 'processing' && (
+                          <Badge variant="rose" className="text-[10px] py-0 px-1 animate-pulse">
+                            Processing...
+                          </Badge>
+                        )}
+                        {source.ragStatus === 'processing' && (
+                          <Badge variant="indigo" className="text-[10px] py-0 px-1 animate-pulse">
+                            Syncing AI...
+                          </Badge>
+                        )}
+                        {(source.transcriptionStatus === 'failed' || source.ragStatus === 'failed') && (
+                          <Badge variant="error" className="text-[10px] py-0 px-1">
+                            Error
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
@@ -289,6 +304,7 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
         isOpen={previewModalOpen}
         onClose={handleClosePreview}
         source={previewSource}
+        notebookId={notebookId}
         isLoading={previewLoading}
       />
     </div>

@@ -9,12 +9,12 @@ import ArtifactViewer from './ArtifactViewer';
 import { ICONS } from '../../constants';
 
 interface NotebookLayoutProps {
+  notebookId: string;
   // Sources
   sources: Source[];
   onToggleSource: (id: string) => void;
-  onAddSource: (type: Source['type']) => void;
+  onAddSource: (type: 'pdf' | 'text' | 'website' | 'audio') => void;
   onRemoveSource: (id: string) => void;
-  notebookId: string;
 
   // Chat
   messages: ChatMessage[];
@@ -31,6 +31,8 @@ interface NotebookLayoutProps {
   onSaveCourseFinderToStudio?: (courses: any[]) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
+  verifiedMode?: boolean;
+  onVerifiedModeChange?: (enabled: boolean) => void;
 
   // Studio
   artifacts: Artifact[];
@@ -47,7 +49,7 @@ interface NotebookLayoutProps {
   onInvite?: () => void;
 }
 
-const NotebookLayout: React.FC<NotebookLayoutProps> = ({
+export default function NotebookLayout({
   sources,
   onToggleSource,
   onAddSource,
@@ -77,7 +79,9 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   generatingType = null,
   participants = [],
   onInvite,
-}) => {
+  verifiedMode = false,
+  onVerifiedModeChange,
+}: NotebookLayoutProps) {
   const router = useRouter();
   const hasSelectedSources = sources.some((s) => s.selected);
   const [activeTab, setActiveTab] = React.useState<'sources' | 'chat' | 'studio'>('chat');
@@ -187,6 +191,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onSaveCourseFinderToStudio={onSaveCourseFinderToStudio}
             typingUsers={typingUsers}
             onTyping={onTyping}
+            verifiedMode={verifiedMode}
+            onVerifiedModeChange={onVerifiedModeChange}
           />
         </div>
 
@@ -260,6 +266,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onSaveCourseFinderToStudio={onSaveCourseFinderToStudio}
                 typingUsers={typingUsers}
                 onTyping={onTyping}
+                verifiedMode={verifiedMode}
+                onVerifiedModeChange={onVerifiedModeChange}
               />
             </div>
           )}
@@ -293,6 +301,4 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
       )}
     </div>
   );
-};
-
-export default NotebookLayout;
+}

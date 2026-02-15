@@ -15,7 +15,7 @@ export interface MindMapNode {
 
 export interface MindMapStructure {
   nodes: Array<{ id: string; label: string; level?: number }>;
-  edges: Array<{ from: string; to: string }>;
+  edges: Array<{ id: string; from: string; to: string }>;
 }
 
 /**
@@ -158,10 +158,10 @@ function extractJSON(text: string): any | null {
 function treeToNodesEdges(
   node: MindMapNode,
   nodes: Array<{ id: string; label: string; level?: number }> = [],
-  edges: Array<{ from: string; to: string }> = [],
+  edges: Array<{ id: string; from: string; to: string }> = [],
   parentId: string | null = null,
   level: number = 0
-): { nodes: Array<{ id: string; label: string; level?: number }>; edges: Array<{ from: string; to: string }> } {
+): { nodes: Array<{ id: string; label: string; level?: number }>; edges: Array<{ id: string; from: string; to: string }> } {
   // Add current node
   nodes.push({
     id: node.id,
@@ -172,6 +172,7 @@ function treeToNodesEdges(
   // Add edge from parent if exists
   if (parentId) {
     edges.push({
+      id: `edge_${parentId}_${node.id}`,
       from: parentId,
       to: node.id
     });
@@ -206,7 +207,8 @@ export function parseMindMapFromText(text: string): MindMapStructure | null {
           label: n.label || n.text || n.name || String(n),
           level: n.level
         })),
-        edges: jsonData.edges.map((e: any) => ({
+        edges: jsonData.edges.map((e: any, idx: number) => ({
+          id: e.id || `edge_${e.from || e.source || e.parent}_${e.to || e.target || e.child}_${idx}`,
           from: e.from || e.source || e.parent,
           to: e.to || e.target || e.child
         }))

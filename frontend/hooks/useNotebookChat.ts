@@ -17,6 +17,7 @@ interface UseNotebookChatProps {
   onComplete?: (message: string, messageId: string) => void;
   onMessageSent?: (message: ChatMessage) => void;
   onClear?: () => void;
+  verifiedMode?: boolean;
 }
 
 export function useNotebookChat({
@@ -37,6 +38,7 @@ export function useNotebookChat({
 }: UseNotebookChatProps) {
   const chatAbortRef = useRef<AbortController | null>(null);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const [verifiedMode, setVerifiedMode] = useState(false);
 
   /**
    * Extract answer from JSON response format: {"answer": "..."}
@@ -131,7 +133,7 @@ export function useNotebookChat({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         };
-        
+
         if (csrfToken) {
           headers['x-csrf-token'] = csrfToken;
         }
@@ -149,6 +151,7 @@ export function useNotebookChat({
             is_collaborative: isCollaborative,
             // Best-effort: enable retrieval when available; backend can ignore if unsupported.
             use_rag: true,
+            verified_mode: verifiedMode,
             ...(extraPayload || {}),
           }),
           signal: abortController.signal,
@@ -231,6 +234,35 @@ export function useNotebookChat({
               if (maybeJson && typeof maybeJson.type === 'string') {
                 if (maybeJson.type === 'token' && typeof maybeJson.content === 'string') {
                   appended = maybeJson.content;
+                } else if (maybeJson.type === 'complete' && maybeJson.verified_data) {
+                  // Verified mode complete event with verification data
+                  console.log('✅ [Verified mode complete]', maybeJson.verified_data);
+                  // Store verified data in message metadata
+                  setLocalMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === loadingId
+                        ? { ...msg, verifiedData: maybeJson.verified_data }
+                        : msg
+                    )
+                  );
+                  appended = '';
+                  sawDoneEvent = true;
+                } else if (maybeJson.type === 'citations' && maybeJson.citations) {
+                  // PHASE 4: Citations event
+                  console.log('📚 [Citations]', maybeJson.citations);
+                  // Store citations in message metadata
+                  setLocalMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === loadingId
+                        ? { ...msg, citations: maybeJson.citations }
+                        : msg
+                    )
+                  );
+                  appended = '';
+                } else if (maybeJson.type === 'thinking') {
+                  // Thinking events in verified mode
+                  console.log('💭 [Thinking]', maybeJson.content);
+                  appended = '';
                 } else if (maybeJson.type === 'tool_start') {
                   console.log('🔧 [LLM tool_start]', {
                     tool: maybeJson.tool,
@@ -412,5 +444,7 @@ export function useNotebookChat({
     handleClearChat,
     handleRegenerateResponse,
     setLocalMessages,
+    verifiedMode,
+    setVerifiedMode,
   };
 }
