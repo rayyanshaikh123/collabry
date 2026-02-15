@@ -194,7 +194,7 @@ export default function FocusPage() {
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="12"
-                      className="text-slate-200 dark:text-slate-700"
+                      className="text-slate-10 dark:text-slate-700"
                     />
                     <circle
                       cx="120"

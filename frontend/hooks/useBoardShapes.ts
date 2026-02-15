@@ -144,7 +144,8 @@ export async function buildMindmapShapes(payload: any) {
         mermaid.initialize({ startOnLoad: false, theme: 'default' });
         const id = 'board_' + Math.random().toString(36).slice(2, 9);
         const { svg } = await mermaid.render(id, data.mermaidCode);
-        svgBase64 = btoa(svg);
+        // Use Unicode-safe encoding for btoa
+        svgBase64 = btoa(unescape(encodeURIComponent(svg)));
       }
     } catch (error) {
       console.error('Failed to render mermaid for study board:', error);

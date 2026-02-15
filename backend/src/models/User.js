@@ -176,6 +176,60 @@ const userSchema = new mongoose.Schema(
         recordedAt: Date,
       },
     },
+
+    // BYOK (Bring Your Own Key) Configuration
+    apiKeys: {
+      type: Map,
+      of: new mongoose.Schema({
+        encryptedKey: {
+          type: String,
+          required: true,
+        },
+        provider: {
+          type: String,
+          enum: ['openai', 'groq', 'gemini'],
+          required: true,
+        },
+        baseUrl: String,  // Optional custom endpoint
+        model: String,  // Preferred model for this provider
+        isActive: {
+          type: Boolean,
+          default: false,
+        },
+        isValid: {
+          type: Boolean,
+          default: true,
+        },
+        lastValidated: Date,
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        lastUsed: Date,
+        errorCount: {
+          type: Number,
+          default: 0,
+        },
+      }, { _id: false }),
+      default: () => new Map(),
+    },
+
+    // BYOK Settings
+    byokSettings: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      activeProvider: {
+        type: String,
+        enum: ['openai', 'groq', 'gemini', null],
+        default: null,
+      },
+      fallbackToSystem: {
+        type: Boolean,
+        default: true,  // If user key fails, use system key
+      },
+    },
   },
   {
     timestamps: true,
@@ -390,6 +444,49 @@ userSchema.methods.getXPToNextLevel = function () {
   const nextLevel = this.gamification.level + 1;
   const xpForNextLevel = Math.pow(nextLevel - 1, 2) * 100;
   return xpForNextLevel - this.gamification.xp;
+};
+
+/**
+ * Get decrypted API key for a provider
+ * @param {string} provider - 'openai', 'groq', or 'gemini'
+ * @returns {Promise<object|null>} - Decrypted key info or null
+ */
+userSchema.methods.getDecryptedApiKey = async function(provider) {
+  const encryption = require('../utils/encryption');
+  
+  if (!this.apiKeys || !this.apiKeys.has(provider)) {
+    return null;
+  }
+
+  const keyData = this.apiKeys.get(provider);
+  
+  if (!keyData.isActive || !keyData.isValid) {
+    return null;
+  }
+
+  try {
+    const decryptedKey = encryption.decrypt(keyData.encryptedKey, this._id.toString());
+    
+    return {
+      apiKey: decryptedKey,
+      provider: keyData.provider,
+      baseUrl: keyData.baseUrl,
+      model: keyData.model
+    };
+  } catch (error) {
+    console.error('Failed to decrypt API key:', error);
+    return null;
+  }
+};
+
+/**
+ * Check if user has BYOK enabled and active
+ * @returns {boolean}
+ */
+userSchema.methods.hasByokEnabled = function() {
+  return this.byokSettings.enabled && 
+         this.byokSettings.activeProvider && 
+         this.apiKeys.has(this.byokSettings.activeProvider);
 };
 
 // Prevent model overwrite error in development

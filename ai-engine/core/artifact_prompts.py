@@ -106,6 +106,28 @@ Do not include JSON.
 No preamble; output the report only."""
 
 
+def build_course_finder_prompt(topic: str) -> str:
+  """
+  Server-side mirror of the course-finder generation prompt from the frontend.
+  """
+  return f"""[COURSE_FINDER_REQUEST]
+
+Topic: {topic}
+
+You MUST call the tool `search_web` before answering. Do not use memory.
+
+Return ONLY valid JSON (no markdown, no code fences):
+{{"tool": null, "answer": "<COURSE_LIST>"}}
+
+Where <COURSE_LIST> is 5-8 lines. EACH line MUST be exactly:
+- [Course Title](https://direct.course.url) - Platform: X | Rating: X.X/5 | Price: $X
+
+Rules:
+- Use direct course pages (not search result pages)
+- If rating/price missing, write "Not provided"
+- No extra commentary; JSON only"""
+
+
 def build_artifact_prompt(artifact: str, topic: str, params: Dict[str, Any] | None = None) -> str:
   """
   High-level dispatcher used by API routes to map an artifact_request payload
@@ -120,6 +142,8 @@ def build_artifact_prompt(artifact: str, topic: str, params: Dict[str, Any] | No
       return build_mindmap_prompt(topic)
   if artifact_lower == "summary":
       return build_summary_prompt(topic)
+  if artifact_lower == "course-finder":
+      return build_course_finder_prompt(topic)
 
   # Fallback: treat as a generic topic question if the artifact type is unknown.
   return f"Please help me study the following topic in depth: {topic}"

@@ -113,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRoute, onNavigate, isMobileOpe
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleLogoClick}
-                  className={`w-12 h-12 bg-linear-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-200 border-b-4 border-indigo-700 transition-all active:translate-y-1 active:border-b-0 ${isAnimating ? 'animate-logo-pop' : ''}`}
+                  className={`w-12 h-12 bg-linear-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200/50 dark:shadow-indigo-900/30 border-b-4 border-indigo-700 transition-all active:translate-y-1 active:border-b-0 ${isAnimating ? 'animate-logo-pop' : ''}`}
                   title="Click to cycle theme!"
                 >
                   <span className="text-white font-black text-3xl font-display">C</span>

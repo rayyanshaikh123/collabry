@@ -14,6 +14,7 @@ interface NotebookLayoutProps {
   onToggleSource: (id: string) => void;
   onAddSource: (type: Source['type']) => void;
   onRemoveSource: (id: string) => void;
+  notebookId: string;
 
   // Chat
   messages: ChatMessage[];
@@ -27,6 +28,7 @@ interface NotebookLayoutProps {
   onSaveMindMapToStudio?: (mindmap: any) => void;
   onSaveInfographicToStudio?: (infographic: any) => void;
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
+  onSaveCourseFinderToStudio?: (courses: any[]) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
 
@@ -50,6 +52,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   onToggleSource,
   onAddSource,
   onRemoveSource,
+  notebookId,
   messages,
   onSendMessage,
   onRegeneratePrompt,
@@ -61,6 +64,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   onSaveMindMapToStudio,
   onSaveInfographicToStudio,
   onSaveFlashcardsToStudio,
+  onSaveCourseFinderToStudio,
   typingUsers = [],
   onTyping,
   artifacts,
@@ -161,6 +165,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onToggleSource={onToggleSource}
             onAddSource={onAddSource}
             onRemoveSource={onRemoveSource}
+            notebookId={notebookId}
           />
         </div>
 
@@ -179,6 +184,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onSaveMindMapToStudio={onSaveMindMapToStudio}
             onSaveInfographicToStudio={onSaveInfographicToStudio}
             onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
+            onSaveCourseFinderToStudio={onSaveCourseFinderToStudio}
             typingUsers={typingUsers}
             onTyping={onTyping}
           />
@@ -231,6 +237,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onToggleSource={onToggleSource}
                 onAddSource={onAddSource}
                 onRemoveSource={onRemoveSource}
+                notebookId={notebookId}
               />
             </div>
           )}
@@ -250,6 +257,7 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onSaveMindMapToStudio={onSaveMindMapToStudio}
                 onSaveInfographicToStudio={onSaveInfographicToStudio}
                 onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
+                onSaveCourseFinderToStudio={onSaveCourseFinderToStudio}
                 typingUsers={typingUsers}
                 onTyping={onTyping}
               />

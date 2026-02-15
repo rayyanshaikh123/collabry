@@ -213,18 +213,22 @@ export default function StudyBoardListPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Study Boards</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Collaborate with others in real-time</p>
+          <h2 className="text-3xl font-black text-slate-800 dark:text-slate-200 flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 flex items-center justify-center shadow-xl border-b-4 border-indigo-700 dark:border-indigo-800">
+              <ICONS.StudyBoard size={24} className="text-white" strokeWidth={2.5} />
+            </div>
+            Study Boards
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm ml-16 mt-1">Collaborate with others in real-time</p>
         </div>
-        <Button 
-          variant="primary" 
-          className="gap-2"
+        <button
           onClick={() => setShowTemplateModal(true)}
           disabled={isCreating}
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50 border-b-4 border-indigo-700 dark:border-indigo-800 transition-all bouncy-hover press-effect disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <ICONS.Plus size={16} />
+          <ICONS.Plus size={18} strokeWidth={3} />
           {isCreating ? 'Creating...' : 'New Board'}
-        </Button>
+        </button>
       </div>
 
       {/* Search Bar */}
@@ -259,11 +263,20 @@ export default function StudyBoardListPage() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
-                <Button variant="secondary" size="sm" onClick={fetchBoards} className="mt-2">
-            Retry
-          </Button>
+        <div className="bg-rose-50 dark:bg-rose-900/30 border-2 border-rose-200 dark:border-rose-800 rounded-[1.5rem] p-6 flex items-start gap-4 shadow-lg shadow-rose-100 dark:shadow-rose-950/30">
+          <div className="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center shrink-0">
+            <ICONS.AlertCircle size={20} className="text-white" strokeWidth={2.5} />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-black text-rose-700 dark:text-rose-400 mb-1">Error Loading Boards</h4>
+            <p className="text-rose-600 dark:text-rose-400 text-sm">{error}</p>
+            <button
+              onClick={fetchBoards}
+              className="mt-3 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-all text-sm border-b-2 border-rose-700 active:translate-y-0.5 active:border-b-0"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )}
 
@@ -319,108 +332,113 @@ export default function StudyBoardListPage() {
                 </div>
               )}
 
-              <div className="space-y-4">
-                {/* Board Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-1">
-                      {board.title}
-                    </h3>
-                    {board.description && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
-                        {board.description}
-                      </p>
-                    )}
+              {/* Card Body */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 flex items-center justify-center shadow-lg border-b-2 border-indigo-700 dark:border-indigo-800 shrink-0">
+                    <ICONS.StudyBoard size={20} className="text-white" strokeWidth={2.5} />
                   </div>
-                  <div className="flex items-center gap-1.5 ml-2">
+                  <h3 className="font-black text-slate-800 dark:text-slate-200 text-lg leading-tight truncate">
+                    {board.title}
+                  </h3>
+                  <div className="flex flex-col gap-1.5 shrink-0 ml-auto">
                     {board.owner._id !== user?.id && (
-                      <Badge variant="cyan" className="text-[11px]">Shared</Badge>
+                      <span className="px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 text-[10px] font-black uppercase tracking-wide rounded-lg">Shared</span>
                     )}
                     {board.isPublic && (
-                      <Badge variant="indigo">Public</Badge>
+                      <span className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-[10px] font-black uppercase tracking-wide rounded-lg">Public</span>
                     )}
                   </div>
                 </div>
-
-                {/* Owner info for shared boards */}
-                {board.owner._id !== user?.id && (
-                  <p className="text-xs text-indigo-500 dark:text-indigo-400 -mt-1">
-                    by {board.owner.name || board.owner.email}
+                {board.description && (
+                  <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                    {board.description}
                   </p>
                 )}
+              </div>
 
-                {/* Stats */}
-                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center gap-1">
-                    <ICONS.Users size={16} />
-                    <span>{board.memberCount || 1} member{(board.memberCount || 1) > 1 ? 's' : ''}</span>
+              {/* Owner info for shared boards */}
+              {board.owner._id !== user?.id && (
+                <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+                  <div className="w-6 h-6 rounded-full bg-linear-to-br from-indigo-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-black">
+                    {(board.owner.name?.[0] || board.owner.email?.[0] || '?').toUpperCase()}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <ICONS.FileText size={16} />
-                    <span>{board.elementCount || 0} element{(board.elementCount || 0) !== 1 ? 's' : ''}</span>
-                  </div>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+                    by {board.owner.name || board.owner.email}
+                  </p>
                 </div>
+              )}
 
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="text-xs text-slate-400 dark:text-slate-500">
-                    Updated {new Date(board.lastActivity || board.createdAt).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {/* Duplicate */}
+              {/* Stats */}
+              <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <ICONS.Users size={16} className="text-indigo-500 dark:text-indigo-400" strokeWidth={2.5} />
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{board.memberCount || 1}</span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <ICONS.FileText size={16} className="text-emerald-500 dark:text-emerald-400" strokeWidth={2.5} />
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{board.elementCount || 0}</span>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-3 mt-3 border-t-2 border-slate-100 dark:border-slate-800">
+                <div className="text-xs font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                  <ICONS.Calendar size={12} />
+                  {new Date(board.lastActivity || board.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </div>
+                <div className="flex items-center gap-1">
+                  {/* Duplicate */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => handleDuplicate(e, board._id)}
+                    disabled={duplicatingBoardId === board._id}
+                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                    title="Duplicate board"
+                  >
+                    {duplicatingBoardId === board._id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500" />
+                    ) : (
+                      <ICONS.Copy size={15} />
+                    )}
+                  </Button>
+                  {/* Archive */}
+                  {board.owner._id === user?.id && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={(e) => handleDuplicate(e, board._id)}
-                      disabled={duplicatingBoardId === board._id}
-                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-                      title="Duplicate board"
+                      onClick={(e) => handleArchive(e, board)}
+                      className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30"
+                      title={board.isArchived ? 'Unarchive board' : 'Archive board'}
                     >
-                      {duplicatingBoardId === board._id ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500" />
+                      <ICONS.FileText size={15} />
+                    </Button>
+                  )}
+                  {/* Delete */}
+                  {board.owner._id === user?.id && (
+                    <button 
+                      onClick={(e) => handleDeleteClick(e, board)}
+                      disabled={deletingBoardId === board._id}
+                      className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all disabled:opacity-50"
+                    >
+                      {deletingBoardId === board._id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-500" />
                       ) : (
-                        <ICONS.Copy size={15} />
+                        <ICONS.Trash size={15} />
                       )}
-                    </Button>
-                    {/* Archive */}
-                    {board.owner._id === user?.id && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => handleArchive(e, board)}
-                        className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30"
-                        title={board.isArchived ? 'Unarchive board' : 'Archive board'}
-                      >
-                        <ICONS.FileText size={15} />
-                      </Button>
-                    )}
-                    {/* Delete */}
-                    {board.owner._id === user?.id && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={(e) => handleDeleteClick(e, board)}
-                        disabled={deletingBoardId === board._id}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        {deletingBoardId === board._id ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500" />
-                        ) : (
-                          <ICONS.Trash size={15} />
-                        )}
-                      </Button>
-                    )}
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openBoard(board._id);
-                      }}
-                    >
-                      Open →
-                    </Button>
-                  </div>
+                    </button>
+                  )}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openBoard(board._id);
+                    }}
+                    className="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1 border-b-2 border-indigo-700 active:translate-y-0.5 active:border-b-0"
+                  >
+                    Open
+                    <ICONS.ChevronRight size={12} strokeWidth={3} />
+                  </button>
                 </div>
               </div>
             </Card>
@@ -437,15 +455,15 @@ export default function StudyBoardListPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && boardToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-                <ICONS.Trash size={24} className="text-red-600 dark:text-red-300" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] shadow-2xl max-w-md w-full p-8 space-y-6 border-2 border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-rose-100 to-rose-200 dark:from-rose-900/30 dark:to-rose-800/30 rounded-2xl flex items-center justify-center border-b-4 border-rose-300 dark:border-rose-800 shadow-lg">
+                <ICONS.Trash size={28} className="text-rose-600 dark:text-rose-400" strokeWidth={2.5} />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">Delete Board?</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone</p>
+                <h3 className="text-xl font-black text-slate-800 dark:text-slate-200">Delete Board?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-bold">This action cannot be undone</p>
               </div>
             </div>
             
@@ -453,28 +471,33 @@ export default function StudyBoardListPage() {
               <p className="text-sm text-slate-700 dark:text-slate-200">
                 Are you sure you want to delete <strong className="text-slate-800 dark:text-slate-100">&ldquo;{boardToDelete.title}&rdquo;</strong>?
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 leading-relaxed">
                 All board data, elements, and member access will be permanently removed.
               </p>
             </div>
 
-            <div className="flex gap-3">
-              <Button 
-                variant="secondary" 
-                className="flex-1"
+            <div className="flex gap-3 pt-2">
+              <button
                 onClick={cancelDelete}
                 disabled={!!deletingBoardId}
+                className="flex-1 px-4 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-black rounded-xl transition-all border-2 border-slate-200 dark:border-slate-700 disabled:opacity-50"
               >
                 Cancel
-              </Button>
-              <Button 
-                variant="primary" 
-                className="flex-1 bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white"
+              </button>
+              <button
                 onClick={confirmDelete}
                 disabled={!!deletingBoardId}
+                className="flex-1 px-4 py-3 bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-black rounded-xl shadow-lg shadow-rose-200 dark:shadow-rose-900/50 border-b-4 border-rose-700 dark:border-rose-800 transition-all press-effect disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {deletingBoardId ? 'Deleting...' : 'Delete Board'}
-              </Button>
+                {deletingBoardId ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Deleting...
+                  </span>
+                ) : (
+                  'Delete Board'
+                )}
+              </button>
             </div>
           </div>
         </div>

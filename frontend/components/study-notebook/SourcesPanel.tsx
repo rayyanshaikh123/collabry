@@ -3,6 +3,9 @@
 import React, { useState } from 'react';
 import { Card, Button, Badge } from '../UIElements';
 import { ICONS } from '../../constants';
+import SourcePreviewModal from './SourcePreviewModal';
+import notebookService from '@/lib/services/notebook.service';
+import { showError } from '@/lib/alert';
 
 export interface Source {
   id: string;
@@ -18,6 +21,7 @@ interface SourcesPanelProps {
   onToggleSource: (id: string) => void;
   onAddSource: (type: Source['type']) => void;
   onRemoveSource: (id: string) => void;
+  notebookId: string;
 }
 
 const SourcesPanel: React.FC<SourcesPanelProps> = ({
@@ -25,8 +29,12 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
   onToggleSource,
   onAddSource,
   onRemoveSource,
+  notebookId,
 }) => {
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewSource, setPreviewSource] = useState<{ id: string; name: string; type: Source['type']; content: string } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const sourceTypeIcon = (type: Source['type']) => {
     switch (type) {
@@ -56,6 +64,47 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
       default:
         return 'gray';
     }
+  };
+
+  const handlePreviewSource = async (source: Source) => {
+    try {
+      setPreviewLoading(true);
+      setPreviewModalOpen(true);
+      
+      const response = await notebookService.getSourceContent(notebookId, source.id);
+      
+      if (response.success && response.data) {
+        setPreviewSource({
+          id: source.id,
+          name: source.name,
+          type: source.type,
+          content: response.data.content || response.data.text || 'No content available'
+        });
+      } else {
+        setPreviewSource({
+          id: source.id,
+          name: source.name,
+          type: source.type,
+          content: 'Failed to load content'
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to load source content:', error);
+      showError(error.message || 'Failed to load source preview');
+      setPreviewSource({
+        id: source.id,
+        name: source.name,
+        type: source.type,
+        content: 'Error loading content'
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewModalOpen(false);
+    setPreviewSource(null);
   };
 
   return (
@@ -184,16 +233,28 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
                           {source.name}
                         </span>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveSource(source.id);
-                        }}
-                        className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all flex-shrink-0"
-                        title="Delete source"
-                      >
-                        <ICONS.trash className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePreviewSource(source);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all"
+                          title="Preview source"
+                        >
+                          <ICONS.Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveSource(source.id);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-all"
+                          title="Delete source"
+                        >
+                          <ICONS.trash className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={sourceTypeColor(source.type) as any} className="text-xs">
@@ -222,6 +283,14 @@ const SourcesPanel: React.FC<SourcesPanelProps> = ({
           </p>
         </div>
       )}
+
+      {/* Source Preview Modal */}
+      <SourcePreviewModal
+        isOpen={previewModalOpen}
+        onClose={handleClosePreview}
+        source={previewSource}
+        isLoading={previewLoading}
+      />
     </div>
   );
 };

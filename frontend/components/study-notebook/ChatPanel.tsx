@@ -43,6 +43,7 @@ interface ChatPanelProps {
   onSaveMindMapToStudio?: (mindmap: any) => void;
   onSaveInfographicToStudio?: (infographic: any) => void;
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
+  onSaveCourseFinderToStudio?: (courses: any[]) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
 }
@@ -60,6 +61,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onSaveMindMapToStudio,
   onSaveInfographicToStudio,
   onSaveFlashcardsToStudio,
+  onSaveCourseFinderToStudio,
   typingUsers = [],
   onTyping,
 }) => {
@@ -713,25 +715,40 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                                     </span>
                                   </div>
 
-                                  {/* Navigation buttons */}
-                                  {courses.length > 1 && (
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        onClick={() => scrollCarousel(message.id, 'left')}
-                                        disabled={!canScrollLeft[message.id]}
-                                        className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
+                                  <div className="flex items-center gap-2">
+                                    {/* Save to Studio button */}
+                                    {onSaveCourseFinderToStudio && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => onSaveCourseFinderToStudio(courses)}
+                                        className="flex items-center gap-1"
                                       >
-                                        <ICONS.ChevronLeft className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
-                                      </button>
-                                      <button
-                                        onClick={() => scrollCarousel(message.id, 'right')}
-                                        disabled={!canScrollRight[message.id]}
-                                        className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
-                                      >
-                                        <ICONS.ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
-                                      </button>
-                                    </div>
-                                  )}
+                                        <ICONS.Download className="w-4 h-4" />
+                                        <span className="text-xs font-bold">Save to Studio</span>
+                                      </Button>
+                                    )}
+
+                                    {/* Navigation buttons */}
+                                    {courses.length > 1 && (
+                                      <>
+                                        <button
+                                          onClick={() => scrollCarousel(message.id, 'left')}
+                                          disabled={!canScrollLeft[message.id]}
+                                          className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
+                                        >
+                                          <ICONS.ChevronLeft className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
+                                        </button>
+                                        <button
+                                          onClick={() => scrollCarousel(message.id, 'right')}
+                                          disabled={!canScrollRight[message.id]}
+                                          className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg border-2 border-indigo-200 dark:border-indigo-700 flex items-center justify-center hover:bg-indigo-600 dark:hover:bg-indigo-700 hover:border-indigo-600 dark:hover:border-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-800 disabled:hover:border-indigo-200 dark:disabled:hover:border-indigo-700 transition-all shadow-sm group"
+                                        >
+                                          <ICONS.ChevronRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:text-white transition-colors" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* Carousel container */}

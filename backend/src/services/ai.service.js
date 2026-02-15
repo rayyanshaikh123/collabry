@@ -15,17 +15,69 @@ class AIService {
 
   /**
    * Forward request to AI engine with user's JWT token
+   * If user has BYOK enabled, include custom API key headers
    */
-  async forwardToAI(endpoint, data, userToken) {
+  async forwardToAI(endpoint, data, userToken, userId = null) {
     try {
-      const response = await this.client.post(endpoint, data, {
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-        },
-      });
+      const headers = {
+        Authorization: `Bearer ${userToken}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Check if user has BYOK (Bring Your Own Key) enabled
+      if (userId) {
+        const User = require('../models/User');
+        const user = await User.findById(userId).select('byokSettings apiKeys');
+        
+        if (user && user.hasByokEnabled()) {
+          const keyInfo = await user.getDecryptedApiKey(user.byokSettings.activeProvider);
+          
+          if (keyInfo) {
+            headers['X-User-Api-Key'] = keyInfo.apiKey;
+            headers['X-User-Base-Url'] = keyInfo.baseUrl;
+            headers['X-User-Provider'] = keyInfo.provider;
+            
+            console.log(`[BYOK] Forwarding request with user's ${keyInfo.provider} key`);
+            
+            // Update last used timestamp
+            const keyData = user.apiKeys.get(user.byokSettings.activeProvider);
+            keyData.lastUsed = new Date();
+            user.apiKeys.set(user.byokSettings.activeProvider, keyData);
+            await user.save();
+          }
+        }
+      }
+
+      const response = await this.client.post(endpoint, data, { headers });
       return response.data;
     } catch (error) {
       console.error('AI Engine Error:', error.message);
+      
+      // If user key fails and fallback is enabled, retry with system key
+      if (error.response?.status === 401 && userId) {
+        const User = require('../models/User');
+        const user = await User.findById(userId).select('byokSettings apiKeys');
+        
+        if (user?.byokSettings.fallbackToSystem && user.byokSettings.activeProvider) {
+          console.log('[BYOK] User key failed, falling back to system key');
+          
+          // Mark user key as invalid
+          const keyData = user.apiKeys.get(user.byokSettings.activeProvider);
+          keyData.isValid = false;
+          keyData.errorCount += 1;
+          user.apiKeys.set(user.byokSettings.activeProvider, keyData);
+          await user.save();
+          
+          // Retry without BYOK headers
+          const headers = {
+            Authorization: `Bearer ${userToken}`,
+            'Content-Type': 'application/json'
+          };
+          const response = await this.client.post(endpoint, data, { headers });
+          return response.data;
+        }
+      }
+      
       throw new Error(
         error.response?.data?.error || 'AI Engine request failed'
       );
@@ -43,7 +95,8 @@ class AIService {
         user_id: userId,
         conversation_id: conversationId,
       },
-      userToken
+      userToken,
+      userId
     );
   }
 
@@ -58,7 +111,8 @@ class AIService {
         user_id: userId,
         conversation_id: conversationId,
       },
-      userToken
+      userToken,
+      userId
     );
   }
 
@@ -72,7 +126,8 @@ class AIService {
         text,
         user_id: userId,
       },
-      userToken
+      userToken,
+      userId
     );
   }
 
@@ -86,7 +141,8 @@ class AIService {
         text,
         user_id: userId,
       },
-      userToken
+      userToken,
+      userId
     );
   }
 
@@ -450,7 +506,8 @@ class AIService {
         metadata,
         user_id: userId,
       },
-      userToken
+      userToken,
+      userId
     );
   }
 

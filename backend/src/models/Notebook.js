@@ -69,7 +69,7 @@ const SourceSchema = new mongoose.Schema({
 const ArtifactSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['quiz', 'mindmap', 'flashcards', 'infographic'],
+    enum: ['quiz', 'mindmap', 'flashcards', 'infographic', 'course-finder'],
     required: true
   },
   referenceId: {
