@@ -581,7 +581,7 @@ async def chat(
 ) -> str:
     """Non-streaming wrapper."""
     response = ""
-    async for event in run_agent(user_id, session_id, message, notebook_id=notebook_id, source_ids=source_ids, byok=byok):
+    async for event in run_agent(user_id, session_id, message, notebook_id=notebook_id, source_ids=source_ids):
         if event["type"] == "token":
             response += event["content"]
         elif event["type"] == "complete":

@@ -13,11 +13,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, JSONResponse
 from server.deps import get_current_user
 from core.agent import chat as agent_chat
-from core.llm import get_openai_client
 from config import CONFIG
+from openai import OpenAI
 import base64
 import io
 import logging
+import os
 import time
 from typing import Optional
 
@@ -25,17 +26,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai/voice", tags=["voice-tutor"])
 
 
+def _get_openai_direct_client() -> OpenAI:
+    """
+    Return an OpenAI client that always points to api.openai.com.
+    Whisper STT and TTS are OpenAI-only features — they don't work on
+    Groq, Ollama, Together, etc. — so we need a dedicated client.
+    """
+    return OpenAI(
+        api_key=os.getenv("OPENAI_API_KEY", ""),
+        base_url="https://api.openai.com/v1",
+    )
+
+
 # ── Whisper STT ────────────────────────────────────────────────────────
 async def _transcribe(audio_bytes: bytes, filename: str = "audio.webm") -> str:
     """Transcribe audio bytes using OpenAI Whisper."""
-    client = get_openai_client()
+    client = _get_openai_direct_client()
     audio_file = io.BytesIO(audio_bytes)
     audio_file.name = filename  # Whisper needs a filename hint
 
     transcript = client.audio.transcriptions.create(
         model="whisper-1",
         file=audio_file,
-        language=None,  # auto-detect (supports Hindi + English)
     )
     return transcript.text
 
@@ -43,7 +55,7 @@ async def _transcribe(audio_bytes: bytes, filename: str = "audio.webm") -> str:
 # ── TTS ────────────────────────────────────────────────────────────────
 async def _synthesise(text: str, voice: str = "nova") -> bytes:
     """Convert text to speech using OpenAI TTS."""
-    client = get_openai_client()
+    client = _get_openai_direct_client()
     response = client.audio.speech.create(
         model="tts-1",
         voice=voice,
@@ -68,7 +80,6 @@ async def voice_chat(
     Returns: JSON { transcript, response_text, audio_base64, session_id }
     """
     user_id = user_info["user_id"]
-    byok = user_info.get("byok")
     start = time.time()
 
     # 1. Read audio blob ---------------------------------------------------
@@ -109,15 +120,24 @@ async def voice_chat(
         )
         full_message = f"{system_hint}\n\nStudent says: {transcript}"
 
+        # Ensure session_id is never None — agent requires a string
+        effective_session_id = session_id or f"voice-{user_id}"
+
+        logger.info(f"🧠 Calling agent_chat for user={user_id}, session={effective_session_id}, notebook={notebook_id}")
+
         response_text = await agent_chat(
-            message=full_message,
             user_id=user_id,
-            session_id=session_id,
+            session_id=effective_session_id,
+            message=full_message,
             notebook_id=notebook_id,
-            byok=byok,
         )
+
+        if not response_text or not response_text.strip():
+            response_text = "I understood your question but couldn't generate a response. Please try again."
+
+        logger.info(f"🧠 Agent returned {len(response_text)} chars")
     except Exception as e:
-        logger.error(f"Agent chat failed: {e}")
+        logger.error(f"Agent chat failed: {e}", exc_info=True)
         response_text = "Sorry, I couldn't process your question. Please try again."
 
     # Strip any accidental markdown from the response

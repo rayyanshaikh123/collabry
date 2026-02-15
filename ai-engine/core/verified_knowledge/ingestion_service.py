@@ -8,8 +8,8 @@ import logging
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from core.verified_knowledge.base import get_verified_knowledge_store
 from core.verified_knowledge.extractors import URLExtractor, TextProcessor, PDFExtractor
