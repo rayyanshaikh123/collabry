@@ -27,8 +27,8 @@ interface BoardHeaderProps {
   isConnected: boolean;
   participants: BoardParticipant[];
   onBack: () => void;
-  onInvite: () => void;
-  onSettings: () => void;
+  onInvite?: () => void;
+  onSettings?: () => void;
   onExport?: () => void;
 }
 
@@ -97,22 +97,26 @@ export function BoardHeader({
             <ICONS.Download size={18} />
           </Button>
         )}
-        <Button
-          variant="outline"
-          className="gap-2 px-6"
-          onClick={onInvite}
-        >
-          <ICONS.Share size={18} /> Invite
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
-          className="rounded-2xl h-10 w-10"
-          onClick={onSettings}
-          title="Board Settings"
-        >
-          <ICONS.Settings size={18} />
-        </Button>
+        {onInvite && (
+          <Button
+            variant="outline"
+            className="gap-2 px-6"
+            onClick={onInvite}
+          >
+            <ICONS.Share size={18} /> Invite
+          </Button>
+        )}
+        {onSettings && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="rounded-2xl h-10 w-10"
+            onClick={onSettings}
+            title="Board Settings"
+          >
+            <ICONS.Settings size={18} />
+          </Button>
+        )}
       </div>
     </div>
   );

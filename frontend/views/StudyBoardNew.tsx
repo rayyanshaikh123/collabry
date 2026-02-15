@@ -26,6 +26,7 @@ import { useYjsSync } from '@/hooks/useYjsSync';
 import { buildShapesFromImport } from '@/hooks/useBoardShapes';
 
 // --- Yjs-based live cursors (replaces LiveCursors + Socket.IO) ---
+// Cursors arrive in tldraw page-space; we convert to screen-space for rendering.
 interface YjsCursorData {
   userId: string;
   name: string;
@@ -33,14 +34,16 @@ interface YjsCursorData {
   cursor?: { x: number; y: number };
 }
 
-const YjsCursor = memo<{ user: YjsCursorData }>(({ user }) => {
-  if (!user.cursor) return null;
+const YjsCursor = memo<{ user: YjsCursorData; editor: Editor | null }>(({ user, editor }) => {
+  if (!user.cursor || !editor) return null;
+  // Convert page-space coordinates back to screen-space for absolute positioning
+  const screenPoint = editor.pageToScreen({ x: user.cursor.x, y: user.cursor.y });
   return (
     <div
       className="absolute transition-transform duration-100"
       style={{
-        left: user.cursor.x,
-        top: user.cursor.y,
+        left: screenPoint.x,
+        top: screenPoint.y,
         transform: 'translate(-50%, -50%)',
       }}
     >
@@ -64,12 +67,12 @@ const YjsCursor = memo<{ user: YjsCursorData }>(({ user }) => {
 });
 YjsCursor.displayName = 'YjsCursor';
 
-const YjsCursors = memo<{ users: YjsCursorData[] }>(({ users }) => (
+const YjsCursors = memo<{ users: YjsCursorData[]; editor: Editor | null }>(({ users, editor }) => (
   <div className="absolute inset-0 pointer-events-none z-10">
     {users
       .filter((u) => u.cursor)
       .map((u) => (
-        <YjsCursor key={u.userId} user={u} />
+        <YjsCursor key={u.userId} user={u} editor={editor} />
       ))}
   </div>
 ));
@@ -143,11 +146,34 @@ const CollaborativeBoard = () => {
     [connectedUsers],
   );
 
+  // Determine current user's role on this board
+  const userRole = useMemo<'owner' | 'editor' | 'viewer'>(() => {
+    if (!currentBoard || !user) return 'viewer';
+    const ownerId = typeof currentBoard.owner === 'string'
+      ? currentBoard.owner
+      : currentBoard.owner?._id;
+    if (ownerId === user.id) return 'owner';
+    const member = currentBoard.members?.find(
+      (m) => {
+        const memberId = typeof m.userId === 'string' ? m.userId : (m.userId as unknown as { _id: string })?._id;
+        return memberId === user.id;
+      }
+    );
+    return member?.role || 'viewer';
+  }, [currentBoard, user]);
+  const isReadonly = userRole === 'viewer';
+
   // Editor mount handler
   const handleMount = useCallback((mountedEditor: Editor) => {
     setEditor(mountedEditor);
     mountedEditor.updateInstanceState({ isGridMode: true });
   }, []);
+
+  // Enforce readonly mode for viewers
+  useEffect(() => {
+    if (!editor || !currentBoard) return;
+    editor.updateInstanceState({ isReadonly: isReadonly });
+  }, [editor, currentBoard, isReadonly]);
 
   // --- Thumbnail generation ---
   const saveThumbnail = useCallback(async () => {
@@ -344,9 +370,9 @@ const CollaborativeBoard = () => {
         isConnected={isConnected}
         participants={boardParticipants}
         onBack={handleBack}
-        onInvite={() => setShowInviteModal(true)}
-        onSettings={() => setShowSettingsModal(true)}
-        onExport={handleExport}
+        onInvite={!isReadonly ? () => setShowInviteModal(true) : undefined}
+        onSettings={!isReadonly ? () => setShowSettingsModal(true) : undefined}
+        onExport={!isReadonly && currentBoard?.settings?.allowExport !== false ? handleExport : undefined}
       />
 
       {/* Sync status indicator */}
@@ -370,7 +396,7 @@ const CollaborativeBoard = () => {
           />
 
           {/* Live Cursors Overlay (from Yjs awareness) */}
-          <YjsCursors users={connectedUsers} />
+          <YjsCursors users={connectedUsers} editor={editor} />
         </div>
       </div>
 

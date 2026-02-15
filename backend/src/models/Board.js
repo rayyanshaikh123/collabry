@@ -148,6 +148,7 @@ boardSchema.index({ 'members.userId': 1 });
 boardSchema.index({ isPublic: 1, isArchived: 1 });
 boardSchema.index({ lastActivity: -1 });
 boardSchema.index({ tags: 1 });
+boardSchema.index({ title: 'text', description: 'text' });
 
 // Virtual for element count (prefer persisted shapeCount, fall back to elements array)
 boardSchema.virtual('elementCount').get(function () {

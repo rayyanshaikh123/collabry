@@ -42,28 +42,51 @@ const checkAIUsageLimit = async (req, res, next) => {
       return next();
     }
     
-    // Get today's usage
-    const usage = await Usage.getTodayUsage(userId);
-    
-    if (usage.aiQuestions >= limits.aiQuestionsPerDay) {
-      return res.status(429).json({
-        success: false,
-        error: 'Daily AI limit reached',
-        message: `You've used all ${limits.aiQuestionsPerDay} AI questions for today. Upgrade your plan for more.`,
-        limitReached: true,
-        currentUsage: usage.aiQuestions,
-        dailyLimit: limits.aiQuestionsPerDay,
-        plan,
-        resetTime: getNextResetTime(),
-        upgradeUrl: '/pricing',
-      });
+    // Atomic check-and-increment: reserve one question slot BEFORE processing.
+    // This prevents race conditions where concurrent requests both pass the check.
+    const today = new Date().toISOString().split('T')[0];
+    const updated = await Usage.findOneAndUpdate(
+      {
+        user: userId,
+        date: today,
+        aiQuestions: { $lt: limits.aiQuestionsPerDay },
+      },
+      {
+        $inc: { aiQuestions: 1 },
+        $setOnInsert: { user: userId, date: today },
+      },
+      { upsert: false, new: true }
+    );
+
+    if (!updated) {
+      // Either no doc exists yet (first request today) or limit already reached.
+      // Try to check if a doc exists at all:
+      const existing = await Usage.getTodayUsage(userId);
+      if (existing.aiQuestions >= limits.aiQuestionsPerDay) {
+        return res.status(429).json({
+          success: false,
+          error: 'Daily AI limit reached',
+          message: `You've used all ${limits.aiQuestionsPerDay} AI questions for today. Upgrade your plan for more.`,
+          limitReached: true,
+          currentUsage: existing.aiQuestions,
+          dailyLimit: limits.aiQuestionsPerDay,
+          plan,
+          resetTime: getNextResetTime(),
+          upgradeUrl: '/pricing',
+        });
+      }
+      // Doc didn't exist — create it with 1 question already counted
+      await Usage.findOneAndUpdate(
+        { user: userId, date: today },
+        { $inc: { aiQuestions: 1 }, $setOnInsert: { user: userId, date: today } },
+        { upsert: true, new: true }
+      );
     }
     
-    // Attach usage info to request
+    // Attach usage info to request (question already reserved)
     req.userPlan = plan;
     req.planLimits = limits;
-    req.currentUsage = usage;
-    req.remainingQuestions = limits.aiQuestionsPerDay - usage.aiQuestions;
+    req.aiQuestionReserved = true; // Signal that trackAIUsage should skip incrementing aiQuestions
     
     next();
   } catch (error) {
@@ -289,12 +312,33 @@ const checkNotebookLimit = async (req, res, next) => {
 };
 
 /**
- * Track AI usage after successful request
- * Call this after AI request completes
+ * Track AI usage after successful request.
+ * If the middleware already reserved a question slot (req.aiQuestionReserved),
+ * only track tokens and details — don't double-increment aiQuestions.
  */
-const trackAIUsage = async (userId, tokens = 0, model = 'basic', questionType = 'chat') => {
+const trackAIUsage = async (userId, tokens = 0, model = 'basic', questionType = 'chat', alreadyReserved = false) => {
   try {
-    await Usage.incrementAIUsage(userId, tokens, model, questionType);
+    if (alreadyReserved) {
+      // Question count already incremented atomically by checkAIUsageLimit — only track tokens + details
+      const today = new Date().toISOString().split('T')[0];
+      await Usage.findOneAndUpdate(
+        { user: userId, date: today },
+        {
+          $inc: { aiTokensUsed: tokens },
+          $push: {
+            aiUsageDetails: {
+              timestamp: new Date(),
+              model,
+              tokensUsed: tokens,
+              questionType,
+            },
+          },
+        },
+        { upsert: false }
+      );
+    } else {
+      await Usage.incrementAIUsage(userId, tokens, model, questionType);
+    }
   } catch (error) {
     console.error('Error tracking AI usage:', error);
   }

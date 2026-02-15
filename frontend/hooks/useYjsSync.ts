@@ -100,6 +100,10 @@ export function useYjsSync({
       setIsConnected(status === 'connected');
     });
 
+    // Allowed record types to sync via Yjs.
+    // 'shape' = drawings/elements, 'asset' = images/videos/bookmarks, 'binding' = arrow connections
+    const SYNCED_TYPES = new Set(['shape', 'asset', 'binding']);
+
     provider.on('sync', (synced: boolean) => {
       setIsSynced(synced);
 
@@ -109,7 +113,7 @@ export function useYjsSync({
         try {
           editor.store.mergeRemoteChanges(() => {
             yStore.forEach((value: any, key: string) => {
-              if (value && typeof value === 'object' && value.id && value.typeName === 'shape') {
+              if (value && typeof value === 'object' && value.id && SYNCED_TYPES.has(value.typeName)) {
                 const existing = editor.store.get(key as any);
                 if (!existing) {
                   editor.store.put([value]);
@@ -191,57 +195,50 @@ export function useYjsSync({
       isApplyingLocalRef.current = true;
       try {
         ydoc.transact(() => {
-          // Handle added shapes
+          // Serialise a record for Yjs storage
+          const serialise = (record: any) => {
+            if (record.typeName === 'shape') {
+              return {
+                id: record.id,
+                typeName: record.typeName,
+                type: record.type,
+                x: record.x,
+                y: record.y,
+                rotation: record.rotation,
+                isLocked: record.isLocked,
+                opacity: record.opacity,
+                props: JSON.parse(JSON.stringify(record.props || {})),
+                meta: JSON.parse(JSON.stringify(record.meta || {})),
+                parentId: record.parentId,
+                index: record.index,
+              };
+            }
+            // Assets & bindings — store full record (strip non-serialisable fields)
+            return JSON.parse(JSON.stringify(record));
+          };
+
+          // Handle added records
           if (added) {
             Object.values(added).forEach((record: any) => {
-              if (record?.typeName === 'shape') {
-                // Store plain serializable object
-                const plainRecord = {
-                  id: record.id,
-                  typeName: record.typeName,
-                  type: record.type,
-                  x: record.x,
-                  y: record.y,
-                  rotation: record.rotation,
-                  isLocked: record.isLocked,
-                  opacity: record.opacity,
-                  props: JSON.parse(JSON.stringify(record.props || {})),
-                  meta: JSON.parse(JSON.stringify(record.meta || {})),
-                  parentId: record.parentId,
-                  index: record.index,
-                };
-                yStore.set(record.id, plainRecord);
+              if (record && SYNCED_TYPES.has(record.typeName)) {
+                yStore.set(record.id, serialise(record));
               }
             });
           }
 
-          // Handle updated shapes
+          // Handle updated records
           if (updated) {
             Object.values(updated).forEach(([, to]: any) => {
-              if (to?.typeName === 'shape') {
-                const plainRecord = {
-                  id: to.id,
-                  typeName: to.typeName,
-                  type: to.type,
-                  x: to.x,
-                  y: to.y,
-                  rotation: to.rotation,
-                  isLocked: to.isLocked,
-                  opacity: to.opacity,
-                  props: JSON.parse(JSON.stringify(to.props || {})),
-                  meta: JSON.parse(JSON.stringify(to.meta || {})),
-                  parentId: to.parentId,
-                  index: to.index,
-                };
-                yStore.set(to.id, plainRecord);
+              if (to && SYNCED_TYPES.has(to.typeName)) {
+                yStore.set(to.id, serialise(to));
               }
             });
           }
 
-          // Handle removed shapes
+          // Handle removed records
           if (removed) {
             Object.values(removed).forEach((record: any) => {
-              if (record?.typeName === 'shape') {
+              if (record && SYNCED_TYPES.has(record.typeName)) {
                 yStore.delete(record.id);
               }
             });
@@ -253,14 +250,17 @@ export function useYjsSync({
     });
     disposeStoreListenerRef.current = disposeListener;
 
-    // --- Track cursor position via awareness ---
+    // --- Track cursor position via awareness (in tldraw page-space) ---
     const handlePointerMove = (e: PointerEvent) => {
+      if (!editor) return;
       const canvas = (e.target as HTMLElement).closest('.tl-container');
       if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
+      // Convert screen coordinates to tldraw page coordinates so cursors
+      // are correct regardless of each user's pan/zoom level.
+      const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
       provider.awareness.setLocalStateField('cursor', {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: pagePoint.x,
+        y: pagePoint.y,
       });
     };
     window.addEventListener('pointermove', handlePointerMove);
