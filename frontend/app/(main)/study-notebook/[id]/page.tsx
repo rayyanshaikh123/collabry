@@ -97,12 +97,12 @@ export default function StudyNotebookPage() {
 
   useEffect(() => {
     const currentSessionId = notebook?.aiSessionId;
-    console.log('[PERSISTENCE DEBUG] useEffect triggered:', { 
+    console.log('[PERSISTENCE DEBUG] useEffect triggered:', {
       hasAiSessionId: !!currentSessionId,
       aiSessionId: currentSessionId,
       loading: sessionMessagesLoading,
       error: sessionMessagesError,
-      dataLength: sessionMessagesData?.length 
+      dataLength: sessionMessagesData?.length
     });
 
     if (!currentSessionId) {
@@ -245,7 +245,9 @@ export default function StudyNotebookPage() {
     handleRegeneratePrompt,
     handleEditPrompt,
     handleClearChat,
-    handleRegenerateResponse
+    handleRegenerateResponse,
+    verifiedMode,
+    setVerifiedMode,
   } = useNotebookChat({
     notebookId,
     sessionId: notebook?.aiSessionId || '',
@@ -494,6 +496,8 @@ export default function StudyNotebookPage() {
         typingUsers={typingUsers}
         onTyping={sendTyping}
         onInvite={() => setInviteModalOpen(true)}
+        verifiedMode={verifiedMode}
+        onVerifiedModeChange={setVerifiedMode}
       />
 
       <NotebookInviteModal

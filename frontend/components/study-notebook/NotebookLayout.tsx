@@ -29,6 +29,8 @@ interface NotebookLayoutProps {
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
+  verifiedMode?: boolean;
+  onVerifiedModeChange?: (enabled: boolean) => void;
 
   // Studio
   artifacts: Artifact[];
@@ -73,6 +75,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
   generatingType = null,
   participants = [],
   onInvite,
+  verifiedMode = false,
+  onVerifiedModeChange,
 }) => {
   const router = useRouter();
   const hasSelectedSources = sources.some((s) => s.selected);
@@ -181,6 +185,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
             onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
             typingUsers={typingUsers}
             onTyping={onTyping}
+            verifiedMode={verifiedMode}
+            onVerifiedModeChange={onVerifiedModeChange}
           />
         </div>
 
@@ -252,6 +258,8 @@ const NotebookLayout: React.FC<NotebookLayoutProps> = ({
                 onSaveFlashcardsToStudio={onSaveFlashcardsToStudio}
                 typingUsers={typingUsers}
                 onTyping={onTyping}
+                verifiedMode={verifiedMode}
+                onVerifiedModeChange={onVerifiedModeChange}
               />
             </div>
           )}

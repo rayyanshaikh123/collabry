@@ -1,0 +1,11 @@
+// Add this to ChatPanel.tsx after line 580 (in the message rendering section)
+// This is a code snippet to integrate VerifiedResponseView
+
+// Inside the message rendering loop, after the markdown content:
+
+{/* Verified Mode Response */}
+{message.role === 'assistant' && message.verifiedData && (
+  <div className="mt-4">
+    <VerifiedResponseView data={message.verifiedData} />
+  </div>
+)}

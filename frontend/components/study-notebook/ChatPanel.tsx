@@ -18,6 +18,8 @@ import { extractInfographicFromMarkdown, containsInfographicData } from '../../l
 import { extractFlashcardsFromMarkdown, containsFlashcardData } from '../../lib/flashcardParser';
 import FlashcardViewer from './FlashcardViewer';
 import BoardPickerModal from '../study-board/BoardPickerModal';
+import VerifiedResponseView from './VerifiedResponseView';
+import VerifiedModeToggle from './VerifiedModeToggle';
 
 export interface ChatMessage {
   id: string;
@@ -28,6 +30,7 @@ export interface ChatMessage {
   senderId?: string;
   senderName?: string;
   senderAvatar?: string;
+  verifiedData?: any; // Verified mode response data
 }
 
 interface ChatPanelProps {
@@ -45,6 +48,8 @@ interface ChatPanelProps {
   onSaveFlashcardsToStudio?: (flashcardSet: any) => void;
   typingUsers?: string[];
   onTyping?: (isTyping: boolean) => void;
+  verifiedMode?: boolean;
+  onVerifiedModeChange?: (enabled: boolean) => void;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -62,6 +67,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onSaveFlashcardsToStudio,
   typingUsers = [],
   onTyping,
+  verifiedMode = false,
+  onVerifiedModeChange,
 }) => {
   const router = useRouter();
   const [inputText, setInputText] = useState('');
@@ -540,6 +547,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
                         return (
                           <>
+                            {/* Verified Mode Response */}
+                            {message.role === 'assistant' && message.verifiedData && (
+                              <div className="mb-4">
+                                <VerifiedResponseView data={message.verifiedData} />
+                              </div>
+                            )}
+
                             {/* Render mindmap */}
                             {mindmap && mindmap.nodes && mindmap.nodes.length > 0 && (
                               <div className="mt-5 -mx-5 px-5 py-5 bg-gradient-to-br from-emerald-50 dark:from-emerald-900/30 via-teal-50 dark:via-teal-900/30 to-cyan-50 dark:to-cyan-900/30 rounded-xl">
@@ -839,6 +853,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
           </Button>
         </form>
+
+        {/* Verified Mode Toggle */}
+        {hasSelectedSources && onVerifiedModeChange && (
+          <div className="mt-3">
+            <VerifiedModeToggle
+              enabled={verifiedMode}
+              onChange={onVerifiedModeChange}
+            />
+          </div>
+        )}
+
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
           Press Enter to send • Shift + Enter for new line
         </p>
