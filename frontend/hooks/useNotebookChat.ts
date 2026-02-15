@@ -247,6 +247,18 @@ export function useNotebookChat({
                   );
                   appended = '';
                   sawDoneEvent = true;
+                } else if (maybeJson.type === 'citations' && maybeJson.citations) {
+                  // PHASE 4: Citations event
+                  console.log('📚 [Citations]', maybeJson.citations);
+                  // Store citations in message metadata
+                  setLocalMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === loadingId
+                        ? { ...msg, citations: maybeJson.citations }
+                        : msg
+                    )
+                  );
+                  appended = '';
                 } else if (maybeJson.type === 'thinking') {
                   // Thinking events in verified mode
                   console.log('💭 [Thinking]', maybeJson.content);

@@ -239,11 +239,12 @@ async def route_message(
         response = await chat_completion(
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": f"History:\n{history_text}\n\nUser Message: {message}"}
+                {"role": "user", "content": f"History:\n{history_text}\n\nUser Message: {message}\n\nRespond only in JSON format."}
             ],
             temperature=0,
             max_tokens=300,
-            stream=False
+            stream=False,
+            response_format={"type": "json_object"}
         )
         
         raw_content = response.choices[0].message.content.strip()

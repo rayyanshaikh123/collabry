@@ -437,7 +437,7 @@ async def run_agent(
         return
 
     # 5. Hybrid Retrieval Stage (For general chat grounded in sources)
-    context = await get_hybrid_context(
+    retrieval_result = await get_hybrid_context(
         user_id=user_id,
         notebook_id=notebook_id,
         policy=final_policy,
@@ -446,9 +446,23 @@ async def run_agent(
         query=normalized_query,
         token=token
     )
+    
+    # Extract context and citations
+    context = retrieval_result.get("context", "")
+    citations = retrieval_result.get("citations", [])
 
     # 6. Standard Conversation with Grounded Context
-    system_prompt = "You are a helpful study assistant. Be supportive and keep answers clear."
+    # PHASE 4: Stricter prompting to reduce hallucinations
+    system_prompt = """You are a helpful study assistant. Follow these rules STRICTLY:
+
+1. ONLY use information from the provided context when answering questions about study materials
+2. If information is NOT in the context, clearly state "I don't have information about this in your study materials"
+3. NEVER make up facts, dates, names, or information
+4. ALWAYS cite sources using [1], [2], etc. when using information from context
+5. If unsure, express uncertainty clearly (e.g., "Based on the available context, it appears...")
+6. Prioritize ACCURACY over completeness - better to say "I don't know" than to guess
+
+Be supportive and keep answers clear."""
     
     # Source Awareness in System Prompt
     if selected_sources:
@@ -456,11 +470,16 @@ async def run_agent(
         system_prompt += f"\n\nYou are currently grounded in the following sources: {source_names}."
 
     if context:
-        system_prompt += f"\n\nUse the following context to help answer the user. Be concise and prioritize information from the context if it matches the query.\n\nCONTEXT:\n{context}"
+        system_prompt += f"\n\nCONTEXT:\n{context}"
+        
+        # PHASE 4: Add citation instructions
+        if citations:
+            system_prompt += "\n\nCITATION REQUIREMENT: When using information from the context, you MUST cite your sources using the citation numbers like [1], [2], etc. that appear in the context. Every factual claim should have a citation."
+        
         if final_policy == "STRICT_SELECTED":
-            system_prompt += "\n\nCRITICAL: Use ONLY the provided context. If the answer is not there, say you don't know based on the selected sources."
+            system_prompt += "\n\n⚠️ CRITICAL: Use ONLY the provided context. If the answer is not there, say 'I don't have information about this in the selected sources.' Do NOT use general knowledge."
         else:
-            system_prompt += "\n\nIf the provided context doesn't contain the answer but is related, say so. If completely unrelated, you may use your general knowledge but mention it's not in the sources."
+            system_prompt += "\n\nIf the provided context doesn't fully answer the question, you may supplement with general knowledge BUT clearly distinguish between context-based information (with citations) and general knowledge (without citations)."
     elif final_mode == "NONE" and notebook_id:
         system_prompt += "\n\nYou have access to the notebook but no specific context was retrieved for this turn. If the user is asking about the sources, suggest that they ask for a 'summary' or 'more detail'."
 
@@ -468,30 +487,43 @@ async def run_agent(
     if session_lang:
         system_prompt += "\n\n" + build_language_instructions(session_lang, is_mixed_lang)
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-    ]
+    # Build conversation history
+    messages = [{"role": "system", "content": system_prompt}]
     
     # For collaborative sessions, include sender context
     if is_collaborative and sender_name:
         messages[0]["content"] += f"\n\nNote: This is a collaborative study session. The current speaker is '{sender_name}'."
-    
+
+    # Add recent history
     # SECURITY FIX - Phase 3: Sanitize conversation history before including in prompt
-    for h in _sanitize_conversation_history(history):
-        messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": message})
+    for turn in _sanitize_conversation_history(history[-5:]):  # Last 5 turns for context
+        messages.append({"role": turn.get("role"), "content": turn.get("content")})
     
+    # Add current message
+    messages.append({"role": "user", "content": message})
+
+    # 7. Stream Response
+    full_response = ""
     try:
-        resp_stream = await chat_completion(messages, stream=True)
-        full_text = ""
-        async for chunk in resp_stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                full_text += delta
-                yield {"type": "token", "content": delta}
+        async for chunk in chat_completion(
+            messages=messages,
+            stream=True,
+            user_id=user_id  # BYOK support
+        ):
+            if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                if hasattr(delta, 'content') and delta.content:
+                    content = delta.content
+                    full_response += content
+                    yield {"type": "token", "content": content}
+
+        # 8. Yield Citations (if any)
+        if citations:
+            logger.info(f"📚 Including {len(citations)} citations in response")
+            yield {"type": "citations", "citations": citations}
         
-        yield {"type": "complete", "message": full_text}
-        conv_manager.save_turn(user_id, session_id, message, full_text, notebook_id,
+        yield {"type": "complete", "message": full_response}
+        conv_manager.save_turn(user_id, session_id, message, full_response, notebook_id,
                                sender_id=user_id, sender_name=sender_name)
 
         # Refresh Redis TTL for this session state at the end of the turn

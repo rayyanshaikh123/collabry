@@ -11,7 +11,7 @@ const { emitNotificationToUser } = require('../socket/notificationNamespace');
  * @access  Private
  */
 exports.createBoard = asyncHandler(async (req, res) => {
-  const board = await boardService.createBoard(req.user.id, req.body);
+  const board = await boardService.createBoard(req.user._id, req.body);
 
   res.status(201).json({
     success: true,
@@ -34,7 +34,7 @@ exports.getBoards = asyncHandler(async (req, res) => {
     sortOrder: req.query.sortOrder || 'desc'
   };
 
-  const result = await boardService.getUserBoards(req.user.id, options);
+  const result = await boardService.getUserBoards(req.user._id, options);
 
   res.json({
     success: true,
@@ -50,7 +50,7 @@ exports.getBoards = asyncHandler(async (req, res) => {
  * @access  Private
  */
 exports.getBoard = asyncHandler(async (req, res) => {
-  const board = await boardService.getBoardById(req.params.id, req.user.id);
+  const board = await boardService.getBoardById(req.params.id, req.user._id);
 
   res.json({
     success: true,
@@ -66,7 +66,7 @@ exports.getBoard = asyncHandler(async (req, res) => {
 exports.updateBoard = asyncHandler(async (req, res) => {
   const board = await boardService.updateBoard(
     req.params.id,
-    req.user.id,
+    req.user._id,
     req.body
   );
 
@@ -82,7 +82,7 @@ exports.updateBoard = asyncHandler(async (req, res) => {
  * @access  Private (Owner only)
  */
 exports.deleteBoard = asyncHandler(async (req, res) => {
-  const result = await boardService.deleteBoard(req.params.id, req.user.id);
+  const result = await boardService.deleteBoard(req.params.id, req.user._id);
 
   res.json({
     success: true,
@@ -97,7 +97,7 @@ exports.deleteBoard = asyncHandler(async (req, res) => {
  */
 exports.archiveBoard = asyncHandler(async (req, res) => {
   const archive = req.body.archive !== false; // Default to true
-  const board = await boardService.archiveBoard(req.params.id, req.user.id, archive);
+  const board = await boardService.archiveBoard(req.params.id, req.user._id, archive);
 
   res.json({
     success: true,
@@ -113,7 +113,7 @@ exports.archiveBoard = asyncHandler(async (req, res) => {
 exports.duplicateBoard = asyncHandler(async (req, res) => {
   const board = await boardService.duplicateBoard(
     req.params.id,
-    req.user.id,
+    req.user._id,
     req.body.title
   );
 
@@ -135,7 +135,7 @@ exports.addMember = asyncHandler(async (req, res) => {
     throw new AppError('User ID is required', 400);
   }
 
-  const board = await boardService.addMember(req.params.id, req.user.id, {
+  const board = await boardService.addMember(req.params.id, req.user._id, {
     userId,
     role: role || 'editor'
   });
@@ -144,7 +144,7 @@ exports.addMember = asyncHandler(async (req, res) => {
   try {
     const User = require('../models/User');
     const addedUser = await User.findById(userId);
-    const invitedBy = await User.findById(req.user.id);
+    const invitedBy = await User.findById(req.user._id);
 
     if (addedUser && invitedBy) {
       const notification = await notificationService.notifyBoardMemberJoined(
@@ -174,7 +174,7 @@ exports.addMember = asyncHandler(async (req, res) => {
 exports.removeMember = asyncHandler(async (req, res) => {
   const board = await boardService.removeMember(
     req.params.id,
-    req.user.id,
+    req.user._id,
     req.params.userId
   );
 
@@ -198,7 +198,7 @@ exports.updateMemberRole = asyncHandler(async (req, res) => {
 
   const board = await boardService.updateMemberRole(
     req.params.id,
-    req.user.id,
+    req.user._id,
     req.params.userId,
     role
   );
@@ -219,7 +219,7 @@ exports.inviteMember = asyncHandler(async (req, res) => {
 
   const result = await boardService.inviteMemberByEmail(
     req.params.id,
-    req.user.id,
+    req.user._id,
     email,
     role
   );
@@ -228,7 +228,7 @@ exports.inviteMember = asyncHandler(async (req, res) => {
   try {
     const User = require('../models/User');
     const invitedUser = await User.findOne({ email });
-    const invitedBy = await User.findById(req.user.id);
+    const invitedBy = await User.findById(req.user._id);
 
     if (invitedUser && invitedBy) {
       const Board = require('../models/Board');
@@ -271,7 +271,7 @@ exports.searchBoards = asyncHandler(async (req, res) => {
     skip: parseInt(req.query.skip) || 0
   };
 
-  const boards = await boardService.searchBoards(req.user.id, q, options);
+  const boards = await boardService.searchBoards(req.user._id, q, options);
 
   res.json({
     success: true,

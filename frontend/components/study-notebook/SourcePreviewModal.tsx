@@ -3,27 +3,86 @@
 import React from 'react';
 import { Card, Button } from '../UIElements';
 import { ICONS } from '../../constants';
+
+// Helper to format seconds as MM:SS
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface SourcePreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isLoading?: boolean;
+  notebookId: string;
   source: {
     id: string;
     name: string;
-    type: 'pdf' | 'text' | 'website' | 'notes';
+    type: 'pdf' | 'text' | 'website' | 'audio';
     content: string;
+    transcriptionSegments?: Array<{
+      start: number;
+      end: number;
+      text: string;
+    }>;
   } | null;
-  isLoading?: boolean;
 }
 
 const SourcePreviewModal: React.FC<SourcePreviewModalProps> = ({
   isOpen,
   onClose,
+  isLoading,
+  notebookId,
   source,
-  isLoading = false,
 }) => {
+  const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = React.useState(false);
+  const audioRef = React.useRef<HTMLAudioElement>(null);
+  const [activeTab, setActiveTab] = React.useState<'transcript' | 'plain'>('transcript');
+  const [currentTime, setCurrentTime] = React.useState(0);
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen && source?.type === 'audio' && notebookId) {
+      const fetchAudio = async () => {
+        setIsAudioLoading(true);
+        try {
+          const { apiClient } = await import('@/lib/api');
+          const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+          const url = `${baseURL}/notebook/notebooks/${notebookId}/sources/${source.id}/audio`;
+
+          const response = await apiClient.getClient().get(url, {
+            responseType: 'blob'
+          });
+
+          const blobUrl = URL.createObjectURL(new Blob([response.data]));
+          setAudioUrl(blobUrl);
+        } catch (err) {
+          console.error('Failed to load audio:', err);
+        } finally {
+          setIsAudioLoading(false);
+        }
+      };
+
+      fetchAudio();
+    }
+
+    return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
+      }
+    };
+  }, [isOpen, source?.id, source?.type, notebookId]);
+
   if (!isOpen) return null;
 
   const getSourceIcon = (type: string) => {
@@ -34,8 +93,8 @@ const SourcePreviewModal: React.FC<SourcePreviewModalProps> = ({
         return '📝';
       case 'website':
         return '🌐';
-      case 'notes':
-        return '📓';
+      case 'audio':
+        return '🎙️';
       default:
         return '📁';
     }
@@ -49,8 +108,8 @@ const SourcePreviewModal: React.FC<SourcePreviewModalProps> = ({
         return 'Text File';
       case 'website':
         return 'Website';
-      case 'notes':
-        return 'Notes';
+      case 'audio':
+        return 'Audio Transcription';
       default:
         return 'Source';
     }
@@ -97,15 +156,108 @@ const SourcePreviewModal: React.FC<SourcePreviewModalProps> = ({
               <p className="text-slate-600 dark:text-slate-400 font-medium">No source selected</p>
             </div>
           ) : (
-            <div className="prose prose-sm max-w-none prose-slate dark:prose-invert prose-headings:font-bold prose-headings:text-slate-800 dark:prose-headings:text-slate-200 prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-code:text-indigo-600 dark:prose-code:text-indigo-400">
-              {source.type === 'website' || source.type === 'notes' ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {source.content}
-                </ReactMarkdown>
-              ) : (
-                <pre className="whitespace-pre-wrap font-mono text-sm bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                  {source.content}
-                </pre>
+            <div className="space-y-6">
+              {source.type === 'audio' && (
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                      <ICONS.Mic className="w-5 h-5" />
+                    </span>
+                    <h3 className="font-bold text-slate-800 dark:text-slate-200">Recording Player</h3>
+                  </div>
+
+                  {isAudioLoading ? (
+                    <div className="h-12 flex items-center justify-center bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-600">
+                      <span className="text-xs text-slate-500 animate-pulse">Loading audio stream...</span>
+                    </div>
+                  ) : audioUrl ? (
+                    <audio
+                      ref={audioRef}
+                      controls
+                      onTimeUpdate={handleTimeUpdate}
+                      className="w-full h-12 rounded-xl"
+                      src={audioUrl}
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  ) : (
+                    <div className="h-12 flex items-center justify-center bg-rose-50 dark:bg-rose-900/10 rounded-xl border border-rose-100 dark:border-rose-900/30">
+                      <span className="text-xs text-rose-600 dark:text-rose-400">Failed to load audio recording.</span>
+                    </div>
+                  )}
+
+                  {source.transcriptionSegments && source.transcriptionSegments.length > 0 && (
+                    <div className="mt-6 border-t border-slate-200 dark:border-slate-700 pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Interactive Transcript</h4>
+                        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+                          <button
+                            onClick={() => setActiveTab('transcript')}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${activeTab === 'transcript' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            Segments
+                          </button>
+                          <button
+                            onClick={() => setActiveTab('plain')}
+                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${activeTab === 'plain' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                          >
+                            Full Text
+                          </button>
+                        </div>
+                      </div>
+
+                      {activeTab === 'transcript' ? (
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                          {source.transcriptionSegments.map((segment, idx) => {
+                            const isActive = currentTime >= segment.start && currentTime <= (segment.end || segment.start + 5);
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => {
+                                  if (audioRef.current) {
+                                    audioRef.current.currentTime = segment.start;
+                                    audioRef.current.play();
+                                  }
+                                }}
+                                className={`w-full text-left p-3 rounded-xl border transition-all group ${isActive
+                                  ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20'
+                                  : 'border-transparent hover:border-indigo-200 dark:hover:border-indigo-900/50 hover:bg-white dark:hover:bg-slate-800'
+                                  }`}
+                              >
+                                <div className="flex gap-3">
+                                  <span className={`text-[10px] font-mono mt-0.5 tabular-nums ${isActive ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                                    {formatTime(segment.start)}
+                                  </span>
+                                  <p className={`text-sm transition-colors ${isActive ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
+                                    {segment.text}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 whitespace-pre-wrap">
+                          {source.content}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {source.type !== 'audio' && (
+                <div className="prose prose-sm max-w-none prose-slate dark:prose-invert prose-headings:font-bold prose-headings:text-slate-800 dark:prose-headings:text-slate-200 prose-p:text-slate-700 dark:prose-p:text-slate-300 prose-pre:bg-slate-100 dark:prose-pre:bg-slate-800 prose-code:text-indigo-600 dark:prose-code:text-indigo-400">
+                  {source.type === 'website' ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {source.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <pre className="whitespace-pre-wrap font-mono text-sm bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                      {source.content}
+                    </pre>
+                  )}
+                </div>
               )}
             </div>
           )}

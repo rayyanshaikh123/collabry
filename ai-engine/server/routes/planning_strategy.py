@@ -10,7 +10,7 @@ from typing import List, Optional
 import logging
 import json
 
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from server.schemas import ErrorResponse
 from core.llm import get_langchain_llm
 
@@ -141,7 +141,7 @@ def _validate_and_coerce(raw: dict, subject: str, topics: List[str]) -> dict:
 )
 async def get_planning_strategy(
     request: PlanningStrategyRequest,
-    user_id: str = Depends(get_current_user),
+    user_id: str = Depends(get_user_id),
 ) -> PlanningStrategyResponse:
     """
     Returns ONLY strategy: subjects, topics with difficulty/estimatedHours/priority/dependencies/revision.

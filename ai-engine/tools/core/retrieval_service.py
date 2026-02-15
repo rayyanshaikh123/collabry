@@ -85,22 +85,30 @@ async def get_hybrid_context(
     source_ids: List[str],
     query: str,
     token: Optional[str] = None
-) -> str:
+) -> Dict[str, Any]:
     """
     Retrieves context based on the validated plan.
     SECURITY FIX - Phase 1: Enhanced with source ID validation.
+    PHASE 4: Now returns citations alongside context.
+    
+    Returns:
+        Dictionary with 'context' (str) and 'citations' (list)
     """
+    from core.citation_manager import CitationManager
+    
     logger.info(f"🚀 Retrieval: policy={policy}, mode={mode}, sources={len(source_ids)}")
     
+    citation_mgr = CitationManager()
+    
     if mode == "NONE":
-        return ""
+        return {"context": "", "citations": []}
 
     # SECURITY FIX: Validate source IDs before ANY processing
     try:
         validated_source_ids = validate_source_ids(source_ids)
     except ValueError as e:
         logger.error(f"🚨 Security: Invalid source_ids provided: {e}")
-        return ""  # Fail safe - return empty context instead of risking data exposure
+        return {"context": "", "citations": []}  # Fail safe
 
     context_parts: List[str] = []
 
@@ -123,7 +131,9 @@ async def get_hybrid_context(
             cached = await redis.get(cache_key)
             if isinstance(cached, str) and cached:
                 logger.debug(f"✅ Retrieval cache hit for key={cache_key}")
-                return cached
+                # Note: Cached results don't have citations - we'll need to regenerate them
+                # For now, return cached context without citations
+                return {"context": cached, "citations": []}
     except Exception as e:
         logger.warning(f"Redis retrieval cache error (read): {e}")
         redis = None
@@ -133,12 +143,20 @@ async def get_hybrid_context(
         if validated_source_ids and token:
             full_texts = await fetch_full_sources(notebook_id, validated_source_ids, token)
             for st in full_texts:
-                context_parts.append(f"--- SOURCE: {st['name']} (Type: {st['type']}) ---\n{st['content']}")
+                # Add citation for full document
+                citation_id = citation_mgr.add_citation(
+                    source_id=st['id'],
+                    source_name=st['name'],
+                    excerpt=st['content'][:300],  # First 300 chars as excerpt
+                    source_type=st['type']
+                )
+                context_parts.append(f"--- SOURCE: {st['name']} (Type: {st['type']}) [{citation_id}] ---\n{st['content']}")
         
         # If we got full text, we might skip chunk search for summaries, 
         # but for synthesis we might want both.
         if mode == "FULL_DOCUMENT" and context_parts:
-            return "\n\n".join(context_parts)
+            context = "\n\n".join(context_parts)
+            return {"context": context, "citations": citation_mgr.get_all()}
 
     # 2. Handle CHUNK_SEARCH (Standard RAG)
     # We always do this for specific queries or if full text failed/wasn't requested.
@@ -156,8 +174,10 @@ async def get_hybrid_context(
     if docs:
         if context_parts: context_parts.append("\n--- RELEVANT EXCERPTS ---")
         for doc in docs:
+            # Add citation for each chunk
+            citation_id = citation_mgr.add_from_document(doc)
             source_name = doc.metadata.get("source", "Unknown")
-            context_parts.append(f"[{source_name}]: {doc.page_content}")
+            context_parts.append(f"[{source_name}]: {doc.page_content} [{citation_id}]")
     
     context = "\n\n".join(context_parts)
 
@@ -168,7 +188,7 @@ async def get_hybrid_context(
         except Exception as e:
             logger.warning(f"Redis retrieval cache error (write): {e}")
 
-    return context
+    return {"context": context, "citations": citation_mgr.get_all()}
 
 async def fetch_full_sources(
     notebook_id: str, 

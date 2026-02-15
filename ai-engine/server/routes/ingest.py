@@ -7,7 +7,7 @@ Handles:
 - User-isolated document storage
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from server.schemas import UploadRequest, UploadResponse, ErrorResponse
 from core.rag_retriever import RAGRetriever
 from langchain_core.documents import Document
@@ -129,7 +129,7 @@ def ingest_document_background(
 async def upload_document(
     request: UploadRequest,
     background_tasks: BackgroundTasks,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> UploadResponse:
     """
     Upload document for user-isolated RAG retrieval.
@@ -187,7 +187,7 @@ async def upload_document(
 )
 async def get_upload_status(
     task_id: str,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Check status of document ingestion task.
@@ -257,7 +257,7 @@ async def get_upload_status(
 )
 async def delete_source_documents(
     source_id: str,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Delete all documents for a specific source.
@@ -297,7 +297,7 @@ async def delete_source_documents(
 )
 async def delete_session_documents(
     session_id: str,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Delete all documents for a specific session (notebook).

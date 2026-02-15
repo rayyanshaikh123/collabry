@@ -13,7 +13,7 @@ from server.schemas import (
     RealtimeStatsResponse,
     ErrorResponse
 )
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from core.usage_tracker import usage_tracker
 from datetime import datetime
 import logging
@@ -82,7 +82,7 @@ async def get_public_stats(
 async def get_my_usage(
     request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ):
     """
     Get usage statistics for the current user.
@@ -137,7 +137,7 @@ async def get_user_usage(
     user_id: str,
     request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    admin_id: str = Depends(get_current_user)
+    admin_id: str = Depends(get_user_id)
 ):
     """
     Get usage statistics for a specific user (admin only).
@@ -203,7 +203,7 @@ async def get_user_usage(
 async def get_global_usage(
     request: Request,
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    admin_id: str = Depends(get_current_user)
+    admin_id: str = Depends(get_user_id)
 ):
     """
     Get global usage statistics across all users (admin only).
@@ -257,7 +257,7 @@ async def get_global_usage(
 )
 async def get_realtime_stats(
     request: Request,
-    admin_id: str = Depends(get_current_user)
+    admin_id: str = Depends(get_user_id)
 ):
     """
     Get real-time usage statistics (admin only).
@@ -305,7 +305,7 @@ async def get_realtime_stats(
     summary="Reset my daily usage",
     description="Reset the aggregated daily usage stats for the authenticated user (today)."
 )
-async def reset_my_usage(user_id: str = Depends(get_current_user)):
+async def reset_my_usage(user_id: str = Depends(get_user_id)):
     try:
         usage_tracker.reset_user_daily_usage(user_id)
         return {"message": "Daily usage reset for current user."}
@@ -322,7 +322,7 @@ async def reset_my_usage(user_id: str = Depends(get_current_user)):
 async def reset_user_usage(
     request: Request,
     target_user_id: str,
-    admin_id: str = Depends(get_current_user)
+    admin_id: str = Depends(get_user_id)
 ):
     try:
         # Admin role check

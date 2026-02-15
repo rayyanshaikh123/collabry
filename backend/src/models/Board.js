@@ -169,26 +169,55 @@ boardSchema.pre('save', function () {
 boardSchema.methods.hasAccess = function (userId) {
   const userIdStr = userId.toString();
 
-  if (this.owner.toString() === userIdStr) {
+  // Handle both populated and unpopulated owner field
+  const ownerIdStr = (this.owner._id || this.owner).toString();
+
+  console.log('  🔐 hasAccess check:');
+  console.log('    userId:', userId, 'type:', typeof userId);
+  console.log('    userIdStr:', userIdStr);
+  console.log('    this.owner:', this.owner, 'type:', typeof this.owner);
+  console.log('    ownerIdStr:', ownerIdStr);
+  console.log('    Match owner?', ownerIdStr === userIdStr);
+
+  if (ownerIdStr === userIdStr) {
+    console.log('    ✅ Access granted: User is owner');
     return true;
   }
 
   if (this.isPublic) {
+    console.log('    ✅ Access granted: Board is public');
     return true;
   }
 
-  return this.members.some(m => m.userId.toString() === userIdStr);
+  // Handle both populated and unpopulated member userId
+  const isMember = this.members.some(m => {
+    const memberIdStr = (m.userId._id || m.userId).toString();
+    return memberIdStr === userIdStr;
+  });
+  
+  console.log('    Is member?', isMember);
+  if (isMember) {
+    console.log('    ✅ Access granted: User is member');
+  } else {
+    console.log('    ❌ Access denied: Not owner, not public, not member');
+  }
+  
+  return isMember;
 };
 
 // Method to get user role
 boardSchema.methods.getUserRole = function (userId) {
   const userIdStr = userId.toString();
+  const ownerIdStr = (this.owner._id || this.owner).toString();
 
-  if (this.owner.toString() === userIdStr) {
+  if (ownerIdStr === userIdStr) {
     return 'owner';
   }
 
-  const member = this.members.find(m => m.userId.toString() === userIdStr);
+  const member = this.members.find(m => {
+    const memberIdStr = (m.userId._id || m.userId).toString();
+    return memberIdStr === userIdStr;
+  });
   return member ? member.role : null;
 };
 

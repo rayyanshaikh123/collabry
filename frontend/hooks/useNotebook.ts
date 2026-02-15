@@ -4,15 +4,20 @@ import notebookService, { Notebook, Source, Artifact, ApiResponse } from '@/lib/
 type AddSourcePayload =
   | FormData
   | {
-      type: 'text' | 'notes';
-      name: string;
-      content: string;
-    }
+    type: 'text';
+    name: string;
+    content: string;
+  }
   | {
-      type: 'website';
-      name?: string;
-      url: string;
-    };
+    type: 'website';
+    name?: string;
+    url: string;
+  }
+  | {
+    type: 'audio';
+    name: string;
+    file: File;
+  };
 
 const updateNotebookQueryCache = (
   queryClient: ReturnType<typeof useQueryClient>,
@@ -54,12 +59,12 @@ export const useNotebook = (id: string | undefined) => {
 export const useCreateNotebook = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title?: string; description?: string }) => 
+    mutationFn: (data: { title?: string; description?: string }) =>
       notebookService.createNotebook(data),
     onSuccess: (response) => {
       // Invalidate notebooks list
       queryClient.invalidateQueries({ queryKey: ['notebooks'] });
-      
+
       // Set the new notebook data in cache
       const notebookId = (response as any)?.data?._id || (response as any)?._id;
       if (notebookId) {
@@ -72,7 +77,7 @@ export const useCreateNotebook = () => {
 export const useUpdateNotebook = (id: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title?: string; description?: string }) => 
+    mutationFn: (data: { title?: string; description?: string }) =>
       notebookService.updateNotebook(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notebooks', id] });
@@ -114,7 +119,7 @@ export const useAddSource = (notebookId: string) => {
       try {
         if (typeof FormData !== 'undefined' && payload instanceof FormData) {
           const rawType = String(payload.get('type') || 'pdf');
-          const type = (['pdf', 'text', 'website', 'notes'].includes(rawType) ? rawType : 'pdf') as Source['type'];
+          const type = (['pdf', 'text', 'website', 'audio'].includes(rawType) ? rawType : 'pdf') as Source['type'];
           const name = String(payload.get('name') || 'Untitled Source');
           optimisticSource.type = type;
           optimisticSource.name = name;
@@ -226,7 +231,7 @@ export const useNotebookContext = (id: string | undefined) => {
 export const useLinkArtifact = (notebookId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic' | 'course-finder'; referenceId: string; title: string; data?: any }) => 
+    mutationFn: (data: { type: 'quiz' | 'mindmap' | 'flashcards' | 'infographic' | 'course-finder'; referenceId: string; title: string; data?: any }) =>
       notebookService.linkArtifact(notebookId, data),
     onSuccess: (response: any) => {
       const added = response?.data as Artifact | undefined;

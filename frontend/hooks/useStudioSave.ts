@@ -7,6 +7,7 @@ interface UseStudioSaveProps {
   linkArtifact: any; // React Query mutation
   createQuiz: any; // React Query mutation
   generateMindMap: any; // React Query mutation
+  createMindMap: any; // React Query mutation
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   showWarning: (message: string) => void;
@@ -19,6 +20,7 @@ export function useStudioSave({
   linkArtifact,
   createQuiz,
   generateMindMap,
+  createMindMap,
   showSuccess,
   showError,
   showWarning,
@@ -136,12 +138,18 @@ export function useStudioSave({
           showWarning(`Could not render mindmap image: ${errorMsg}. Saving structure only.`);
         }
 
-        const result = await generateMindMap.mutateAsync({
+        const result = await createMindMap.mutateAsync({
+          title: `Mind Map - ${notebook.title}`,
           topic: `${notebook.title} - Study Notes`,
-          maxNodes: mindmap.nodes.length,
-          useRag: false,
-          save: true,
-          subjectId: notebook.subject || null,
+          nodes: mindmap.nodes.map((n: any, idx: number) => ({
+            ...n,
+            id: n.id || `node_${idx}`
+          })),
+          edges: mindmap.edges.map((e: any, idx: number) => ({
+            ...e,
+            id: e.id || `edge_${e.from || idx}_${e.to || idx}_${idx}`
+          })),
+          subject: (notebook.subject as any) || null,
         });
 
         const savedId =
@@ -179,7 +187,7 @@ export function useStudioSave({
         showError('Failed to save mindmap to Studio');
       }
     },
-    [notebook, generateMindMap, linkArtifact, showSuccess, showError, showWarning]
+    [notebook, createMindMap, linkArtifact, showSuccess, showError, showWarning]
   );
 
   const handleSaveInfographicToStudio = useCallback(

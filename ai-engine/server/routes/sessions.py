@@ -147,10 +147,11 @@ class SessionsListResponse(BaseModel):
     summary="Get user's chat sessions",
     description="Retrieve all chat sessions for the authenticated user"
 )
-async def get_sessions(user_id: str = Depends(get_current_user)):
+async def get_sessions(current_user: dict = Depends(get_current_user)):
     """
     Get all chat sessions for a user with rate limiting info.
     """
+    user_id = current_user["user_id"]  # Extract user_id from dict
     try:
         # Get user role from user_id (you might want to fetch this from backend)
         # For now, assume 'student' role means free user
@@ -201,11 +202,12 @@ async def get_sessions(user_id: str = Depends(get_current_user)):
 )
 async def create_session(
     session_data: SessionCreate,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Create a new chat session with rate limiting.
     """
+    user_id = current_user["user_id"]
     try:
         # Check session limit for free users
         max_sessions = 50  # Increased limit for development
@@ -262,11 +264,12 @@ async def create_session(
 )
 async def get_session_messages(
     session_id: str,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Get all messages for a specific session.
     """
+    user_id = current_user["user_id"]
     try:
         # Verify session access
         session = verify_session_access(session_id, user_id)
@@ -309,11 +312,12 @@ async def get_session_messages(
 async def save_message(
     session_id: str,
     message: Message,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Save a message to a session.
     """
+    user_id = current_user["user_id"]
     try:
         # Verify session access
         session = verify_session_access(session_id, user_id)
@@ -362,11 +366,12 @@ async def save_message(
 )
 async def delete_session(
     session_id: str,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Delete a session and all its messages.
     """
+    user_id = current_user["user_id"]
     try:
         # Verify session access
         session = verify_session_access(session_id, user_id)
@@ -408,11 +413,12 @@ async def delete_session(
 )
 async def clear_session_messages(
     session_id: str,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Clear all messages in a session.
     """
+    user_id = current_user["user_id"]
     try:
         # Verify session access
         session = verify_session_access(session_id, user_id)
@@ -446,8 +452,9 @@ async def session_chat_stream_get(
     session_id: str,
     message: str,
     use_rag: bool = False,
-    user_id: str = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
+    user_id = current_user["user_id"]
     """
     Streaming chat endpoint using GET with query parameters (for SSE compatibility).
     Automatically saves messages to the session.
@@ -480,9 +487,10 @@ async def session_chat_stream_get(
 async def session_chat_stream(
     session_id: str,
     request: ChatRequest,
-    user_id: str = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
+    user_id = current_user["user_id"]
     """
     Streaming chat endpoint for a specific session using SSE.
     Automatically saves messages to the session.
@@ -557,6 +565,7 @@ async def session_chat_stream(
                     notebook_id=notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
+                    verified_mode=request.verified_mode,
                     token=credentials.credentials if credentials else None,
                     stream=True
                 ):

@@ -10,6 +10,7 @@ const path = require('path');
 const pdfParse = require('pdf-parse');
 const cheerio = require('cheerio');
 const notificationService = require('../services/notification.service');
+const transcriptionService = require('../services/transcription.service');
 const { getIO } = require('../socket');
 const { emitNotificationToUser } = require('../socket/notificationNamespace');
 
@@ -19,52 +20,51 @@ const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/sources');
 fs.mkdir(UPLOADS_DIR, { recursive: true }).catch(console.error);
 
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
 /**
  * Helper function to extract text content from source
  */
 async function extractSourceContent(source) {
-  // Check for cached content first (Performance optimization)
+  if (source.type === 'audio' && source.transcriptionSegments?.length > 0) {
+    return source.transcriptionSegments
+      .map(seg => `[${formatTime(seg.start)}] ${seg.text}`)
+      .join('\n');
+  }
+
+  // Check for cached content first
   if (source.content && source.content.trim().length > 0) {
     return source.content;
   }
 
-  if (source.type === 'text' || source.type === 'notes') {
-    return source.content || '';
+  if (source.type === 'text' || source.type === 'audio') {
+    return source.content || source.transcription || '';
   } else if (source.type === 'pdf' || source.type === 'document') {
     if (source.filePath) {
       try {
         console.log(`Extracting text from PDF: ${source.filePath}`);
-
-        // Read PDF file
         const dataBuffer = await fs.readFile(source.filePath);
-
-        // Parse PDF and extract text (with options to suppress warnings)
         const pdfData = await pdfParse(dataBuffer, {
-          max: 0, // Extract all pages
-          verbosity: 0 // Suppress warnings
+          max: 0,
+          verbosity: 0
         });
         const text = pdfData.text;
-
         console.log(`✓ Extracted ${text.length} characters from PDF: ${source.name}`);
-
         if (!text || text.length < 10) {
-          console.warn(`⚠ Very little text extracted from PDF: ${source.name}`);
-          return `[PDF Document: ${source.name} - No text content extracted. This might be an image-based PDF that requires OCR.]`;
+          return `[PDF Document: ${source.name} - No text content extracted.]`;
         }
-
         return text;
       } catch (err) {
         console.error('Failed to extract text from PDF:', err.message);
-        // Return a descriptive placeholder instead of failing completely
-        return `[PDF Document: ${source.name} - Unable to extract text. Error: ${err.message}. Please try converting the PDF to text or using a different format.]`;
+        return `[PDF Document: ${source.name} - Unable to extract text. Error: ${err.message}]`;
       }
     }
-    return `[Document: ${source.name} - No file path]`;
   } else if (source.type === 'website') {
-    if (source.content && typeof source.content === 'string' && source.content.trim().length > 0) {
-      return source.content;
-    }
-    return `[Website: ${source.url}]`;
+    return source.content || `[Website: ${source.url}]`;
   }
   return '';
 }
@@ -530,9 +530,22 @@ exports.addSource = asyncHandler(async (req, res) => {
     if (!clientName || clientName === url || clientName === scraped.normalizedUrl) {
       source.name = derivedName;
     }
-  } else if (type === 'text' || type === 'notes') {
+  } else if (type === 'audio') {
+    if (!file) {
+      throw new AppError('Audio file is required for audio sources', 400);
+    }
+
+    // Save audio file to local storage
+    const fileName = `${Date.now()}-${file.originalname}`;
+    const filePath = path.join(UPLOADS_DIR, fileName);
+    await fs.writeFile(filePath, file.buffer);
+
+    source.filePath = filePath;
+    source.size = file.size;
+    source.transcriptionStatus = 'pending';
+  } else if (type === 'text') {
     if (!content) {
-      throw new AppError('Content is required for text/notes sources', 400);
+      throw new AppError('Content is required for text sources', 400);
     }
     source.content = content;
     source.size = content.length;
@@ -550,67 +563,109 @@ exports.addSource = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, { $inc: { storageUsed: sourceSize } });
   }
 
-  // Track file upload
-  if (type === 'pdf' || type === 'document') {
+  // Track file upload milestone
+  if (type === 'pdf' || type === 'document' || type === 'audio') {
     const { trackFileUpload } = require('../middleware/usageEnforcement');
     await trackFileUpload(req.user._id);
   }
 
-  // Return the newly added source
+  // Get the added source with its ID
   const addedSource = notebook.sources[notebook.sources.length - 1];
 
-  // Extract JWT token from request
+  // START BACKGROUND PROCESSING (Transcription -> Ingestion)
+  // We don't await this so the user gets a 201 immediately
   const authToken = req.headers.authorization?.split(' ')[1];
-
-  if (authToken) {
-    // Debug: decode JWT to see user_id (for troubleshooting only)
-    try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.decode(authToken);
-      console.log(`[DEBUG] JWT payload: ${JSON.stringify(decoded)}`);
-      console.log(`[DEBUG] User ID in JWT: ${decoded?.id || decoded?.sub}`);
-      console.log(`[DEBUG] Notebook userId: ${notebook.userId}`);
-    } catch (e) {
-      console.warn('[DEBUG] Failed to decode JWT for logging:', e.message);
-    }
-  } else {
-    console.warn('[DEBUG] No authToken found in request headers');
-  }
-
-  // Ingest source into AI engine's RAG system (WAIT for completion)
-  if (authToken && notebook.aiSessionId) {
-    try {
-      await ingestSourceToRAG(notebook, addedSource, authToken);
-      console.log('✅ RAG ingestion completed before response');
-
-      // Send notification about document processing completion
-      try {
-        const notification = await notificationService.notifyDocumentProcessed(
-          notebook.userId, // Always notify owner
-          addedSource.name
-        );
-
-        const io = getIO();
-        emitNotificationToUser(io, notebook.userId, notification);
-
-        // Also notify uploader if different from owner
-        if (notebook.userId.toString() !== req.user._id.toString()) {
-          emitNotificationToUser(io, req.user._id, notification);
-        }
-      } catch (err) {
-        console.error('Failed to send document notification:', err);
-      }
-    } catch (err) {
-      console.error('❌ RAG ingestion failed:', err.message);
-      // Continue anyway, return the source even if ingestion fails
-    }
-  }
+  processSourceInBackground(notebook._id, addedSource._id, authToken, req.user._id);
 
   res.status(201).json({
     success: true,
     data: addedSource
   });
 });
+
+/**
+ * Background worker to handle transcription and RAG ingestion
+ */
+async function processSourceInBackground(notebookId, sourceId, authToken, uploaderId) {
+  try {
+    console.log(`[BACKGROUND] Starting processing for source ${sourceId} in notebook ${notebookId}`);
+    
+    // 1. Fetch fresh notebook and source
+    const notebook = await Notebook.findById(notebookId);
+    if (!notebook) return;
+    const source = notebook.sources.id(sourceId);
+    if (!source) return;
+
+    const io = getIO();
+    const room = `notebook:${notebookId}`;
+
+    // 2. Handle Transcription (if audio and not already done)
+    if (source.type === 'audio' && source.transcriptionStatus !== 'completed') {
+      try {
+        source.transcriptionStatus = 'processing';
+        await notebook.save();
+        
+        // Broadcast start
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+
+        const results = await transcriptionService.transcribeAudio(source.filePath, source.name);
+        
+        source.transcription = results.text;
+        source.content = results.text;
+        source.duration = results.duration;
+        source.transcriptionSegments = results.segments;
+        source.transcriptionStatus = 'completed';
+        await notebook.save();
+
+        console.log(`[BACKGROUND] Transcription completed for ${source.name}`);
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+      } catch (err) {
+        console.error(`[BACKGROUND] Transcription failed:`, err.message);
+        source.transcriptionStatus = 'failed';
+        source.transcriptionError = err.message;
+        source.content = `[Audio File: ${source.name} - Transcription failed: ${err.message}]`;
+        await notebook.save();
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+      }
+    }
+
+    // 3. Handle RAG Ingestion
+    if (authToken && notebook.aiSessionId) {
+      try {
+        source.ragStatus = 'processing';
+        await notebook.save();
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+
+        await ingestSourceToRAG(notebook, source, authToken);
+        
+        // Re-fetch source status (ingestSourceToRAG doesn't update source object in this scope)
+        // Wait, ingestSourceToRAG should ideally update the source status. 
+        // Let's modify ingestSourceToRAG to update the database.
+        
+        source.ragStatus = 'completed';
+        await notebook.save();
+        console.log(`[BACKGROUND] RAG Ingestion completed for ${source.name}`);
+
+        // Notify user via notification system
+        try {
+          const notification = await notificationService.notifyDocumentProcessed(uploaderId, source.name);
+          emitNotificationToUser(io, uploaderId, notification);
+        } catch (e) { /* ignore */ }
+
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+      } catch (err) {
+        console.error(`[BACKGROUND] RAG Ingestion failed:`, err.message);
+        source.ragStatus = 'failed';
+        source.ragError = err.message;
+        await notebook.save();
+        if (io) io.of('/notebook-collab').to(room).emit('source:update', { action: 'updated', source });
+      }
+    }
+
+  } catch (err) {
+    console.error(`[BACKGROUND] Fatal error in background processing:`, err);
+  }
+}
 
 /**
  * @desc    Remove source from notebook
@@ -746,9 +801,60 @@ exports.getSourceContent = asyncHandler(async (req, res) => {
       id: source._id,
       name: source.name,
       type: source.type,
-      content
+      content,
+      // Include audio-specific fields if available
+      transcription: source.transcription,
+      transcriptionSegments: source.transcriptionSegments,
+      transcriptionStatus: source.transcriptionStatus,
+      duration: source.duration
     }
   });
+});
+
+/**
+ * @desc    Stream audio source file
+ * @route   GET /api/notebook/notebooks/:id/sources/:sourceId/audio
+ * @access  Private
+ */
+exports.streamAudioSource = asyncHandler(async (req, res) => {
+  const notebook = await Notebook.findById(req.params.id);
+
+  if (!notebook) {
+    throw new AppError('Notebook not found', 404);
+  }
+
+  if (!notebook.canAccess(req.user._id)) {
+    throw new AppError('Access denied', 403);
+  }
+
+  const source = notebook.sources.id(req.params.sourceId);
+
+  if (!source || source.type !== 'audio' || !source.filePath) {
+    throw new AppError('Audio source not found or invalid', 404);
+  }
+
+  try {
+    const stats = await fs.stat(source.filePath);
+    
+    // Set appropriate content type
+    const ext = path.extname(source.filePath).toLowerCase();
+    let contentType = 'audio/mpeg'; // default
+    if (ext === '.wav') contentType = 'audio/wav';
+    else if (ext === '.m4a') contentType = 'audio/mp4';
+    else if (ext === '.ogg') contentType = 'audio/ogg';
+
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stats.size,
+      'Accept-Ranges': 'bytes'
+    });
+
+    const stream = require('fs').createReadStream(source.filePath);
+    stream.pipe(res);
+  } catch (err) {
+    console.error(`[AUDIO STREAM] Error: ${err.message}`);
+    throw new AppError('Error streaming audio file', 500);
+  }
 });
 
 /**

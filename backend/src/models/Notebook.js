@@ -40,7 +40,7 @@ const CollaboratorSchema = new mongoose.Schema({
 const SourceSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['pdf', 'text', 'website', 'notes'],
+    enum: ['pdf', 'text', 'website', 'audio'],  // Replaced 'notes' with 'audio'
     required: true
   },
   name: {
@@ -48,9 +48,30 @@ const SourceSchema = new mongoose.Schema({
     required: true
   },
   filePath: String, // For uploaded files (local storage)
-  url: String, // For websites
-  content: String, // For text/notes
+  url: String, // For websites or audio file URLs
+  content: String, // For text or transcriptions
   size: Number, // File size in bytes
+  
+  // Audio-specific fields
+  audioUrl: String, // Cloud storage URL for audio file
+  duration: Number, // Duration in seconds
+  transcription: String, // Whisper transcription text
+  transcriptionStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'failed'],
+    default: 'pending'
+  },
+  transcriptionError: String, // Error message if transcription failed
+  transcriptionSegments: [mongoose.Schema.Types.Mixed], // Granular timing data
+  
+  // RAG-specific fields
+  ragStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'failed'],
+    default: 'pending'
+  },
+  ragError: String,
+  
   selected: {
     type: Boolean,
     default: true

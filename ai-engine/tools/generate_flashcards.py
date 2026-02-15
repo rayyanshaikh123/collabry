@@ -28,7 +28,7 @@ async def generate_flashcards(
     Examples of when to use:
     - "Make me flashcards for biology"
     - "Create study cards about the French Revolution"
-    - "Generate 20 flashcards on vocabulary"
+    - "Generate 10 flashcards on vocabulary"
     
     Args:
         topic: The topic for flashcards (REQUIRED)

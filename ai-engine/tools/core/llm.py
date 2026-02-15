@@ -16,9 +16,13 @@ Provider switching requires only environment variable changes.
 import os
 import time
 import asyncio
+import logging
 from typing import Optional
 from openai import OpenAI, AsyncOpenAI
 from langchain_openai import ChatOpenAI
+
+logger = logging.getLogger(__name__)
+
 
 
 # Rate limiting
@@ -224,29 +228,53 @@ async def chat_completion(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
     stream: bool = False,
+    user_id: Optional[str] = None,
     **kwargs
 ):
     """
-    Convenience function for chat completions.
+    Convenience function for chat completions with BYOK support.
     
     Args:
         messages: List of message dicts with 'role' and 'content'
         temperature: Override default temperature
         max_tokens: Override default max tokens
         stream: Enable streaming
+        user_id: User ID for BYOK (Bring Your Own Key)
         **kwargs: Additional OpenAI API parameters
     
     Returns:
         Chat completion response
     """
     config = get_llm_config()
-    client = get_async_openai_client()
+    
+    # Check if user has BYOK enabled
+    user_key_data = None
+    if user_id:
+        try:
+            from core.byok import get_user_api_key
+            user_key_data = await get_user_api_key(user_id, provider="openai")
+        except Exception as e:
+            logger.warning(f"[BYOK] Failed to fetch user API key: {e}")
+    
+    # Use user's key if available, otherwise system key
+    if user_key_data and user_key_data.get("key"):
+        logger.info(f"[BYOK] Using user's API key for user_id={user_id}")
+        client = AsyncOpenAI(
+            api_key=user_key_data["key"],
+            base_url=user_key_data.get("base_url", config.base_url)
+        )
+        model = user_key_data.get("model", config.model)
+    else:
+        logger.info(f"[BYOK] Using system API key")
+        client = get_async_openai_client()
+        model = config.model
     
     return await client.chat.completions.create(
-        model=config.model,
+        model=model,
         messages=messages,
         temperature=temperature or config.temperature,
         max_tokens=max_tokens or config.max_tokens,
         stream=stream,
         **kwargs
     )
+

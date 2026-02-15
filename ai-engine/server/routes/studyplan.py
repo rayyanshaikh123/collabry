@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from server.deps import get_current_user
+from server.deps import get_current_user, get_user_id
 from server.schemas import ErrorResponse
 from core.llm import get_langchain_llm
 from core.backend_client import get_backend_client
@@ -334,7 +334,7 @@ def distribute_topics_across_days(
 )
 async def generate_study_plan(
     request: StudyPlanRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_user_id)
 ) -> StudyPlanResponse:
     """
     ⚠️ DEPRECATED - Use /ai/v2/generate-smart-schedule instead
