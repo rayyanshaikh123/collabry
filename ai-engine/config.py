@@ -91,6 +91,10 @@ class Config:
     # FAISS
     FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "./data/faiss_index")
     
+    # Verified Knowledge Base (Separate FAISS Index)
+    VERIFIED_FAISS_INDEX_PATH = os.getenv("VERIFIED_FAISS_INDEX_PATH", "./data/verified_faiss_index")
+    VERIFIED_KNOWLEDGE_ENABLED = os.getenv("VERIFIED_KNOWLEDGE_ENABLED", "true").lower() == "true"
+    
     # Chroma
     CHROMA_HOST = os.getenv("CHROMA_HOST", "localhost")
     CHROMA_PORT = int(os.getenv("CHROMA_PORT", "8000"))

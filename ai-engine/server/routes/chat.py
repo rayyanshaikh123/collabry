@@ -74,7 +74,8 @@ async def chat(
             session_id=session_id,
             message=agent_message,
             notebook_id=request.notebook_id,
-            source_ids=request.source_ids
+            source_ids=request.source_ids,
+            verified_mode=request.verified_mode
         )
         
         logger.info(f"Chat response generated: {len(response)} chars")
@@ -132,7 +133,8 @@ async def chat_stream(
                     notebook_id=request.notebook_id,
                     use_rag=bool(request.use_rag) or bool(request.source_ids),
                     source_ids=request.source_ids,
-                    stream=True
+                    stream=True,
+                    verified_mode=request.verified_mode
                 ):
                     if event:
                         has_data = True

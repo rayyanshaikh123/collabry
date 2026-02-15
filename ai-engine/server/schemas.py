@@ -39,6 +39,10 @@ class ChatRequest(BaseModel):
         default=None,
         description="Artifact-specific parameters (e.g. quiz count/difficulty/custom prompt)"
     )
+    verified_mode: bool = Field(
+        False,
+        description="Enable verified study mode with misinformation detection"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -48,6 +52,35 @@ class ChatResponse(BaseModel):
     user_id: str = Field(..., description="User ID from JWT")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     tool_used: Optional[str] = Field(None, description="Tool invoked if any")
+
+
+class VerifiedClaim(BaseModel):
+    """Verified claim with verification status."""
+    text: str = Field(..., description="Claim text")
+    status: str = Field(..., description="verified | partially_supported | unsupported | insufficient_data | conflict")
+    source: str = Field("", description="Source that verified/contradicted this claim")
+    authority_level: Optional[str] = Field(None, description="high | medium | low")
+    reason: str = Field("", description="Reason for verification status")
+
+
+class VerifiedChatResponse(BaseModel):
+    """Response from chat endpoint in verified mode."""
+    mode: str = Field("verified", description="Response mode")
+    answer: str = Field(..., description="The answer text")
+    claims: List[VerifiedClaim] = Field(default_factory=list, description="List of verified claims")
+    conflict_flag: bool = Field(False, description="True if contradictions detected")
+    outdated_flag: bool = Field(False, description="True if outdated information detected")
+    out_of_scope_flag: bool = Field(False, description="True if question is out of syllabus scope")
+    numeric_validated: bool = Field(True, description="True if arithmetic validation passed")
+    logical_consistency_passed: bool = Field(True, description="True if logical consistency check passed")
+    confidence_score: float = Field(..., description="Confidence score 0-100")
+    emotional_support: Optional[str] = Field(None, description="Supportive message if stress detected")
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="Authoritative sources used")
+    coverage: float = Field(0.0, description="Verified knowledge coverage 0.0-1.0")
+    misinformation_detected: bool = Field(False, description="True if misinformation patterns detected")
+    session_id: str = Field(..., description="Session ID")
+    user_id: str = Field(..., description="User ID")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ============================================================================
