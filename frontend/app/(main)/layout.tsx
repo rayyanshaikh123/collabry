@@ -14,7 +14,7 @@ import { ICONS } from '../../constants';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useUIStore } from '@/lib/stores/ui.store';
 import { useSocket } from '@/hooks/useCollaboration';
-import { AppRoute } from '../../types';
+import { AppRoute, ThemeType } from '../../types';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import NotificationDropdown from '../../components/NotificationDropdown';
 

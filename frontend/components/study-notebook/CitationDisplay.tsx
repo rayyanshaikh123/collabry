@@ -36,16 +36,16 @@ export default function CitationDisplay({ citations }: CitationDisplayProps) {
             case 'audio':
                 return <ICONS.Mic size={14} className="text-purple-500" />;
             case 'website':
-                return <ICONS.Globe size={14} className="text-emerald-500" />;
+                return <ICONS.globe size={14} className="text-emerald-500" />;
             default:
-                return <ICONS.File size={14} className="text-slate-500" />;
+                return <ICONS.FileText size={14} className="text-slate-500" />;
         }
     };
 
     return (
         <div className="mt-4 border-t-2 border-slate-200 dark:border-slate-700 pt-4">
             <div className="flex items-center gap-2 mb-3">
-                <ICONS.BookOpen size={16} className="text-indigo-600 dark:text-indigo-400" />
+                <ICONS.Book size={16} className="text-indigo-600 dark:text-indigo-400" />
                 <h4 className="text-sm font-black text-slate-700 dark:text-slate-300">
                     Sources ({citations.length})
                 </h4>
