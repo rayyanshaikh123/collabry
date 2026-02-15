@@ -103,6 +103,14 @@ const boardSchema = new mongoose.Schema({
     canvasHeight: {
       type: Number,
       default: 5000
+    },
+    allowComments: {
+      type: Boolean,
+      default: true
+    },
+    allowExport: {
+      type: Boolean,
+      default: true
     }
   },
   thumbnail: {
@@ -119,6 +127,10 @@ const boardSchema = new mongoose.Schema({
   isArchived: {
     type: Boolean,
     default: false
+  },
+  shapeCount: {
+    type: Number,
+    default: 0
   },
   deletedAt: {
     type: Date,
@@ -137,9 +149,9 @@ boardSchema.index({ isPublic: 1, isArchived: 1 });
 boardSchema.index({ lastActivity: -1 });
 boardSchema.index({ tags: 1 });
 
-// Virtual for element count
+// Virtual for element count (prefer persisted shapeCount, fall back to elements array)
 boardSchema.virtual('elementCount').get(function () {
-  return this.elements?.length || 0;
+  return this.shapeCount || this.elements?.length || 0;
 });
 
 // Virtual for member count

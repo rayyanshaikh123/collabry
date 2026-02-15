@@ -10,6 +10,12 @@ import TemplateSelectorModal from '../../../components/TemplateSelectorModal';
 import { BoardTemplate, getTemplateShapes } from '../../../lib/boardTemplates';
 import { showError } from '@/lib/alert';
 
+interface BoardMember {
+  userId: string;
+  role: 'owner' | 'editor' | 'viewer';
+  addedAt: string;
+}
+
 interface Board {
   _id: string;
   title: string;
@@ -19,8 +25,9 @@ interface Board {
     name: string;
     email: string;
   };
-  members: any[];
+  members: BoardMember[];
   isPublic: boolean;
+  isArchived?: boolean;
   elementCount?: number;
   memberCount?: number;
   thumbnail?: string;
@@ -40,6 +47,8 @@ export default function StudyBoardListPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [boardToDelete, setBoardToDelete] = useState<Board | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [duplicatingBoardId, setDuplicatingBoardId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     fetchBoards();
@@ -75,10 +84,11 @@ export default function StudyBoardListPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await studyBoardService.getBoards();
-      setBoards(response as any);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load boards');
+      const response = await studyBoardService.getBoards({ includeArchived: true });
+      setBoards(response as Board[]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load boards';
+      setError(message);
       console.error('Error fetching boards:', err);
     } finally {
       setIsLoading(false);
@@ -88,7 +98,7 @@ export default function StudyBoardListPage() {
   const createNewBoard = async (template?: BoardTemplate) => {
     try {
       setIsCreating(true);
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         title: template ? `${template.name} - ${boards.length + 1}` : `New Board ${boards.length + 1}`,
         description: template ? template.description : 'Collaborative study board',
         isPublic: false,
@@ -96,18 +106,19 @@ export default function StudyBoardListPage() {
 
       if (template?.id) payload.template = template.id;
 
-      const newBoard = await studyBoardService.createBoard(payload as any);
+      const newBoard = await studyBoardService.createBoard(payload as Record<string, string | boolean>) as Board;
       
       // Store template shapes with fresh IDs in sessionStorage
       if (template && template.shapes.length > 0) {
         const shapesWithIds = getTemplateShapes(template);
-        sessionStorage.setItem(`board-${(newBoard as any)._id}-template`, JSON.stringify(shapesWithIds));
+        sessionStorage.setItem(`board-${newBoard._id}-template`, JSON.stringify(shapesWithIds));
       }
       
       // Navigate to the new board
-      router.push(`/study-board/${(newBoard as any)._id}`);
-    } catch (err: any) {
-      showError('Failed to create board: ' + err.message);
+      router.push(`/study-board/${newBoard._id}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      showError('Failed to create board: ' + message);
       console.error('Error creating board:', err);
     } finally {
       setIsCreating(false);
@@ -138,8 +149,9 @@ export default function StudyBoardListPage() {
       setBoards(boards.filter(b => b._id !== boardToDelete._id));
       setShowDeleteConfirm(false);
       setBoardToDelete(null);
-    } catch (err: any) {
-      alert('Failed to delete board: ' + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete board';
+      alert(message);
       console.error('Error deleting board:', err);
     } finally {
       setDeletingBoardId(null);
@@ -150,6 +162,40 @@ export default function StudyBoardListPage() {
     setShowDeleteConfirm(false);
     setBoardToDelete(null);
   };
+
+  const handleDuplicate = async (e: React.MouseEvent, boardId: string) => {
+    e.stopPropagation();
+    try {
+      setDuplicatingBoardId(boardId);
+      const newBoard = await studyBoardService.duplicateBoard(boardId);
+      setBoards(prev => [newBoard as Board, ...prev]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to duplicate board';
+      showError(message);
+    } finally {
+      setDuplicatingBoardId(null);
+    }
+  };
+
+  const handleArchive = async (e: React.MouseEvent, board: Board) => {
+    e.stopPropagation();
+    const newArchived = !board.isArchived;
+    try {
+      await studyBoardService.archiveBoard(board._id, newArchived);
+      setBoards(prev =>
+        prev.map(b =>
+          b._id === board._id ? { ...b, isArchived: newArchived } : b
+        )
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : newArchived ? 'Failed to archive board' : 'Failed to unarchive board';
+      showError(message);
+    }
+  };
+
+  const filteredBoards = showArchived
+    ? boards.filter(b => b.isArchived)
+    : boards.filter(b => !b.isArchived);
 
   if (isLoading) {
     return (
@@ -182,23 +228,33 @@ export default function StudyBoardListPage() {
       </div>
 
       {/* Search Bar */}
-      <div className="relative">
-        <ICONS.Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search boards..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 placeholder:text-slate-400"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
-        )}
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <ICONS.Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search boards..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          )}
+        </div>
+        <Button
+          variant={showArchived ? 'primary' : 'secondary'}
+          className="gap-2 whitespace-nowrap"
+          onClick={() => setShowArchived(!showArchived)}
+        >
+          <ICONS.FileText size={16} />
+          {showArchived ? 'Archived' : 'Active'}
+        </Button>
       </div>
 
       {/* Error Message */}
@@ -212,7 +268,7 @@ export default function StudyBoardListPage() {
       )}
 
       {/* Boards Grid */}
-      {boards.length === 0 ? (
+      {filteredBoards.length === 0 ? (
         <Card className="text-center py-12">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -241,7 +297,7 @@ export default function StudyBoardListPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {boards.map((board) => (
+          {filteredBoards.map((board) => (
             <Card 
               key={board._id}
               className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
@@ -310,7 +366,35 @@ export default function StudyBoardListPage() {
                   <div className="text-xs text-slate-400 dark:text-slate-500">
                     Updated {new Date(board.lastActivity || board.createdAt).toLocaleDateString()}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    {/* Duplicate */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => handleDuplicate(e, board._id)}
+                      disabled={duplicatingBoardId === board._id}
+                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                      title="Duplicate board"
+                    >
+                      {duplicatingBoardId === board._id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-500" />
+                      ) : (
+                        <ICONS.Copy size={15} />
+                      )}
+                    </Button>
+                    {/* Archive */}
+                    {board.owner._id === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => handleArchive(e, board)}
+                        className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30"
+                        title={board.isArchived ? 'Unarchive board' : 'Archive board'}
+                      >
+                        <ICONS.FileText size={15} />
+                      </Button>
+                    )}
+                    {/* Delete */}
                     {board.owner._id === user?.id && (
                       <Button 
                         variant="ghost" 
@@ -322,7 +406,7 @@ export default function StudyBoardListPage() {
                         {deletingBoardId === board._id ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500" />
                         ) : (
-                          <ICONS.Trash size={16} />
+                          <ICONS.Trash size={15} />
                         )}
                       </Button>
                     )}
@@ -367,7 +451,7 @@ export default function StudyBoardListPage() {
             
             <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
               <p className="text-sm text-slate-700 dark:text-slate-200">
-                Are you sure you want to delete <strong className="text-slate-800 dark:text-slate-100">"{boardToDelete.title}"</strong>?
+                Are you sure you want to delete <strong className="text-slate-800 dark:text-slate-100">&ldquo;{boardToDelete.title}&rdquo;</strong>?
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                 All board data, elements, and member access will be permanently removed.

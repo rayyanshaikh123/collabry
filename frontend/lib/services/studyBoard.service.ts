@@ -10,8 +10,9 @@ import type { StudyBoard, BoardMember } from '@/types';
 export const studyBoardService = {
   // ── CRUD ────────────────────────────────────────────
 
-  async getBoards(): Promise<StudyBoard[]> {
-    const response = await apiClient.get<StudyBoard[]>('/boards');
+  async getBoards(params?: { includeArchived?: boolean }): Promise<StudyBoard[]> {
+    const query = params?.includeArchived ? '?includeArchived=true' : '';
+    const response = await apiClient.get<StudyBoard[]>(`/boards${query}`);
     if (response.success && response.data) return response.data;
     throw new Error('Failed to fetch boards');
   },

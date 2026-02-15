@@ -149,38 +149,37 @@ const CollaborativeBoard = () => {
     mountedEditor.updateInstanceState({ isGridMode: true });
   }, []);
 
-  // --- Thumbnail generation on unmount ---
-  useEffect(() => {
-    return () => {
-      // Capture thumbnail when navigating away
-      if (editor && boardId) {
-        try {
-          const shapeIds = editor.getCurrentPageShapeIds();
-          if (shapeIds.size === 0) return;
-          // Use tldraw's built-in SVG export to get a preview
-          const svgEl = document.querySelector('.tl-canvas');
-          if (!svgEl) return;
-          // Create a small thumbnail from the canvas
-          const canvas = document.createElement('canvas');
-          canvas.width = 400;
-          canvas.height = 240;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) return;
-          // Draw current canvas state
-          const htmlCanvas = document.querySelector('.tl-canvas canvas') as HTMLCanvasElement | null;
-          if (htmlCanvas) {
-            ctx.drawImage(htmlCanvas, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/png', 0.6);
-            if (dataUrl && dataUrl.length < 500_000) {
-              studyBoardService.saveThumbnail(boardId, dataUrl).catch(() => {});
-            }
-          }
-        } catch {
-          // Thumbnail is best-effort, never block navigation
-        }
+  // --- Thumbnail generation ---
+  const saveThumbnail = useCallback(async () => {
+    if (!editor || !boardId) return;
+    try {
+      const shapeIds = [...editor.getCurrentPageShapeIds()];
+      if (shapeIds.length === 0) return;
+      const { url } = await editor.toImageDataUrl(shapeIds, {
+        format: 'png',
+        scale: 0.25,
+        background: true,
+      });
+      if (url && url.length < 500_000) {
+        await studyBoardService.saveThumbnail(boardId, url);
       }
-    };
+    } catch {
+      // Thumbnail is best-effort, never block navigation
+    }
   }, [editor, boardId]);
+
+  // Auto-save thumbnail every 60s while editing
+  useEffect(() => {
+    if (!editor || !boardId) return;
+    const interval = setInterval(saveThumbnail, 60_000);
+    return () => clearInterval(interval);
+  }, [editor, boardId, saveThumbnail]);
+
+  // Save thumbnail on back navigation
+  const handleBack = useCallback(async () => {
+    await saveThumbnail();
+    router.push('/study-board');
+  }, [saveThumbnail, router]);
 
   // --- Export board as PNG ---
   const handleExport = useCallback(async () => {
@@ -344,7 +343,7 @@ const CollaborativeBoard = () => {
         boardTitle={currentBoard?.title}
         isConnected={isConnected}
         participants={boardParticipants}
-        onBack={() => router.push('/study-board')}
+        onBack={handleBack}
         onInvite={() => setShowInviteModal(true)}
         onSettings={() => setShowSettingsModal(true)}
         onExport={handleExport}
@@ -394,7 +393,7 @@ const CollaborativeBoard = () => {
 
       {currentBoard && boardId && (
         <BoardSettingsModal
-          board={{ ...currentBoard, _id: currentBoard.id, isPublic: false }}
+          board={{ ...currentBoard, _id: currentBoard.id ?? boardId ?? '' }}
           isOpen={showSettingsModal}
           onClose={() => setShowSettingsModal(false)}
           onSave={async (updates) => {

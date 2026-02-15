@@ -98,9 +98,9 @@ const checkBoardLimit = async (req, res, next) => {
       return next();
     }
     
-    // Count existing boards
+    // Count existing boards (exclude soft-deleted and archived)
     const Board = require('../models/Board');
-    const boardCount = await Board.countDocuments({ owner: userId });
+    const boardCount = await Board.countDocuments({ owner: userId, deletedAt: null, isArchived: false });
     
     if (boardCount >= limits.boards) {
       return res.status(429).json({
@@ -328,9 +328,9 @@ const getUsageSummary = async (userId) => {
     const todayUsage = await Usage.getTodayUsage(userId);
     const monthlyStats = await Usage.getUsageStats(userId, 30);
     
-    // Get board count
+    // Get board count (exclude soft-deleted and archived)
     const Board = require('../models/Board');
-    const boardCount = await Board.countDocuments({ owner: userId });
+    const boardCount = await Board.countDocuments({ owner: userId, deletedAt: null, isArchived: false });
 
     // Get notebook count
     const Notebook = require('../models/Notebook');

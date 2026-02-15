@@ -102,11 +102,22 @@ async function persistDoc(docName) {
     const stateVector = Y.encodeStateAsUpdate(doc);
     const stateBuffer = Buffer.from(stateVector);
 
+    // Count shapes in the Yjs store for the board card display
+    let shapeCount = 0;
+    try {
+      const store = doc.getMap('tldraw');
+      store.forEach((value, key) => {
+        // tldraw stores shapes with keys like 'shape:...' 
+        if (key.startsWith('shape:')) shapeCount++;
+      });
+    } catch (_) { /* ignore count errors */ }
+
     await Board.findByIdAndUpdate(docName, {
       yjsState: stateBuffer,
       yjsUpdatedAt: new Date(),
       updatedAt: new Date(),
       lastActivity: new Date(),
+      shapeCount,
     });
 
     console.log(`[Yjs] Persisted doc ${docName} (${stateBuffer.length} bytes)`);

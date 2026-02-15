@@ -334,12 +334,10 @@ class BoardService {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
-      // TODO: Send invitation email for non-registered users
-      return {
-        message: 'Invitation email sent. User must register to join.',
-        email,
-        registered: false
-      };
+      throw new AppError(
+        `No account found for ${email}. The user must sign up on Collabry first before they can be invited.`,
+        404
+      );
     }
 
     // Check if user is already a member

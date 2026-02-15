@@ -1,9 +1,41 @@
 const cron = require('node-cron');
 const Subscription = require('../models/Subscription');
 const User = require('../models/User');
-const { GRACE_PERIOD_DAYS } = require('../config/plans');
+const Board = require('../models/Board');
+const { GRACE_PERIOD_DAYS, PLAN_LIMITS } = require('../config/plans');
 
 let task = null;
+
+/**
+ * Auto-archive excess boards when a user downgrades.
+ * Keeps the N most-recently-active boards and archives the rest.
+ */
+async function enforceDowngradeLimits(userId, newPlan) {
+  const limits = PLAN_LIMITS[newPlan] || PLAN_LIMITS.free;
+  if (limits.boards === -1) return; // unlimited — nothing to do
+
+  const activeBoards = await Board.find({
+    owner: userId,
+    deletedAt: null,
+    isArchived: false,
+  }).sort({ lastActivity: -1 });
+
+  if (activeBoards.length <= limits.boards) return; // within limit
+
+  // Archive everything beyond the allowed count (keep most recent)
+  const boardsToArchive = activeBoards.slice(limits.boards);
+  const idsToArchive = boardsToArchive.map(b => b._id);
+
+  await Board.updateMany(
+    { _id: { $in: idsToArchive } },
+    { $set: { isArchived: true } }
+  );
+
+  console.log(
+    `[subscriptionExpiry] Auto-archived ${idsToArchive.length} excess board(s) for user ${userId} ` +
+      `(plan: ${newPlan}, limit: ${limits.boards}).`
+  );
+}
 
 /**
  * Downgrade expired subscriptions.
@@ -13,6 +45,7 @@ let task = null;
  *  2. status === 'active' AND currentPeriodEnd + grace period has passed (payment lapsed)
  *
  * Sets plan → 'free', status → 'expired', and updates User.subscriptionTier.
+ * Then auto-archives excess boards so the user can't keep using more than the free limit.
  */
 async function processExpiredSubscriptions() {
   const graceCutoff = new Date();
@@ -44,6 +77,9 @@ async function processExpiredSubscriptions() {
         await sub.save();
 
         await User.findByIdAndUpdate(sub.user, { subscriptionTier: 'free' });
+
+        // Auto-archive excess boards that exceed the free plan limit
+        await enforceDowngradeLimits(sub.user, 'free');
 
         console.log(
           `[subscriptionExpiry] Downgraded user ${sub.user} from ${oldPlan} → free ` +

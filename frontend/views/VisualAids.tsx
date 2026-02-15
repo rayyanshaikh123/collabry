@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, Button, Badge, Input } from '../components/UIElements';
 import { ICONS } from '../constants';
 import { 
@@ -14,6 +15,7 @@ import {
 } from '@/hooks/useVisualAids';
 import AlertModal from '../components/AlertModal';
 import { useAlert } from '@/hooks/useAlert';
+import BoardPickerModal from '../components/study-board/BoardPickerModal';
 
 const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, answer }) => {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -46,6 +48,7 @@ const Flashcard: React.FC<{ question: string; answer: string }> = ({ question, a
 };
 
 const VisualAidsView: React.FC = () => {
+  const router = useRouter();
   const { alertState, showAlert, hideAlert } = useAlert();
   const [activeTab, setActiveTab] = useState<'quizzes' | 'mindmap' | 'concepts'>('quizzes');
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>();
@@ -59,6 +62,24 @@ const VisualAidsView: React.FC = () => {
   const [quizSubject, setQuizSubject] = useState<string>('');
   const [quizDifficulty, setQuizDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [quizCount, setQuizCount] = useState<number>(5);
+
+  // Board picker state
+  const [showBoardPicker, setShowBoardPicker] = useState(false);
+  const [pendingBoardData, setPendingBoardData] = useState<{ kind: string; data: unknown; title?: string } | null>(null);
+
+  const openBoardPicker = (payload: { kind: string; data: unknown; title?: string }) => {
+    setPendingBoardData(payload);
+    setShowBoardPicker(true);
+  };
+
+  const handleSelectBoard = (boardId: string) => {
+    if (pendingBoardData) {
+      sessionStorage.setItem(`board-${boardId}-import`, JSON.stringify(pendingBoardData));
+    }
+    setShowBoardPicker(false);
+    setPendingBoardData(null);
+    router.push(`/study-board/${boardId}`);
+  };
   
   // Quiz attempt state
   const [activeQuizAttempt, setActiveQuizAttempt] = useState<string | null>(null);
@@ -745,6 +766,18 @@ const VisualAidsView: React.FC = () => {
               </svg>
 
               <div className="absolute bottom-8 right-8 flex gap-2">
+                 <Button
+                   variant="secondary"
+                   size="icon"
+                   title="Send to Study Board"
+                   onClick={() => openBoardPicker({
+                     kind: 'mindmap',
+                     data: mindMaps[0],
+                     title: mindMaps[0].title,
+                   })}
+                 >
+                   <ICONS.Share size={20}/>
+                 </Button>
                  <Button variant="secondary" size="icon"><ICONS.Pointer size={20}/></Button>
                  <Button variant="secondary" size="icon"><ICONS.Plus size={20}/></Button>
               </div>
@@ -817,6 +850,13 @@ const VisualAidsView: React.FC = () => {
         message={alertState.message}
         type={alertState.type}
         confirmText={alertState.confirmText}
+      />
+
+      <BoardPickerModal
+        isOpen={showBoardPicker}
+        onClose={() => { setShowBoardPicker(false); setPendingBoardData(null); }}
+        onSelectBoard={handleSelectBoard}
+        title={pendingBoardData?.title ? `Send "${pendingBoardData.title}" to Board` : 'Send to Study Board'}
       />
     </div>
   );
