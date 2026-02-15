@@ -1,14 +1,13 @@
 'use client';
 
-import {useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback, memo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Tldraw, createTLStore, defaultShapeUtils, Editor } from 'tldraw';
+import { Tldraw, createTLStore, defaultShapeUtils, Editor, exportAs } from 'tldraw';
 import 'tldraw/tldraw.css';
 
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
 import { Button } from '@/components/ui/button';
-import { ICONS } from '@/constants';
 import { LoadingPage } from '@/components/UIElements';
 import type { BoardParticipant } from '@/types/studyBoard.types';
 import type { StudyBoard } from '@/types';
@@ -19,69 +18,130 @@ import BoardSettingsModal from '@/components/BoardSettingsModal';
 
 // Board components
 import { BoardHeader } from '@/components/study-board/BoardHeader';
-import { LiveCursors } from '@/components/study-board/LiveCursors';
 
-// Board hooks
-import { useBoardConnection } from '@/hooks/useBoardConnection';
-import { useBoardSync } from '@/hooks/useBoardSync';
-import { useCursorTracking } from '@/hooks/useCursorTracking';
-import { usePendingElements } from '@/hooks/usePendingElements';
+// Yjs sync hook (replaces useBoardConnection, useBoardSync, useCursorTracking, usePendingElements)
+import { useYjsSync } from '@/hooks/useYjsSync';
 
-// Types
-interface ParticipantData {
+// Shapes utility for AI imports (mindmap, infographic)
+import { buildShapesFromImport } from '@/hooks/useBoardShapes';
+
+// --- Yjs-based live cursors (replaces LiveCursors + Socket.IO) ---
+interface YjsCursorData {
   userId: string;
   name: string;
-  email?: string;
-  userName?: string;
   color: string;
-  role?: 'owner' | 'editor' | 'viewer';
-  isActive?: boolean;
-  joinedAt?: string;
+  cursor?: { x: number; y: number };
 }
 
-interface CursorData {
-  x: number;
-  y: number;
+const YjsCursor = memo<{ user: YjsCursorData }>(({ user }) => {
+  if (!user.cursor) return null;
+  return (
+    <div
+      className="absolute transition-transform duration-100"
+      style={{
+        left: user.cursor.x,
+        top: user.cursor.y,
+        transform: 'translate(-50%, -50%)',
+      }}
+    >
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill={user.color}
+        className="drop-shadow-lg"
+      >
+        <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z" />
+      </svg>
+      <div
+        className="ml-6 -mt-2 px-2 py-1 rounded text-white text-xs font-bold whitespace-nowrap shadow-lg"
+        style={{ backgroundColor: user.color }}
+      >
+        {(user.name || 'User').split('@')[0]}
+      </div>
+    </div>
+  );
+});
+YjsCursor.displayName = 'YjsCursor';
+
+const YjsCursors = memo<{ users: YjsCursorData[] }>(({ users }) => (
+  <div className="absolute inset-0 pointer-events-none z-10">
+    {users
+      .filter((u) => u.cursor)
+      .map((u) => (
+        <YjsCursor key={u.userId} user={u} />
+      ))}
+  </div>
+));
+YjsCursors.displayName = 'YjsCursors';
+
+// Random user color for awareness
+const COLORS = [
+  '#e57373', '#64b5f6', '#81c784', '#ffb74d', '#ba68c8',
+  '#4dd0e1', '#ff8a65', '#a1887f', '#90a4ae', '#f06292',
+];
+function pickColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0;
+  }
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
 /**
- * CollaborativeBoard - Real-time collaborative whiteboard using tldraw
- * 
- * Features:
- * - Multi-user collaboration with live cursor tracking
- * - Shape synchronization across clients
- * - Import artifacts from study-notebook (mindmaps, infographics)
- * - Google Drive image storage integration
+ * CollaborativeBoard — Real-time collaborative whiteboard using tldraw + Yjs
+ *
+ * Sync: tldraw Editor ↔ Yjs Y.Map ↔ WebSocket ↔ Backend ↔ MongoDB
+ * Presence: Yjs awareness protocol (cursors + connected users)
+ * AI imports: mindmaps / infographics via sessionStorage payload
  */
 const CollaborativeBoard = () => {
   const params = useParams();
   const router = useRouter();
-  // Route is /study-board/[id], so the param key is 'id' (not 'boardId')
   const rawId = params.id ?? params.boardId;
   const boardId = Array.isArray(rawId) ? rawId[0] : rawId || null;
-  
+
   const { user, accessToken } = useAuthStore();
 
   // State
   const [currentBoard, setCurrentBoard] = useState<StudyBoard | null>(null);
   const [store] = useState(() => createTLStore({ shapeUtils: defaultShapeUtils }));
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [participants, setParticipants] = useState<ParticipantData[]>([]);
-  const [cursors, setCursors] = useState<Record<string, CursorData>>({});
-  const [pendingElements, setPendingElements] = useState<any[]>([]);
 
   // Modals
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  // Refs for sync logic
-  const isApplyingRemoteChange = useRef(false);
-  const isDrawingRef = useRef(false);
-  const drawingShapeIdRef = useRef<string | null>(null);
+  // Import payload refs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const importPayloadRef = useRef<any>(null);
   const importAppliedRef = useRef(false);
+
+  // Yjs sync — single hook replaces 4 old hooks + LiveCursors
+  const userColor = useMemo(() => pickColor(user?.id || 'anon'), [user?.id]);
+  const { isConnected, isSynced, connectedUsers } = useYjsSync({
+    editor,
+    boardId,
+    accessToken,
+    userName: user?.name || user?.email || 'Anonymous',
+    userColor,
+  });
+
+  // Convert connectedUsers to BoardParticipant format for BoardHeader
+  const boardParticipants: BoardParticipant[] = useMemo(
+    () =>
+      connectedUsers.map((u) => ({
+        userId: u.userId,
+        userName: u.name,
+        name: u.name,
+        color: u.color,
+        role: 'editor' as const,
+        isActive: true,
+        joinedAt: new Date().toISOString(),
+      })),
+    [connectedUsers],
+  );
 
   // Editor mount handler
   const handleMount = useCallback((mountedEditor: Editor) => {
@@ -89,17 +149,68 @@ const CollaborativeBoard = () => {
     mountedEditor.updateInstanceState({ isGridMode: true });
   }, []);
 
+  // --- Thumbnail generation on unmount ---
+  useEffect(() => {
+    return () => {
+      // Capture thumbnail when navigating away
+      if (editor && boardId) {
+        try {
+          const shapeIds = editor.getCurrentPageShapeIds();
+          if (shapeIds.size === 0) return;
+          // Use tldraw's built-in SVG export to get a preview
+          const svgEl = document.querySelector('.tl-canvas');
+          if (!svgEl) return;
+          // Create a small thumbnail from the canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = 400;
+          canvas.height = 240;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          // Draw current canvas state
+          const htmlCanvas = document.querySelector('.tl-canvas canvas') as HTMLCanvasElement | null;
+          if (htmlCanvas) {
+            ctx.drawImage(htmlCanvas, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/png', 0.6);
+            if (dataUrl && dataUrl.length < 500_000) {
+              studyBoardService.saveThumbnail(boardId, dataUrl).catch(() => {});
+            }
+          }
+        } catch {
+          // Thumbnail is best-effort, never block navigation
+        }
+      }
+    };
+  }, [editor, boardId]);
+
+  // --- Export board as PNG ---
+  const handleExport = useCallback(async () => {
+    if (!editor) return;
+    const shapeIds = editor.getCurrentPageShapeIds();
+    if (shapeIds.size === 0) {
+      alert('Nothing to export — the board is empty.');
+      return;
+    }
+    try {
+      await exportAs(editor, [...shapeIds], {
+        format: 'png',
+        scale: 2,
+        background: true,
+      });
+    } catch (e) {
+      console.error('[Board] Export failed:', e);
+      alert('Export failed. Please try again.');
+    }
+  }, [editor]);
+
   // Sync theme changes with tldraw
   useEffect(() => {
     if (!editor) return;
 
     const syncTheme = () => {
       const isDark = document.documentElement.classList.contains('dark');
-      // tldraw's internal preference for theme
       editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
     };
 
-    // Initial sync
     syncTheme();
 
     const observer = new MutationObserver((mutations) => {
@@ -114,217 +225,100 @@ const CollaborativeBoard = () => {
     return () => observer.disconnect();
   }, [editor]);
 
-  // Socket event handlers
-  const handleUserJoined = useCallback((data: any) => {
-    if (data.participants) {
-      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
-    } else {
-      // Single user joined — add them
-      if (data.userId && data.userId !== user?.id) {
-        setParticipants(prev => {
-          if (prev.some(p => p.userId === data.userId)) return prev;
-          return [...prev, { userId: data.userId, name: data.email || 'User', email: data.email, color: data.color || '#888', userName: data.email }];
-        });
-      }
-    }
-  }, [user]);
+  // Load board metadata via REST API (replaces Socket.IO board:join)
+  useEffect(() => {
+    if (!boardId || !accessToken) return;
 
-  const handleUserLeft = useCallback((data: any) => {
-    if (data.participants) {
-      setParticipants(data.participants.filter((p: ParticipantData) => p.userId !== user?.id));
-    } else {
-      // Single user left — remove them
-      setParticipants(prev => prev.filter(p => p.userId !== data.userId));
-    }
-  }, [user]);
+    let cancelled = false;
 
-  const handleCursorMove = useCallback((data: { userId: string; position: CursorData }) => {
-    if (data.userId !== user?.id) {
-      setCursors(prev => ({
-        ...prev,
-        [data.userId]: data.position
-      }));
-    }
-  }, [user]);
+    const loadBoard = async () => {
+      try {
+        setIsLoading(true);
+        const board = await studyBoardService.getBoard(boardId);
+        if (cancelled) return;
+        setCurrentBoard(board);
 
-  const handleElementCreated = useCallback((data: any) => {
-    if (!editor || !data?.element) return;
-    if (user?.id === data.userId) return;
-
-    isApplyingRemoteChange.current = true;
-    try {
-      editor.store.mergeRemoteChanges(() => {
-        const el = data.element;
-
-        // Reconstruct assets for image shapes
-        if (el.type === 'image' && el.props?.assetId) {
-          let assetSrc = null;
-
-          if (el.meta?.driveFileId) {
-            const { googleDriveService } = require('@/lib/googleDrive');
-            assetSrc = googleDriveService.getPublicUrl(el.meta.driveFileId);
-          } else if (el.meta?.svgDataUri) {
-            assetSrc = el.meta.svgDataUri;
-          } else if (el.meta?.imageData?.src) {
-            assetSrc = el.meta.imageData.src;
-          }
-
-          if (assetSrc) {
-            editor.store.put([{
-              id: el.props.assetId,
-              type: 'image',
-              typeName: 'asset',
-              props: {
-                name: el.meta?.driveName || el.meta?.imageData?.name || 'image.png',
-                src: assetSrc,
-                w: el.meta?.w || el.meta?.imageData?.w || el.props.w || 800,
-                h: el.meta?.h || el.meta?.imageData?.h || el.props.h || 600,
-                mimeType: el.meta?.driveMimeType || el.meta?.imageData?.mimeType || el.meta?.svgDataUri ? 'image/svg+xml' : 'image/png',
-                isAnimated: false,
-              },
-              meta: {},
-            }]);
+        // Check for template shapes from sessionStorage (board creation with template)
+        const templateShapes = sessionStorage.getItem(`board-${boardId}-template`);
+        if (templateShapes) {
+          try {
+            const shapes = JSON.parse(templateShapes);
+            sessionStorage.removeItem(`board-${boardId}-template`);
+            // Wrap as an import payload so the import effect handles it
+            importPayloadRef.current = { kind: 'template', shapes };
+          } catch (e) {
+            console.error('Failed to parse template shapes:', e);
           }
         }
 
-        const shape: any = {
-          id: el.id,
-          typeName: el.typeName || 'shape',
-          type: el.type,
-          x: el.x || 0,
-          y: el.y || 0,
-          props: el.props || {},
-          parentId: el.parentId || 'page:page',
-          index: el.index || 'a1',
-          rotation: el.rotation || 0,
-          isLocked: el.isLocked || false,
-          opacity: el.opacity || 1,
-          meta: el.meta || {},
-        };
+        // Check for import payload from sessionStorage (mindmap / infographic)
+        if (!importPayloadRef.current) {
+          const importPayload = sessionStorage.getItem(`board-${boardId}-import`);
+          if (importPayload) {
+            try {
+              importPayloadRef.current = JSON.parse(importPayload);
+              sessionStorage.removeItem(`board-${boardId}-import`);
+            } catch (e) {
+              console.error('Failed to parse import payload:', e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Board] Failed to load board:', error);
+        if (!cancelled) {
+          alert('Failed to load board. It may not exist or you may not have access.');
+          router.push('/study-board');
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
 
-        editor.store.put([shape]);
-      });
-    } catch (error) {
-      console.error('Error in handleElementCreated:', error);
-    } finally {
-      isApplyingRemoteChange.current = false;
-    }
-  }, [editor, user]);
+    loadBoard();
+    return () => { cancelled = true; };
+  }, [boardId, accessToken, router]);
 
-  const handleElementUpdated = useCallback((data: any) => {
-    if (!editor) return;
-    // Backend sends { elementId, changes, userId } — NOT data.element
-    const elementId = data.elementId || data.element?.id;
-    const changes = data.changes || data.changeSet || data.element;
-    if (!elementId || !changes) return;
-    if (user?.id === data.userId) return;
+  // Apply imported artifacts (mindmap / infographic) after Yjs sync is established
+  useEffect(() => {
+    if (!editor || !boardId || !isSynced) return;
+    if (!importPayloadRef.current || importAppliedRef.current) return;
 
-    isApplyingRemoteChange.current = true;
-    try {
-      editor.store.mergeRemoteChanges(() => {
-        const existingShape = editor.store.get(elementId) as any;
-        if (!existingShape) return;
+    let cancelled = false;
 
-        const updatedShape = {
-          ...existingShape,
-          ...changes,
-          props: { ...existingShape.props, ...(changes.props || {}) },
-          meta: { ...existingShape.meta, ...(changes.meta || {}) },
-        };
+    const applyImport = async () => {
+      if (cancelled) return;
+      try {
+        const payload = importPayloadRef.current;
 
-        editor.store.put([updatedShape]);
-      });
-    } catch (error) {
-      console.error('Error in handleElementUpdated:', error);
-    } finally {
-      isApplyingRemoteChange.current = false;
-    }
-  }, [editor, user]);
+        // Template shapes are already tldraw-ready records
+        if (payload?.kind === 'template' && Array.isArray(payload.shapes)) {
+          if (payload.shapes.length > 0) {
+            editor.store.put(payload.shapes);
+            console.log(`[Board] Applied ${payload.shapes.length} template shapes`);
+          }
+        } else {
+          // AI import (mindmap / infographic) — needs shape building
+          const { shapes, assets } = await buildShapesFromImport(payload);
+          if (cancelled || shapes.length === 0) return;
+          const records = [...assets, ...shapes];
+          editor.store.put(records);
+          console.log(`[Board] Applied ${shapes.length} shapes + ${assets.length} assets from import`);
+        }
+      } catch (e) {
+        console.error('[Board] Failed to apply imported shapes:', e);
+      } finally {
+        importAppliedRef.current = true;
+        importPayloadRef.current = null;
+      }
+    };
 
-  const handleElementDeleted = useCallback((data: any) => {
-    if (!editor || !data?.elementId) return;
-    if (user?.id === data.userId) return;
-
-    isApplyingRemoteChange.current = true;
-    try {
-      editor.store.mergeRemoteChanges(() => {
-        editor.store.remove([data.elementId]);
-      });
-    } catch (error) {
-      console.error('Error in handleElementDeleted:', error);
-    } finally {
-      isApplyingRemoteChange.current = false;
-    }
-  }, [editor, user]);
-
-  // Initialize board connection
-  useBoardConnection({
-    editor,
-    boardId: boardId || '',
-    user,
-    accessToken: accessToken || '',
-    router,
-    setIsConnected,
-    setIsLoading,
-    setCurrentBoard,
-    setParticipants,
-    setPendingElements,
-    importPayloadRef,
-    handleUserJoined,
-    handleUserLeft,
-    handleCursorMove
-  });
-
-  // Synchronize tldraw store with socket
-  useBoardSync({
-    editor: editor as any,
-    boardId: boardId || '',
-    isConnected,
-    isApplyingRemoteChange,
-    isDrawingRef,
-    drawingShapeIdRef
-  });
-
-  // Track cursor position
-  useCursorTracking({
-    boardId: boardId || '',
-    isConnected
-  });
-
-  // Apply pending elements and imported artifacts
-  usePendingElements({
-    editor,
-    boardId,
-    isConnected,
-    pendingElements,
-    setPendingElements,
-    isApplyingRemoteChange,
-    importPayloadRef,
-    importAppliedRef,
-    handleElementCreated,
-    handleElementUpdated,
-    handleElementDeleted
-  });
-
-  // Memoized participant list
-  const visibleParticipants = useMemo(() => participants.slice(0, 3), [participants]);
-
-  // Convert ParticipantData to BoardParticipant format
-  const boardParticipants: BoardParticipant[] = useMemo(() =>
-    participants.map(p => ({
-      userId: p.userId,
-      userName: p.userName || p.name,
-      name: p.name,
-      email: p.email,
-      color: p.color,
-      role: p.role || 'editor' as 'owner' | 'editor' | 'viewer',
-      isActive: p.isActive ?? true,
-      joinedAt: p.joinedAt || new Date().toISOString()
-    })),
-    [participants]
-  );
-
-  const visibleBoardParticipants = useMemo(() => boardParticipants.slice(0, 3), [boardParticipants]);
+    // Small delay to let initial sync settle
+    const timer = setTimeout(applyImport, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [editor, boardId, isSynced]);
 
   if (isLoading) {
     return <LoadingPage />;
@@ -353,7 +347,15 @@ const CollaborativeBoard = () => {
         onBack={() => router.push('/study-board')}
         onInvite={() => setShowInviteModal(true)}
         onSettings={() => setShowSettingsModal(true)}
+        onExport={handleExport}
       />
+
+      {/* Sync status indicator */}
+      {isConnected && !isSynced && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-yellow-100 dark:bg-yellow-900/60 text-yellow-800 dark:text-yellow-200 text-xs px-3 py-1 rounded-full">
+          Syncing…
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex relative">
@@ -363,11 +365,13 @@ const CollaborativeBoard = () => {
             store={store}
             autoFocus
             onMount={handleMount}
-            licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY || 'dev'}
+            {...(process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY
+              ? { licenseKey: process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY }
+              : {})}
           />
 
-          {/* Live Cursors Overlay */}
-          <LiveCursors cursors={cursors} participants={boardParticipants} />
+          {/* Live Cursors Overlay (from Yjs awareness) */}
+          <YjsCursors users={connectedUsers} />
         </div>
       </div>
 

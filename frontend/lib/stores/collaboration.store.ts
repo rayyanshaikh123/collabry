@@ -145,23 +145,20 @@ export const useCollaborationStore = create<CollaborationState>((set, get) => ({
     });
   },
 
-  // Join room
+  // Join room (board sync is now handled by Yjs, this is for general presence)
   joinRoom: (roomId: string) => {
-    socketClient.joinBoard(roomId);
     set({ currentRoom: roomId });
   },
 
   // Leave room
   leaveRoom: (roomId: string) => {
-    socketClient.leaveBoard(roomId);
     set({ currentRoom: null });
   },
 
   // Update presence
   updatePresence: (status: PresenceStatus) => {
-    // TODO: Emit presence update via socket
-    const socket = socketClient.getBoardSocket();
-    socket?.emit('presence:update', { status });
+    // Presence for boards is now handled by Yjs awareness
+    // This is a no-op placeholder for general app presence
   },
 }));
 

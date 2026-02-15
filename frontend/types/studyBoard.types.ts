@@ -1,56 +1,76 @@
 /**
  * Study Board Types
+ * Aligned with backend Board model + Yjs-based sync
  */
 
-export type BoardElementType = 
-  | 'text'
-  | 'image'
-  | 'sticky-note'
-  | 'shape'
-  | 'connector'
-  | 'drawing';
-
+/** Minimal tldraw-style element stored in legacy elements array */
 export interface BoardElement {
   id: string;
-  type: BoardElementType;
+  type: string;
+  typeName?: string;
   x: number;
   y: number;
-  width: number;
-  height: number;
-  content?: string;
-  color?: string;
-  fontSize?: number;
-  imageUrl?: string;
   rotation?: number;
-  locked?: boolean;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  isLocked?: boolean;
+  opacity?: number;
+  props?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
+  parentId?: string;
+  index?: string;
+  createdBy?: string;
 }
 
+/** Matches the backend Board mongoose model */
 export interface StudyBoard {
+  /** Returned as `_id` from Mongo, aliased to `id` in some paths */
   id: string;
+  _id?: string;
   title: string;
   description?: string;
-  ownerId: string;
-  owner?: any;
-  members?: any[];
-  elements: BoardElement[];
-  participants: BoardParticipant[];
+  owner: { _id: string; name: string; email: string } | string;
+  ownerId?: string;
+  members?: BoardMember[];
+  /** Legacy — tldraw shapes are now synced via Yjs (yjsState) */
+  elements?: BoardElement[];
   isPublic: boolean;
-  color: string;
+  settings?: BoardSettings;
+  thumbnail?: string;
+  tags?: string[];
+  lastActivity?: string;
+  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
-  lastActive: string;
+  elementCount?: number;
+  memberCount?: number;
 }
 
+export interface BoardMember {
+  userId: string;
+  role: 'owner' | 'editor' | 'viewer';
+  addedAt?: string;
+  email?: string;
+  name?: string;
+}
+
+export interface BoardSettings {
+  backgroundColor?: string;
+  gridEnabled?: boolean;
+  gridSize?: number;
+  snapToGrid?: boolean;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  allowComments?: boolean;
+  allowExport?: boolean;
+}
+
+/** Used for live presence via Yjs awareness */
 export interface BoardParticipant {
   userId: string;
   userName: string;
-  name: string; // Display name (email or username)
+  name: string;
   email?: string;
   userAvatar?: string;
-  color: string; // User's cursor/avatar color
+  color: string;
   role: 'owner' | 'editor' | 'viewer';
   cursor?: CursorPosition;
   isActive: boolean;
@@ -60,14 +80,5 @@ export interface BoardParticipant {
 export interface CursorPosition {
   x: number;
   y: number;
-  color: string;
-}
-
-export interface BoardUpdate {
-  boardId: string;
-  action: 'add' | 'update' | 'delete';
-  element?: BoardElement;
-  elementId?: string;
-  userId: string;
-  timestamp: string;
+  color?: string;
 }

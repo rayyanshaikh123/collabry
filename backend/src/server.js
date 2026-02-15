@@ -35,8 +35,12 @@ initializeServices();
 // Create HTTP server
 const server = http.createServer(app);
 
-// Initialize Socket.IO
+// Initialize Socket.IO (for chat, notifications, notebook collab)
 const io = initializeSocket(server);
+
+// Initialize Yjs WebSocket server (for tldraw board collaboration)
+const { attachYjsWebSocket } = require('./socket/yjsServer');
+attachYjsWebSocket(server);
 
 // Register Tier-2/3 event listeners
 registerEventListeners();

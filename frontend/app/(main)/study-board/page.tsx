@@ -23,6 +23,7 @@ interface Board {
   isPublic: boolean;
   elementCount?: number;
   memberCount?: number;
+  thumbnail?: string;
   lastActivity: string;
   createdAt: string;
 }
@@ -38,10 +39,37 @@ export default function StudyBoardListPage() {
   const [deletingBoardId, setDeletingBoardId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [boardToDelete, setBoardToDelete] = useState<Board | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchBoards();
   }, []);
+
+  // Debounced search
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      // Reset to full list when search is cleared
+      fetchBoards();
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await studyBoardService.searchBoards(searchQuery.trim());
+        setBoards(results as Board[]);
+      } catch {
+        // Fall back to client-side filter if search endpoint fails
+        const response = await studyBoardService.getBoards();
+        const filtered = (response as Board[]).filter((b: Board) =>
+          b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          b.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setBoards(filtered);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchBoards = async () => {
     try {
@@ -153,6 +181,26 @@ export default function StudyBoardListPage() {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <ICONS.Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search boards..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 placeholder:text-slate-400"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        )}
+      </div>
+
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
@@ -168,16 +216,27 @@ export default function StudyBoardListPage() {
         <Card className="text-center py-12">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ICONS.Plus size={32} className="text-indigo-600" />
+              {searchQuery ? (
+                <ICONS.Search size={32} className="text-indigo-600" />
+              ) : (
+                <ICONS.Plus size={32} className="text-indigo-600" />
+              )}
             </div>
-            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">No boards yet</h3>
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-2">
+              {searchQuery ? 'No boards found' : 'No boards yet'}
+            </h3>
             <p className="text-slate-500 dark:text-slate-400 mb-6">
-              Create your first collaborative study board to start working with others
+              {searchQuery
+                ? `No boards match "${searchQuery}". Try a different search term.`
+                : 'Create your first collaborative study board to start working with others'
+              }
             </p>
-            <Button variant="primary" onClick={() => setShowTemplateModal(true)} disabled={isCreating}>
-              <ICONS.Plus size={16} className="mr-2" />
-              {isCreating ? 'Creating...' : 'Create Your First Board'}
-            </Button>
+            {!searchQuery && (
+              <Button variant="primary" onClick={() => setShowTemplateModal(true)} disabled={isCreating}>
+                <ICONS.Plus size={16} className="mr-2" />
+                {isCreating ? 'Creating...' : 'Create Your First Board'}
+              </Button>
+            )}
           </div>
         </Card>
       ) : (
@@ -185,9 +244,25 @@ export default function StudyBoardListPage() {
           {boards.map((board) => (
             <Card 
               key={board._id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
+              className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
               onClick={() => openBoard(board._id)}
             >
+              {/* Thumbnail Preview */}
+              {board.thumbnail ? (
+                <div className="-mx-4 -mt-4 mb-4 h-36 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={board.thumbnail}
+                    alt={board.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="-mx-4 -mt-4 mb-4 h-36 bg-linear-to-br from-indigo-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
+                  <ICONS.FileText size={40} className="text-indigo-300 dark:text-slate-500" />
+                </div>
+              )}
+
               <div className="space-y-4">
                 {/* Board Header */}
                 <div className="flex items-start justify-between">

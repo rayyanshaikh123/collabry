@@ -66,6 +66,15 @@ const boardSchema = new mongoose.Schema({
     }
   }],
   elements: [boardElementSchema],
+  // Yjs CRDT state — binary snapshot of the collaborative document
+  yjsState: {
+    type: Buffer,
+    default: null
+  },
+  yjsUpdatedAt: {
+    type: Date,
+    default: null
+  },
   isPublic: {
     type: Boolean,
     default: false

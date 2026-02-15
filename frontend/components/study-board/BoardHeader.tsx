@@ -29,6 +29,7 @@ interface BoardHeaderProps {
   onBack: () => void;
   onInvite: () => void;
   onSettings: () => void;
+  onExport?: () => void;
 }
 
 export function BoardHeader({
@@ -38,6 +39,7 @@ export function BoardHeader({
   onBack,
   onInvite,
   onSettings,
+  onExport,
 }: BoardHeaderProps) {
   const visibleParticipants = participants.slice(0, 3);
   const participantCount = participants.length;
@@ -84,6 +86,17 @@ export function BoardHeader({
             </div>
           )}
         </div>
+        {onExport && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="rounded-2xl h-10 w-10"
+            onClick={onExport}
+            title="Export board as PNG"
+          >
+            <ICONS.Download size={18} />
+          </Button>
+        )}
         <Button
           variant="outline"
           className="gap-2 px-6"

@@ -43,7 +43,10 @@
     "redis": "^4.7.1",
     "resend": "^6.9.2",
     "socket.io": "^4.8.3",
-    "tldraw": "^4.2.3"
+    "tldraw": "^4.2.3",
+    "ws": "^8.19.0",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.29"
   },
   "devDependencies": {
     "jest": "^29.7.0",

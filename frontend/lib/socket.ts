@@ -4,7 +4,6 @@
  */
 
 import { io, Socket } from 'socket.io-client';
-import { toast } from '@/hooks/use-toast';
 
 // Determine socket URL from env variables
 const getSocketUrl = () => {
@@ -24,7 +23,7 @@ const SOCKET_URL = getSocketUrl();
 
 class SocketClient {
   private socket: Socket | null = null;
-  private boardSocket: Socket | null = null;
+  // Board sync is now handled by Yjs WebSocket (useYjsSync hook)
   private notificationSocket: Socket | null = null;
 
   private reconnectAttempts = 0;
@@ -70,95 +69,10 @@ class SocketClient {
   }
 
   /**
-   * Connect to Boards namespace
-   */
-  connectBoards(token: string): Promise<Socket> {
-    return new Promise((resolve, reject) => {
-      // If already connected, resolve immediately
-      if (this.boardSocket?.connected) {
-        resolve(this.boardSocket);
-        return;
-      }
-
-      // Cleanup existing
-      if (this.boardSocket) {
-        this.boardSocket.removeAllListeners();
-        this.boardSocket.disconnect();
-        this.boardSocket = null;
-      }
-
-      this.boardSocket = io(`${SOCKET_URL}/boards`, {
-        auth: {
-          token,
-        },
-        transports: ['polling', 'websocket'],
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 10,
-      });
-
-      let settled = false;
-
-      const timeout = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        // Don't destroy the socket — let Socket.IO keep retrying in the background
-        console.warn('[Board Socket] Initial connection timeout (15s). Socket will keep retrying.');
-        toast({
-          variant: 'warning',
-          title: 'Connection Delayed',
-          description: 'Board connection is taking longer than expected. Continuing to retry in background.',
-        });
-        reject(new Error('Board socket connection timeout'));
-      }, 15000);
-
-      this.boardSocket.on('connect', () => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timeout);
-          toast({
-            variant: 'success',
-            title: 'Connected',
-            description: 'Board collaboration is now active.',
-          });
-          resolve(this.boardSocket!);
-        }
-      });
-
-      this.boardSocket.on('connect_error', (error) => {
-        console.warn('[Board Socket] Connection error (will retry):', error.message);
-        // Don't reject or destroy — let Socket.IO reconnection handle it
-        // Only show toast if it persists
-      });
-
-      this.boardSocket.on('error', (error) => {
-        console.error('[Board Socket] Socket error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Connection Error',
-          description: 'Unable to connect to collaboration server. Your changes will sync when reconnected.',
-        });
-      });
-
-      this.boardSocket.on('disconnect', (reason) => {
-        console.warn('[Board Socket] Disconnected:', reason);
-        if (reason === 'io server disconnect' || reason === 'transport close') {
-          toast({
-            variant: 'warning',
-            title: 'Disconnected',
-            description: 'Lost connection to collaboration server. Attempting to reconnect...',
-          });
-        }
-      });
-    });
-  }
-
-  /**
    * Connect to Notifications namespace
    */
   connectNotifications(token: string): Promise<Socket> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (this.notificationSocket?.connected) {
         resolve(this.notificationSocket);
         return;
@@ -211,7 +125,7 @@ class SocketClient {
       console.warn('[Socket] Disconnected:', reason);
     });
 
-    this.socket.on('connect_error', (error) => {
+    this.socket.on('connect_error', () => {
       this.reconnectAttempts++;
       
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -221,103 +135,23 @@ class SocketClient {
     });
   }
 
-  private setupBoardEventHandlers() {
-    // Event handlers are set up during connectBoards()
-  }
-
   disconnect() {
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
-    this.disconnectBoards();
-    
-  }
-
-  disconnectBoards() {
-    if (this.boardSocket) {
-      this.boardSocket.removeAllListeners();
-      this.boardSocket.disconnect();
-      this.boardSocket = null;
+    if (this.notificationSocket) {
+      this.notificationSocket.removeAllListeners();
+      this.notificationSocket.disconnect();
+      this.notificationSocket = null;
     }
   }
 
-  // Board collaboration events
-  joinBoard(boardId: string, callback?: (response: any) => void) {
-    if (!this.boardSocket) {
-      callback?.({ error: 'Socket not connected' });
-      return;
-    }
-    if (!this.boardSocket.connected) {
-      // Wait for reconnection then join
-      this.boardSocket.once('connect', () => {
-        this.boardSocket?.emit('board:join', { boardId }, callback);
-      });
-      return;
-    }
-    this.boardSocket.emit('board:join', { boardId }, callback);
-  }
-
-  leaveBoard(boardId: string) {
-    this.boardSocket?.emit('board:leave', { boardId });
-  }
-
-  createElement(boardId: string, element: any, callback?: (response: any) => void) {
-    this.boardSocket?.emit('element:create', { boardId, element }, callback);
-  }
-
-  updateElement(boardId: string, elementId: string, changes: any, callback?: (response: any) => void) {
-    this.boardSocket?.emit('element:update', { boardId, elementId, changes }, callback);
-  }
-
-  deleteElement(boardId: string, elementId: string, callback?: (response: any) => void) {
-    this.boardSocket?.emit('element:delete', { boardId, elementId }, callback);
-  }
-
-  sendBoardUpdate(boardId: string, update: any) {
-    this.boardSocket?.emit('board:update', { boardId, update });
-  }
-
-  sendCursorPosition(boardId: string, position: { x: number; y: number }) {
-    this.boardSocket?.emit('cursor:move', { boardId, position });
-  }
-
-  // Event listeners
-  onElementCreated(callback: (data: any) => void) {
-    this.boardSocket?.on('element:created', callback);
-  }
-
-  onElementUpdated(callback: (data: any) => void) {
-    this.boardSocket?.on('element:updated', callback);
-  }
-
-  onElementDeleted(callback: (data: any) => void) {
-    this.boardSocket?.on('element:deleted', callback);
-  }
-
-  onUserJoined(callback: (data: any) => void) {
-    this.boardSocket?.on('user:joined', callback);
-  }
-
-  onUserLeft(callback: (data: any) => void) {
-    this.boardSocket?.on('user:left', callback);
-  }
-
-  onCursorMove(callback: (data: any) => void) {
-    this.boardSocket?.on('cursor:moved', callback);
-  }
-
-  // Note: 'off' needs to know which socket. Defaulting to boardSocket as it seems to be the main use case for dynamic listeners
-  off(event: string, callback?: any) {
-    this.boardSocket?.off(event, callback);
+  // Note: 'off' removes listener from notification socket
+  off(event: string, callback?: (...args: unknown[]) => void) {
     this.notificationSocket?.off(event, callback);
     this.socket?.off(event, callback);
-  }
-
-  // Listen for full board updates
-  onBoardUpdate(callback: (data: any) => void) {
-    this.boardSocket?.on('board:update', callback);
   }
 
   // Notification methods
@@ -325,17 +159,8 @@ class SocketClient {
     return this.notificationSocket;
   }
 
-  // Board socket getter
-  getBoardSocket(): Socket | null {
-    return this.boardSocket;
-  }
-
   isConnected(): boolean {
     return this.socket?.connected ?? false;
-  }
-
-  isBoardConnected(): boolean {
-    return this.boardSocket?.connected ?? false;
   }
 }
 

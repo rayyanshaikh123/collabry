@@ -50,8 +50,9 @@ const initializeSocket = (httpServer) => {
     });
   });
 
-  // Initialize board namespace
-  require('./boardNamespace')(io);
+  // Board sync is now handled by Yjs WebSocket (yjsServer.js)
+  // Legacy boardNamespace kept but disabled to avoid confusion:
+  // require('./boardNamespace')(io);
 
   // Initialize chat namespace
   const { initializeChatNamespace } = require('./chatNamespace');

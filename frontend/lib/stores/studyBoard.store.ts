@@ -11,7 +11,6 @@ import type {
   CursorPosition,
 } from '@/types';
 import { studyBoardService } from '@/lib/services/studyBoard.service';
-import { socketClient } from '@/lib/socket';
 
 interface StudyBoardState {
   // State
@@ -295,26 +294,10 @@ export const useStudyBoardStore = create<StudyBoardState>((set, get) => ({
     }
   },
 
-  // Join board (realtime)
-  joinBoard: (boardId: string) => {
-    // TODO: Emit socket event to join board room
-    socketClient.joinBoard(boardId);
-  },
-
-  // Leave board (realtime)
-  leaveBoard: (boardId: string) => {
-    // TODO: Emit socket event to leave board room
-    socketClient.leaveBoard(boardId);
-  },
-
-  // Broadcast update (realtime)
-  broadcastUpdate: (update: any) => {
-    const { currentBoard } = get();
-    if (!currentBoard) return;
-    
-    // TODO: Emit socket event with update
-    socketClient.sendBoardUpdate(currentBoard.id, update);
-  },
+  // Board sync is now handled by Yjs (useYjsSync hook)
+  joinBoard: (_boardId: string) => { /* no-op */ },
+  leaveBoard: (_boardId: string) => { /* no-op */ },
+  broadcastUpdate: (_update: any) => { /* no-op */ },
 
   // Clear error
   clearError: () => {
