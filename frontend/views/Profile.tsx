@@ -246,9 +246,9 @@ const ProfileView: React.FC = () => {
     if (subscription?.plan) {
       const planNames: Record<string, string> = {
         'free': 'FREE EXPLORER',
-        'basic': 'BASIC LEARNER',
+        'starter': 'STARTER LEARNER',
         'pro': 'PRO EXPLORER',
-        'enterprise': 'ENTERPRISE',
+        'unlimited': 'UNLIMITED',
       };
       return planNames[subscription.plan] || subscription.plan.toUpperCase();
     }
@@ -424,7 +424,7 @@ const ProfileView: React.FC = () => {
             </div>
             <p className="text-sm font-bold opacity-80 mb-6">
               You're on the <span className="bg-white dark:bg-slate-800 px-2 py-0.5 rounded-lg">{getPlanName()}</span> plan. 
-              {subscription?.plan === 'pro' || subscription?.plan === 'enterprise' ? ' All features unlocked!' : ' Upgrade for more features!'}
+              {subscription?.plan === 'pro' || subscription?.plan === 'unlimited' ? ' All features unlocked!' : ' Upgrade for more features!'}
             </p>
             <Link href="/subscription">
               <Button variant="secondary" className="w-full text-amber-600 dark:text-amber-400">Manage Plan</Button>

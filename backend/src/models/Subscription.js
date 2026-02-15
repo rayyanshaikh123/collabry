@@ -10,7 +10,7 @@ const subscriptionSchema = new mongoose.Schema(
     },
     plan: {
       type: String,
-      enum: ['free', 'basic', 'pro', 'enterprise'],
+      enum: ['free', 'starter', 'pro', 'unlimited'],
       default: 'free',
       required: true,
     },

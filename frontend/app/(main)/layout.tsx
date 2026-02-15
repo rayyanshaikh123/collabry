@@ -37,6 +37,7 @@ const getAppRouteFromPath = (path: string): string => {
     '/visual-aids': 'visual-aids',
     '/social': 'social',
     '/recycle-bin': 'recycle-bin',
+    '/voice-tutor': 'voice-tutor',
   };
   // Handle dynamic routes like /study-notebook/[id] and /study-board/[id]
   if (path.startsWith('/study-notebook')) return 'study-notebook';
@@ -159,6 +160,7 @@ export default function MainLayout({
       'visual-aids': '/visual-aids',
       'social': '/social',
       'recycle-bin': '/recycle-bin',
+      'voice-tutor': '/voice-tutor',
     };
     router.push(pathMap[routeStr] || '/dashboard');
   };

@@ -51,13 +51,13 @@ const getPlanDetails = (planId) => {
 
 /**
  * Convert plan name to tier
- * @param {string} planId - e.g., 'basic_monthly', 'pro_yearly'
- * @returns {string} - 'free', 'basic', 'pro', 'enterprise'
+ * @param {string} planId - e.g., 'starter_monthly', 'pro_yearly'
+ * @returns {string} - 'free', 'starter', 'pro', 'unlimited'
  */
 const planIdToTier = (planId) => {
-  if (planId.startsWith('basic')) return 'basic';
+  if (planId.startsWith('starter')) return 'starter';
   if (planId.startsWith('pro')) return 'pro';
-  if (planId.startsWith('enterprise')) return 'enterprise';
+  if (planId.startsWith('unlimited')) return 'unlimited';
   return 'free';
 };
 
@@ -68,7 +68,7 @@ const planIdToTier = (planId) => {
  */
 const getIntervalFromPlanId = (planId) => {
   if (planId.includes('yearly')) return 'yearly';
-  if (planId.includes('lifetime') || planId === 'enterprise') return 'lifetime';
+  if (planId.includes('lifetime') || planId === 'unlimited') return 'lifetime';
   return 'monthly';
 };
 

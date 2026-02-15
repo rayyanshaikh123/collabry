@@ -6,7 +6,7 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 const { protect } = require('../middlewares/auth.middleware');
-const { checkAIUsageLimit, trackAIUsage, checkFileUploadLimit, checkStorageLimit } = require('../middleware/usageEnforcement');
+const { checkAIUsageLimit, checkVoiceTurnsLimit, trackAIUsage, checkFileUploadLimit, checkStorageLimit } = require('../middleware/usageEnforcement');
 
 const AI_ENGINE_URL = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
@@ -142,7 +142,7 @@ const createTrackedProxyHandler = (questionType = 'chat') => {
         
         // Track usage for streaming requests
         if (userId) {
-          trackAIUsage(userId, 0, 'basic', questionType);
+          trackAIUsage(userId, 0, 'starter', questionType);
         }
         
         // Set SSE headers
@@ -177,7 +177,7 @@ const createTrackedProxyHandler = (questionType = 'chat') => {
       // Track usage for successful requests
       if (userId) {
         const tokens = response.data?.usage?.total_tokens || 0;
-        trackAIUsage(userId, tokens, 'basic', questionType);
+        trackAIUsage(userId, tokens, 'starter', questionType);
       }
       
       // Return response in standard API format with usage info
@@ -244,5 +244,58 @@ router.post('/qa/stream', protect, checkAIUsageLimit, createTrackedProxyHandler(
 router.post('/mindmap', protect, checkAIUsageLimit, createTrackedProxyHandler('other'));
 router.post('/upload', protect, checkFileUploadLimit, checkStorageLimit, proxyToAI);
 router.post('/generate-study-plan', protect, checkAIUsageLimit, createTrackedProxyHandler('study-copilot'));
+
+// Voice Tutor routes — proxy multipart to AI engine
+router.post('/voice/chat', protect, checkVoiceTurnsLimit, async (req, res) => {
+  try {
+    const url = `${AI_ENGINE_URL}/ai/voice/chat`;
+    const token = req.headers.authorization;
+
+    // Forward the raw request as-is (multipart/form-data)
+    const response = await axios.post(url, req, {
+      headers: {
+        ...req.headers,
+        host: undefined, // Remove host header to avoid conflicts
+        ...(token && { Authorization: token }),
+      },
+      maxBodyLength: 26 * 1024 * 1024, // 26 MB
+      maxContentLength: 26 * 1024 * 1024,
+      responseType: 'json',
+    });
+
+    // Track usage
+    const userId = req.user?.id || req.user?._id;
+    if (userId) {
+      trackAIUsage(userId, 0, 'starter', 'voice-tutor');
+    }
+
+    res.status(response.status).json({
+      success: true,
+      data: response.data,
+      usage: {
+        remainingQuestions: req.remainingQuestions !== undefined ? req.remainingQuestions - 1 : 'unlimited',
+        plan: req.userPlan,
+      },
+    });
+  } catch (error) {
+    console.error('Voice Tutor Proxy Error:', error.message);
+    if (error.response) {
+      const safeData = getSafeErrorData(error);
+      res.status(error.response.status).json({
+        success: false,
+        message: safeData?.message || safeData?.detail || 'Voice tutor error',
+        error: safeData,
+      });
+    } else {
+      res.status(503).json({
+        success: false,
+        message: 'Voice tutor unavailable',
+        error: error.message,
+      });
+    }
+  }
+});
+router.post('/voice/tts', protect, proxyToAI);
+router.post('/voice/stt', protect, proxyToAI);
 
 module.exports = router;

@@ -45,7 +45,7 @@ const couponSchema = new mongoose.Schema(
     // Applicable plans (empty = all plans)
     applicablePlans: [{
       type: String,
-      enum: ['basic', 'pro', 'enterprise'],
+      enum: ['starter', 'pro', 'unlimited'],
     }],
     
     // Validity period

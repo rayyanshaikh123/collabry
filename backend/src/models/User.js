@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema(
     },
     subscriptionTier: {
       type: String,
-      enum: ['free', 'basic', 'pro', 'enterprise'],
+      enum: ['free', 'starter', 'pro', 'unlimited'],
       default: 'free',
     },
     storageUsed: {

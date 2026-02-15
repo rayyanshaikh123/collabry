@@ -40,6 +40,12 @@ const usageSchema = new mongoose.Schema(
       default: 0,
     },
     
+    // Voice Tutor turns count
+    voiceTurns: {
+      type: Number,
+      default: 0,
+    },
+    
     // Detailed AI usage breakdown
     aiUsageDetails: [{
       timestamp: {
@@ -48,7 +54,7 @@ const usageSchema = new mongoose.Schema(
       },
       model: {
         type: String,
-        default: 'basic',
+        default: 'starter',
       },
       tokensUsed: {
         type: Number,
@@ -56,7 +62,7 @@ const usageSchema = new mongoose.Schema(
       },
       questionType: {
         type: String,
-        enum: ['chat', 'study-copilot', 'summarize', 'quiz-generate', 'other'],
+        enum: ['chat', 'study-copilot', 'summarize', 'quiz-generate', 'voice-tutor', 'other'],
         default: 'chat',
       },
     }],
@@ -92,7 +98,7 @@ usageSchema.statics.getTodayUsage = async function(userId) {
 };
 
 // Static method to increment AI usage
-usageSchema.statics.incrementAIUsage = async function(userId, tokens = 0, model = 'basic', questionType = 'chat') {
+usageSchema.statics.incrementAIUsage = async function(userId, tokens = 0, model = 'starter', questionType = 'chat') {
   const today = new Date().toISOString().split('T')[0];
   
   const usage = await this.findOneAndUpdate(
