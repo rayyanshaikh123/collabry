@@ -30,7 +30,8 @@ export enum AppRoute {
   VISUAL_AIDS = 'visual-aids',
   STUDY_BUDDY = 'study-buddy',
   SOCIAL = 'social',
-  RECYCLE_BIN = 'recycle-bin'
+  RECYCLE_BIN = 'recycle-bin',
+  VOICE_TUTOR = 'voice-tutor'
 }
 
 export type ThemeType = 'indigo' | 'blue' | 'amber' | 'emerald' | 'rose' | 'purple' | 'cyan' | 'pink' | 'teal' | 'violet' | 'orange' | 'yellow';
