@@ -213,9 +213,9 @@ const SubscriptionManagement: React.FC = () => {
               <select value={planFilter} onChange={(e) => { setPlanFilter(e.target.value); setSubPage(1); }} className="text-xs font-bold rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300">
                 <option value="">All Plans</option>
                 <option value="free">Free</option>
-                <option value="basic">Basic</option>
+                <option value="starter">Starter</option>
                 <option value="pro">Pro</option>
-                <option value="enterprise">Enterprise</option>
+                <option value="unlimited">Unlimited</option>
               </select>
               <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setSubPage(1); }} className="text-xs font-bold rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-700 dark:text-slate-300">
                 <option value="">All Status</option>

@@ -57,9 +57,9 @@ interface HistoryRecord {
 /* ────────────────────────────────────────── */
 const PLAN_BADGES: Record<string, { label: string; color: 'indigo' | 'emerald' | 'amber' | 'rose' }> = {
   free: { label: 'Free', color: 'indigo' },
-  basic: { label: 'Basic', color: 'emerald' },
+  starter: { label: 'Starter', color: 'emerald' },
   pro: { label: 'Pro', color: 'amber' },
-  enterprise: { label: 'Enterprise', color: 'rose' },
+  unlimited: { label: 'Unlimited', color: 'rose' },
 };
 
 /* ────────────────────────────────────────── */

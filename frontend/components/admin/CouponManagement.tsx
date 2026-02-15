@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Button, Badge, Input } from '../UIElements';
 import couponService, { type Coupon, type CouponFormData, type CouponStats } from '@/lib/services/coupon.service';
 
-const PLANS = ['basic', 'pro', 'enterprise'];
+const PLANS = ['starter', 'pro', 'unlimited'];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });

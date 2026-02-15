@@ -149,9 +149,9 @@ const AdminNotifications: React.FC = () => {
                 >
                   <option value="">All Tiers</option>
                   <option value="free">Free</option>
-                  <option value="basic">Basic</option>
+                  <option value="starter">Starter</option>
                   <option value="pro">Pro</option>
-                  <option value="enterprise">Enterprise</option>
+                  <option value="unlimited">Unlimited</option>
                 </select>
               </div>
             </div>

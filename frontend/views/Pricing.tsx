@@ -39,7 +39,7 @@ interface EnterprisePlan extends BasePlan {
 
 type Plan = FreePlan | PaidPlan | EnterprisePlan;
 
-type PlanKey = 'free' | 'basic' | 'pro' | 'enterprise';
+type PlanKey = 'free' | 'starter' | 'pro' | 'unlimited';
 
 // Razorpay script loader
 const loadRazorpayScript = () => {
@@ -69,72 +69,76 @@ const PLANS: Record<PlanKey, Plan> = {
       '100 MB storage',
     ],
     limitations: [
+      'No Voice Tutor access',
       'Limited daily AI usage',
       'Single board only',
     ],
     color: 'from-slate-500 to-slate-700',
-    buttonText: 'Current Plan',
+    buttonText: 'Get Started Free',
   },
-  basic: {
-    name: 'Basic',
+  starter: {
+    name: 'Starter',
     icon: Zap,
-    price: 9,
+    price: 49,
     currency: '₹',
     period: 'month',
-    yearlyPrice: 99,
+    yearlyPrice: 499,
     description: 'For serious learners',
     features: [
-      '100 AI questions per day',
+      '50 AI questions per day',
+      '🎙️ 10 Voice Tutor turns/day',
       '5 collaborative boards',
       '20 study notebooks',
       '20 group members per board',
       '50 file uploads per day',
-      '5 GB storage',
-      'Real-time collaboration',
+      '2 GB storage',
     ],
     popular: true,
     color: 'from-indigo-500 to-purple-600',
-    buttonText: 'Upgrade to Basic',
-    savings: '8% off yearly',
+    buttonText: 'Upgrade to Starter',
+    savings: '15% off yearly',
   },
   pro: {
     name: 'Pro',
     icon: Crown,
-    price: 29,
+    price: 149,
     currency: '₹',
     period: 'month',
-    yearlyPrice: 319,
+    yearlyPrice: 1499,
     popular: false,
     description: 'For power users',
     features: [
       'Unlimited AI questions',
+      '🎙️ 50 Voice Tutor turns/day',
       'Unlimited boards',
       'Unlimited notebooks',
       '50 group members per board',
       'Unlimited file uploads',
-      '50 GB storage',
-      'Real-time collaboration',
+      '25 GB storage',
     ],
     color: 'from-amber-500 to-orange-600',
     buttonText: 'Upgrade to Pro',
-    savings: '8% off yearly',
+    savings: '16% off yearly',
   },
-  enterprise: {
-    name: 'Enterprise',
+  unlimited: {
+    name: 'Unlimited',
     icon: Star,
-    price: 99999,
+    price: 499,
     currency: '₹',
-    period: 'one-time',
-    description: 'For organizations',
+    period: 'month',
+    yearlyPrice: 4999,
+    popular: false,
+    description: 'For teams & power users',
     features: [
       'Everything in Pro',
+      '🎙️ Unlimited Voice Tutor',
       'Unlimited group members',
       '500 GB storage',
-      'Lifetime access',
+      'Priority support',
     ],
     color: 'from-rose-500 to-pink-600',
-    buttonText: 'Contact Sales',
-    isCustom: true,
+    buttonText: 'Go Unlimited',
+    savings: '16% off yearly',
   },
 };
 
@@ -155,7 +159,7 @@ const PricingView: React.FC = () => {
     try {
       const data = await apiClient.post('/coupons/validate', {
         code: couponCode.trim(),
-        planTier: 'basic', // Validates generically
+        planTier: 'starter', // Validates generically
       });
       if (data.success && data.data?.valid) {
         setCouponStatus({ valid: true, message: `Coupon applied! ${data.data.discount ? `${data.data.discountType === 'percentage' ? data.data.discountValue + '%' : '₹' + (data.data.discountValue / 100)} off` : 'Discount will be applied at checkout.'}` });
@@ -177,12 +181,6 @@ const PricingView: React.FC = () => {
 
     if (planKey === 'free') {
       return; // Already on free plan
-    }
-
-    if (planKey === 'enterprise') {
-      // Redirect to contact page
-      router.push('/contact?subject=Enterprise+Plan');
-      return;
     }
 
     setLoading(true);
@@ -354,7 +352,7 @@ const PricingView: React.FC = () => {
             >
               Yearly
               <span className="absolute -top-2 -right-2 bg-amber-400 text-slate-900 text-xs px-2 py-0.5 rounded-full font-black">
-                Save 8%
+                Save 16%
               </span>
             </button>
           </div>

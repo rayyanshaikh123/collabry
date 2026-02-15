@@ -113,6 +113,92 @@ const checkAIUsageLimit = async (req, res, next) => {
 };
 
 /**
+ * Middleware to check Voice Tutor usage limits
+ * Use this before voice-tutor endpoints
+ */
+const checkVoiceTurnsLimit = async (req, res, next) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+      });
+    }
+
+    const { plan, limits } = await getPlanLimits(userId);
+    const voiceLimit = limits.voiceTurnsPerDay;
+
+    // Check if voice tutor is available for this plan
+    if (voiceLimit === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'Voice Tutor not available',
+        message: 'Voice Tutor is not included in your current plan. Upgrade to Starter or above.',
+        upgradeUrl: '/pricing',
+      });
+    }
+
+    // Unlimited voice turns
+    if (voiceLimit === -1) {
+      req.userPlan = plan;
+      req.planLimits = limits;
+      return next();
+    }
+
+    // Atomic check-and-increment for voice turns
+    const today = new Date().toISOString().split('T')[0];
+    const updated = await Usage.findOneAndUpdate(
+      {
+        user: userId,
+        date: today,
+        voiceTurns: { $lt: voiceLimit },
+      },
+      {
+        $inc: { voiceTurns: 1 },
+        $setOnInsert: { user: userId, date: today },
+      },
+      { upsert: false, new: true }
+    );
+
+    if (!updated) {
+      const existing = await Usage.getTodayUsage(userId);
+      if (existing.voiceTurns >= voiceLimit) {
+        return res.status(429).json({
+          success: false,
+          error: 'Daily voice tutor limit reached',
+          message: `You've used all ${voiceLimit} Voice Tutor turns for today. Upgrade your plan for more.`,
+          limitReached: true,
+          currentUsage: existing.voiceTurns,
+          dailyLimit: voiceLimit,
+          plan,
+          resetTime: getNextResetTime(),
+          upgradeUrl: '/pricing',
+        });
+      }
+      // Doc didn't exist — create it with 1 voice turn counted
+      await Usage.findOneAndUpdate(
+        { user: userId, date: today },
+        { $inc: { voiceTurns: 1 }, $setOnInsert: { user: userId, date: today } },
+        { upsert: true, new: true }
+      );
+    }
+
+    req.userPlan = plan;
+    req.planLimits = limits;
+    req.voiceTurnReserved = true;
+    next();
+  } catch (error) {
+    console.error('Error checking voice usage limit:', error);
+    return res.status(503).json({
+      success: false,
+      error: 'Unable to verify usage limits. Please try again.',
+    });
+  }
+};
+
+/**
  * Middleware to check board creation limits
  */
 const checkBoardLimit = async (req, res, next) => {
@@ -491,6 +577,7 @@ module.exports = {
   getUserPlan,
   getPlanLimits,
   checkAIUsageLimit,
+  checkVoiceTurnsLimit,
   checkBoardLimit,
   checkNotebookLimit,
   checkFileUploadLimit,

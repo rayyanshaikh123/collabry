@@ -2,13 +2,21 @@
  * Single source of truth for all subscription plan configuration.
  * Every module (middleware, models, services) should import from here.
  *
- * TIER HIERARCHY: free < basic < pro < enterprise
+ * TIER HIERARCHY: free < starter < pro < unlimited
  *
  * RULE: Every limit listed here MUST be enforced in code.
  * Do NOT add cosmetic/unenforceable features (e.g. "priority support").
+ *
+ * COST BASIS (Feb 2026):
+ *   Groq LLM chat       → FREE (rate-limited)
+ *   OpenAI Embeddings    → ~$0.00002/query
+ *   OpenAI Whisper (STT) → $0.006/min
+ *   OpenAI TTS           → $0.015/1K chars
+ *   Tavily web search    → $0.004/search
+ *   Voice turn total     → ~₹1.4/turn
  */
 
-const TIER_ORDER = ['free', 'basic', 'pro', 'enterprise'];
+const TIER_ORDER = ['free', 'starter', 'pro', 'unlimited'];
 
 /**
  * Feature limits per plan.
@@ -16,6 +24,7 @@ const TIER_ORDER = ['free', 'basic', 'pro', 'enterprise'];
  *
  * ENFORCED BY:
  *   aiQuestionsPerDay  → checkAIUsageLimit middleware
+ *   voiceTurnsPerDay   → checkAIUsageLimit middleware (type: 'voice-tutor')
  *   boards             → checkBoardLimit middleware
  *   notebooks          → checkNotebookLimit middleware
  *   groupMembers       → group.service.js addMember/joinGroupWithCode
@@ -25,30 +34,34 @@ const TIER_ORDER = ['free', 'basic', 'pro', 'enterprise'];
 const PLAN_LIMITS = {
   free: {
     aiQuestionsPerDay: 10,
+    voiceTurnsPerDay: 0,     // Voice Tutor is paid-only
     boards: 1,
     notebooks: 3,
     groupMembers: 5,
-    storageGB: 0.1, // 100 MB
+    storageGB: 0.1,          // 100 MB
     fileUploadsPerDay: 5,
   },
-  basic: {
-    aiQuestionsPerDay: 100,
+  starter: {
+    aiQuestionsPerDay: 50,
+    voiceTurnsPerDay: 10,    // ~₹14/day cost cap
     boards: 5,
     notebooks: 20,
     groupMembers: 20,
-    storageGB: 5,
+    storageGB: 2,
     fileUploadsPerDay: 50,
   },
   pro: {
-    aiQuestionsPerDay: -1, // unlimited
+    aiQuestionsPerDay: -1,   // unlimited
+    voiceTurnsPerDay: 50,    // ~₹70/day cost cap
     boards: -1,
     notebooks: -1,
     groupMembers: 50,
-    storageGB: 50,
+    storageGB: 25,
     fileUploadsPerDay: -1,
   },
-  enterprise: {
+  unlimited: {
     aiQuestionsPerDay: -1,
+    voiceTurnsPerDay: -1,    // truly unlimited
     boards: -1,
     notebooks: -1,
     groupMembers: -1,
@@ -62,55 +75,66 @@ const PLAN_LIMITS = {
  * Amounts are in paise (₹1 = 100 paise).
  */
 const RAZORPAY_PLANS = {
-  basic_monthly: {
-    tier: 'basic',
-    name: 'Basic Plan - Monthly',
-    amount: 900, // ₹9
+  starter_monthly: {
+    tier: 'starter',
+    name: 'Starter Plan - Monthly',
+    amount: 4900,  // ₹49
     currency: 'INR',
     interval: 'monthly',
     period: 1,
-    description: '100 AI questions/day, 5 boards, 20 notebooks, 5GB storage',
+    description: '50 AI questions/day, 10 voice turns/day, 5 boards, 2GB storage',
   },
-  basic_yearly: {
-    tier: 'basic',
-    name: 'Basic Plan - Yearly',
-    amount: 9900, // ₹99
+  starter_yearly: {
+    tier: 'starter',
+    name: 'Starter Plan - Yearly',
+    amount: 49900, // ₹499  (~15% off vs monthly)
     currency: 'INR',
     interval: 'yearly',
     period: 1,
-    description: 'Basic plan — save 8% with yearly billing',
+    description: 'Starter plan — save 15% with yearly billing',
   },
   pro_monthly: {
     tier: 'pro',
     name: 'Pro Plan - Monthly',
-    amount: 2900, // ₹29
+    amount: 14900, // ₹149
     currency: 'INR',
     interval: 'monthly',
     period: 1,
-    description: 'Unlimited AI & boards, 50GB storage, 50 group members',
+    description: 'Unlimited AI, 50 voice turns/day, unlimited boards, 25GB storage',
   },
   pro_yearly: {
     tier: 'pro',
     name: 'Pro Plan - Yearly',
-    amount: 31900, // ₹319
+    amount: 149900, // ₹1,499  (~16% off vs monthly)
     currency: 'INR',
     interval: 'yearly',
     period: 1,
-    description: 'Pro plan — save 8% with yearly billing',
+    description: 'Pro plan — save 16% with yearly billing',
+  },
+  unlimited_monthly: {
+    tier: 'unlimited',
+    name: 'Unlimited Plan - Monthly',
+    amount: 49900, // ₹499
+    currency: 'INR',
+    interval: 'monthly',
+    period: 1,
+    description: 'Everything unlimited, 500GB storage',
+  },
+  unlimited_yearly: {
+    tier: 'unlimited',
+    name: 'Unlimited Plan - Yearly',
+    amount: 499900, // ₹4,999  (~16% off vs monthly)
+    currency: 'INR',
+    interval: 'yearly',
+    period: 1,
+    description: 'Unlimited plan — save 16% with yearly billing',
   },
 };
 
 /**
- * One-time payment plans (enterprise/lifetime).
+ * One-time payment plans (legacy — kept for backward compat).
  */
-const ONE_TIME_PLANS = {
-  enterprise: {
-    tier: 'enterprise',
-    amount: 9999900, // ₹99,999
-    currency: 'INR',
-    description: 'Enterprise Plan - Lifetime Access',
-  },
-};
+const ONE_TIME_PLANS = {};
 
 /**
  * Grace period (in days) after subscription expiry before downgrade.

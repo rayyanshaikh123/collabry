@@ -3,7 +3,7 @@
  */
 
 export type UserRole = 'student' | 'admin' | 'mentor';
-export type SubscriptionTier = 'free' | 'basic' | 'pro' | 'enterprise';
+export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'unlimited';
 
 export interface User {
   id: string;
