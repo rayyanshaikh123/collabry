@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const config = require('../config/env');
 
 /**
  * Double-Submit Cookie CSRF Protection
@@ -38,13 +39,19 @@ const ensureCsrfToken = (req, res, next) => {
   
   if (!token) {
     token = generateCsrfToken();
-    res.cookie(CSRF_COOKIE_NAME, token, {
+    const cookieOpts = {
       httpOnly: false, // Frontend JS MUST be able to read this
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    });
+    };
+    // In production cross-subdomain setups (e.g., collabry.live ↔ api.collabry.live),
+    // set a shared domain so the cookie is readable by the frontend JS.
+    if (config.cookieDomain) {
+      cookieOpts.domain = config.cookieDomain;
+    }
+    res.cookie(CSRF_COOKIE_NAME, token, cookieOpts);
     // Also set it on the request so verify can use it in the same cycle
     req.cookies[CSRF_COOKIE_NAME] = token;
   }

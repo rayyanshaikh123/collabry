@@ -130,12 +130,50 @@ class ApiClient {
   }
 
   /**
-   * Get the CSRF token from Zustand store.
-   * In cross-origin setups, we can't read the backend's cookie from document.cookie,
-   * so the backend includes it in login/refresh response bodies.
+   * Get the CSRF token.
+   * Priority: Zustand store → document.cookie fallback (if cookie domain is shared).
+   * In cross-origin setups, the backend includes the token in login/refresh response bodies.
    */
   private getCsrfToken(): string | null {
-    return useAuthStore.getState().csrfToken;
+    // 1. Primary: in-memory Zustand store (set after login/refresh)
+    const storeToken = useAuthStore.getState().csrfToken;
+    if (storeToken) return storeToken;
+
+    // 2. Fallback: read from document.cookie (works when COOKIE_DOMAIN is shared, e.g., .collabry.live)
+    if (typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|;\s*)csrfToken=([^;]*)/);
+      if (match) {
+        const cookieToken = decodeURIComponent(match[1]);
+        // Sync it back to the store so future requests don't re-read the cookie
+        useAuthStore.getState().setCsrfToken(cookieToken);
+        return cookieToken;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Bootstrap a CSRF token from the backend.
+   * Call this once on app init (before any state-mutating request) so the
+   * browser receives the csrfToken cookie and we store the value in memory.
+   */
+  async bootstrapCsrfToken(): Promise<string | null> {
+    // Skip if we already have one
+    if (useAuthStore.getState().csrfToken) {
+      return useAuthStore.getState().csrfToken;
+    }
+    try {
+      const response = await this.client.get('/auth/csrf-token');
+      const token = response.data?.data?.csrfToken;
+      if (token) {
+        useAuthStore.getState().setCsrfToken(token);
+      }
+      return token || null;
+    } catch {
+      console.warn('CSRF token bootstrap failed — will retry on next auth flow');
+      return null;
+    }
   }
 
   private async refreshAccessToken(): Promise<string> {

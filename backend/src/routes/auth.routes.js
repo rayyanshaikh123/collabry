@@ -156,6 +156,20 @@ router.post(
 );
 
 /**
+ * @route   GET /api/auth/csrf-token
+ * @desc    Bootstrap a CSRF token for cross-origin frontends
+ * @access  Public
+ */
+router.get('/csrf-token', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      csrfToken: res.locals.csrfToken,
+    },
+  });
+});
+
+/**
  * @route   GET /api/auth/sessions
  * @desc    Get active sessions for current user
  * @access  Private

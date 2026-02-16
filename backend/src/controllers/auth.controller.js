@@ -1,21 +1,29 @@
 const asyncHandler = require('../utils/asyncHandler');
 const authService = require('../services/auth.service');
+const config = require('../config/env');
 
 /**
  * Cookie options for the httpOnly refresh token cookie.
  * - httpOnly: not accessible via JavaScript (XSS protection)
  * - secure: only sent over HTTPS in production
  * - sameSite: 'none' for cross-origin (Vercel frontend → Render backend)
+ * - domain: shared across subdomains in production (e.g., .collabry.live)
  * - path: only sent to auth endpoints that need it
  */
 const REFRESH_COOKIE_NAME = 'refreshToken';
-const getRefreshCookieOptions = () => ({
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  path: '/api/auth', // only sent to auth routes
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
-});
+const getRefreshCookieOptions = () => {
+  const opts = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/api/auth', // only sent to auth routes
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
+  };
+  if (config.cookieDomain) {
+    opts.domain = config.cookieDomain;
+  }
+  return opts;
+};
 
 /**
  * Helper: extract request metadata for token audit trail
