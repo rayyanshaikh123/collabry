@@ -138,6 +138,11 @@ const config = {
   },
   // Remove trailing slashes from frontend URL to ensure CORS works correctly
   frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, ''),
+  // Cookie domain for cross-subdomain sharing (e.g., '.collabry.live')
+  // Set COOKIE_DOMAIN in production so cookies from api.collabry.live are
+  // accessible across all *.collabry.live subdomains.
+  // Leave unset in development to use the default (current hostname).
+  cookieDomain: process.env.COOKIE_DOMAIN || undefined,
 };
 
 module.exports = config;

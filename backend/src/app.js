@@ -74,10 +74,16 @@ app.use(morgan('dev'));
 app.use(ensureCsrfToken);
 app.use(verifyCsrfToken({
   excludePaths: [
-    '/api/webhooks', // Razorpay webhooks don't have CSRF cookies
-    '/api/auth/refresh', // Refresh uses httpOnly cookie — CSRF not needed
-    '/api/auth/login', // First request — user doesn't have CSRF token yet
-    '/api/auth/register', // First request — user doesn't have CSRF token yet
+    '/api/webhooks',            // Razorpay webhooks don't have CSRF cookies
+    '/api/auth/refresh',        // Refresh uses httpOnly cookie — CSRF not needed
+    '/api/auth/login',          // First request — user doesn't have CSRF token yet
+    '/api/auth/register',       // First request — user doesn't have CSRF token yet
+    '/api/auth/forgot-password', // Public — user has no session; rate-limited + only sends email
+    '/api/auth/reset-password',  // Public — protected by secret token from email
+    '/api/auth/verify-email',    // Public — protected by secret token from email
+    '/api/auth/resend-verification', // Public — rate-limited + only sends email
+    '/api/auth/logout',          // Just clears session cookie; low risk
+    '/api/auth/csrf-token',      // CSRF bootstrap endpoint (GET, but listed for safety)
   ],
 }));
 

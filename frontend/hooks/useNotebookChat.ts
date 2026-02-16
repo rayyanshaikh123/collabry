@@ -121,8 +121,13 @@ export function useNotebookChat({
         const apiUrl = (process.env.NEXT_PUBLIC_AI_ENGINE_URL || 'http://localhost:8000').replace(/\/+$/, '');
         const endpoint = `${apiUrl}/ai/sessions/${sessionId}/chat/stream`;
 
-        // Get CSRF token from cookie
+        // Get CSRF token from Zustand store (primary) or document.cookie (fallback)
         const getCsrfToken = (): string | null => {
+          // Primary: Zustand in-memory store (set after login/refresh)
+          const { useAuthStore } = require('@/lib/stores/auth.store');
+          const storeToken = useAuthStore.getState().csrfToken;
+          if (storeToken) return storeToken;
+          // Fallback: cookie (works when COOKIE_DOMAIN is shared across subdomains)
           if (typeof document === 'undefined') return null;
           const match = document.cookie.match(/(?:^|;\s*)csrfToken=([^;]*)/);
           return match ? decodeURIComponent(match[1]) : null;
